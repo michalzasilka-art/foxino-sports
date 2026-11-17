@@ -10,12 +10,12 @@
 //    (tennis/?list=1&friend=host|join&room=…) and in Penalties both play and the points are compared
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { RoomEnvironment } from '/penalty/lib/RoomEnvironment.js';
-import { makeStadium, loadStadiumModels } from '/penalty/stadium.js?v=2';
+import { makeWinterPlaza } from './winter.js?v=1';
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { POSES } from '/penalty/foxino.js';
 import { makeBall } from '/penalty/props.js';
 import { sfx, unlock } from '/penalty/sound.js';
-import { makePost } from './look.js?v=1';
+import { makePost, paintedSky } from './look.js?v=3';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -30,19 +30,23 @@ const ACTS = [
 const FRIEND_KIT = { shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ff7d22' };
 let myName = store.get('tennis-name', '') || '';
 
-// ---------- the renderer and the stadium ----------
+// ---------- the renderer and the winter plaza in front of the Olympic stadium (v3, 2026-11-17) ----------
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, powerPreference: 'high-performance' });
 let pr = Math.min(window.devicePixelRatio || 1, 2);
-renderer.setPixelRatio(pr); renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.setPixelRatio(pr); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.98;   // (ACES: Neutral is far slower in Safari)
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1200); scene.add(camera);
 { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.5; pm.dispose(); }
-scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x5a8a45, 1.2));
-const key = new THREE.DirectionalLight(0xfff1de, 2.4); key.position.set(9, 22, 30); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+// winter dusk: a blue-violet sky light with a lilac snow bounce, a cool moon-white key from the front, the warm sunset
+// glow from behind the stadium as a rim light; warm windows, lamps and the cauldron's flame glow in the post pass
+scene.fog = new THREE.Fog(0xe6c8d8, 90, 380);   // (the stadium stays crisp; the far mountains melt into the horizon glow)
+const WINTER_SKY = 'art/sky-winter-dusk.webp?v=1';
+scene.add(new THREE.HemisphereLight(0x9aa6ff, 0xb3a3dc, 0.75));
+const key = new THREE.DirectionalLight(0xe4e9ff, 1.75); key.position.set(9, 22, 30); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
 Object.assign(key.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 1, far: 80 }); key.shadow.bias = -0.0005; key.shadow.normalBias = 0.03; key.shadow.radius = 4;
 key.target.position.set(0, 0, 15); scene.add(key, key.target);
-const rim = new THREE.DirectionalLight(0xb9d4ff, 1.4); rim.position.set(-8, 10, -6); scene.add(rim);
-const POSTFX = makePost(renderer, { aoRange: 60, focusMul: 1.0, blur: 0.85, grade: { sat: 1.06 } });
+const rim = new THREE.DirectionalLight(0xffb27a, 2.2); rim.position.set(-6, 9, -40); scene.add(rim);   // the sunset behind the stadium
+const POSTFX = makePost(renderer, { aoRange: 70, focusMul: 2.2, blur: 0.22, grade: { sat: 1.1, warm: 0.6 }, glow: 1.0 });
 let stadium = null;
 
 // ---------- the platforms (a dark disc, a glowing ring, light rising round the edge) ----------
@@ -92,9 +96,10 @@ function poseFox(F, t, dt, mood) {
 const CAM = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 function fitCamera() {
   const a = camera.aspect;
-  if (a < 0.8) { camera.fov = 52; CAM.pos.set(0.78, 2.05, 23.9); CAM.look.set(0.78, 0.95, 14.8); SPOT.fr.set(1.6, 0, 13.7); }
-  else if (a < 1.3) { camera.fov = 42; CAM.pos.set(1.05, 1.7, 21.4); CAM.look.set(1.05, 1.0, 14.6); SPOT.fr.set(2.0, 0, 14.4); }
-  else { camera.fov = 36; CAM.pos.set(1.1, 1.65, 21.2); CAM.look.set(0.6, 1.1, 14.8); SPOT.fr.set(2.25, 0, 14.7); }
+  // (v3) a low camera in front of the two platforms, looking a little up: the stadium fills the top of the picture
+  if (a < 0.8) { camera.fov = 58; CAM.pos.set(0.78, 1.55, 23.4); CAM.look.set(0.6, 4.2, -6); SPOT.fr.set(1.6, 0, 13.9); }
+  else if (a < 1.3) { camera.fov = 46; CAM.pos.set(1.05, 1.5, 22.2); CAM.look.set(0.8, 3.6, -6); SPOT.fr.set(2.0, 0, 14.4); }
+  else { camera.fov = 40; CAM.pos.set(1.1, 1.5, 21.8); CAM.look.set(0.7, 3.4, -6); SPOT.fr.set(2.25, 0, 14.7); }
   platFr.position.copy(SPOT.fr); if (FRD.fox) FRD.fox.root.position.set(SPOT.fr.x, 0.31, SPOT.fr.z);
   camera.updateProjectionMatrix();
 }
@@ -129,7 +134,7 @@ function frame(now) {
     for (const p of [platMe, platFr]) { p.userData.glowM.uniforms.uT.value = T; }
     platFr.userData.glowM.uniforms.uC.value.set(FRD.on ? 0xff9a3c : 0x6fe2ff);
     platFr.userData.ring.material.color.set(FRD.on ? 0xff9a3c : 0x6fe2ff);
-    if (stadium) stadium.update(dt, T);
+    if (stadium) stadium.update(dt, T, camera, pr);
     const sw = Math.sin(T * 0.35) * 0.12;
     camera.position.set(CAM.pos.x + sw, CAM.pos.y + Math.sin(T * 0.5) * 0.03, CAM.pos.z); camera.lookAt(CAM.look);
     POSTFX.draw(scene, camera, camera.position.distanceTo(SPOT.me));
@@ -335,8 +340,8 @@ $('leaveBtn').onclick = () => { sfx.click && sfx.click(); send({ t: 'bye' }); cl
   resize();
   const bar = (p, t) => { $('loadBar').style.width = `${p}%`; if (t) $('loadTxt').textContent = t; };
   bar(20, 'Opening the stadium…');
-  let MODELS = null; try { MODELS = await loadStadiumModels(); } catch (e) { console.warn('stadium models', e); }
-  stadium = makeStadium(scene, MODELS);
+  paintedSky(scene, WINTER_SKY, { yaw: 0.5, envRenderer: renderer, base: 0.3, span: 0.75 }); scene.environmentIntensity = 0.3;
+  try { stadium = await makeWinterPlaza(scene); } catch (e) { console.warn('winter plaza', e); }
   bar(65, 'Foxino is on his way…');
   try { ME.fox = await addFox(myKit()); } catch (e) { console.warn('foxino', e); }
   ball = makeBall(); ball.castShadow = true; ball.position.set(SPOT.me.x - 0.55, 0.31 + 0.11, SPOT.me.z + 0.35); scene.add(ball);
@@ -346,5 +351,5 @@ $('leaveBtn').onclick = () => { sfx.click && sfx.click(); send({ t: 'bye' }); cl
   renderMode();
   const jc = (new URLSearchParams(location.search).get('join') || '').replace(/\D/g, '');
   if (jc.length === 6) openParty(jc);
-  window.LOBBY = { PT, ME, FRD, get RUN() { return RUN; }, SEL, renderer, POSTFX };
+  window.LOBBY = { PT, ME, FRD, get RUN() { return RUN; }, SEL, renderer, POSTFX, scene, camera, get stadium() { return stadium; } };
 })();

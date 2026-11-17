@@ -7,7 +7,7 @@
 //    0 = plain drawing; a slow device steps a level down before it lowers the resolution. ?gfx=0 / ?gfx=1 force a level.
 import * as THREE from '/penalty/lib/three.module.min.js';
 
-export function paintedSky(scene, url, { yaw = 0, onFog = null, envRenderer = null } = {}) {
+export function paintedSky(scene, url, { yaw = 0, onFog = null, envRenderer = null, base = 0.18, span = 0.8 } = {}) {   // (base/span: which band of the picture sits at the horizon, opt-in; 2026-11-17 winter lobby)
   const tex = new THREE.TextureLoader().load(url, (tx) => {
     try {
       const c = document.createElement('canvas'); c.width = 32; c.height = 32; const x = c.getContext('2d');
@@ -26,13 +26,13 @@ export function paintedSky(scene, url, { yaw = 0, onFog = null, envRenderer = nu
   });
   tex.colorSpace = THREE.SRGBColorSpace; tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), new THREE.ShaderMaterial({
-    uniforms: { map: { value: tex }, uYaw: { value: yaw } }, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
+    uniforms: { map: { value: tex }, uYaw: { value: yaw }, uB: { value: base }, uS: { value: span } }, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
     vertexShader: 'varying vec3 vD; void main() { vD = position; vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0); gl_Position = p.xyww; }',
-    fragmentShader: `uniform sampler2D map; uniform float uYaw; varying vec3 vD;
+    fragmentShader: `uniform sampler2D map; uniform float uYaw, uB, uS; varying vec3 vD;
       void main() { vec3 d = normalize(vD); float az = atan(d.x, -d.z) / 3.14159265 + uYaw;
         float u = 1.0 - abs(mod(az + 1.0, 2.0) - 1.0);
         float el = asin(clamp(d.y, -1.0, 1.0)) / 1.5707963;
-        float v = el >= 0.0 ? .18 + el * .8 : .18 * clamp(1.0 + el * 5.0, 0.0, 1.0);
+        float v = el >= 0.0 ? uB + el * uS : uB * clamp(1.0 + el * 5.0, 0.0, 1.0);
         gl_FragColor = texture2D(map, vec2(clamp(u, .002, .998), clamp(v, .004, .996)));
         #include <colorspace_fragment>
       }`,
