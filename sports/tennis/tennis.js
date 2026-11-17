@@ -12,6 +12,7 @@ import { POSES } from '/penalty/foxino.js';
 import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
+import { paintedSky, makePost } from '../look.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -34,20 +35,18 @@ renderer.setPixelRatio(pr);
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.98;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xcbeaf5, 70, 170);
+scene.fog = new THREE.Fog(0xcbeaf5, 60, 190);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 600);
-const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false, uniforms: { uSun: { value: new THREE.Vector3(-0.4, 0.62, -0.68).normalize() } },
-  vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
-  fragmentShader: `varying vec3 vD; uniform vec3 uSun; void main(){ float h = clamp(vD.y, -0.2, 1.0);
-    vec3 c = mix(vec3(0.80,0.93,0.97), vec3(0.47,0.77,0.97), smoothstep(0.0, 0.25, h)); c = mix(c, vec3(0.17,0.48,0.90), smoothstep(0.25, 0.9, h));
-    float s = max(dot(normalize(vD), uSun), 0.0); c += vec3(1.0,0.93,0.75) * (pow(s, 500.0) * 3.0 + pow(s, 10.0) * 0.22); gl_FragColor = vec4(c, 1.0); }` });
-const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), skyMat); scene.add(sky);
-{ const pm = new THREE.PMREMGenerator(renderer); const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), skyMat)); scene.environment = pm.fromScene(es, 0.02).texture; pm.dispose(); }
-scene.add(new THREE.HemisphereLight(0xe6f6ff, 0x5c8a4a, 0.85));
-const sun = new THREE.DirectionalLight(0xfff0d8, 1.9);
+// (2026-11-17, the user: "increase the graphics of the environment based on how you've worked with Adventures") the
+// Foxino Adventures look: the hand-painted sky, the fog in its haze, a warm sun with soft shadows, the post pass (../look.js)
+const sky = paintedSky(scene, '/adventures/sky/sky-jungle-day.webp?v=1', { envRenderer: renderer, yaw: 0.35 });
+{ const pm = new THREE.PMREMGenerator(renderer); const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 16, 8), new THREE.MeshBasicMaterial({ color: 0xa8d8ea, side: THREE.BackSide }))); scene.environment = pm.fromScene(es, 0.02).texture; pm.dispose(); }
+scene.add(new THREE.HemisphereLight(0xfff1dc, 0x4d6a36, 1.0));
+const sun = new THREE.DirectionalLight(0xffdba6, 1.8);
 sun.position.set(-14, 26, -12); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 80 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 24, bottom: -24, near: 1, far: 90 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 4;
 scene.add(sun);
+const POSTFX = makePost(renderer, { aoRange: 80, focusMul: 1.3, blur: 0.5, grade: { sat: 1.07 } });
 
 // ---------- the court ----------
 function courtTexture() {
@@ -71,9 +70,13 @@ function courtTexture() {
 }
 const world = new THREE.Group(); scene.add(world);
 function buildCourt() {
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), new THREE.MeshStandardMaterial({ color: 0x5aa84a, roughness: 1 }));
+  const gc = document.createElement('canvas'); gc.width = 64; gc.height = 64; const gg = gc.getContext('2d');
+  gg.fillStyle = '#62ad4c'; gg.fillRect(0, 0, 64, 64); gg.fillStyle = '#57a043'; gg.fillRect(0, 0, 64, 32);
+  for (let i = 0; i < 400; i++) { gg.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,200' : '20,60,10'},${Math.random() * 0.06})`; gg.fillRect(Math.random() * 64, Math.random() * 64, 1, 2); }
+  const gtx = new THREE.CanvasTexture(gc); gtx.colorSpace = THREE.SRGBColorSpace; gtx.wrapS = gtx.wrapT = THREE.RepeatWrapping; gtx.repeat.set(1, 55); gtx.anisotropy = 8;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), new THREE.MeshStandardMaterial({ map: gtx, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true; world.add(ground);
-  const court = new THREE.Mesh(new THREE.PlaneGeometry(20, 38), new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.75 }));
+  const court = new THREE.Mesh(new THREE.PlaneGeometry(20, 38), new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.6, envMapIntensity: 0.6 }));
   court.rotation.x = -Math.PI / 2; court.receiveShadow = true; world.add(court);
   // the net: posts, a mesh with a white tape, a little sag in the middle
   const post = new THREE.MeshStandardMaterial({ color: 0x1f2a44, roughness: 0.5, metalness: 0.4 });
@@ -109,12 +112,32 @@ function buildCourt() {
     for (let z = -16; z <= 16; z += 1.05) if (Math.random() < 0.75) seats.push({ x: s * (11.6 + r * 1.4), y: 0.5 + r * 0.6, z: z + rand(-0.15, 0.15), s, ph: Math.random() * 6 });
   }
   CROWD.seats = seats;
-  const bodyG = new THREE.CapsuleGeometry(0.2, 0.35, 2, 6), headG = new THREE.SphereGeometry(0.17, 7, 5);
+  const bodyG = new THREE.BoxGeometry(0.38, 0.52, 0.3), headG = new THREE.IcosahedronGeometry(0.18, 0);
   CROWD.body = new THREE.InstancedMesh(bodyG, new THREE.MeshStandardMaterial({ roughness: 0.8 }), seats.length);
   CROWD.head = new THREE.InstancedMesh(headG, new THREE.MeshStandardMaterial({ roughness: 0.7 }), seats.length);
   const cols = ['#ff5d8f', '#ffb703', '#3ab0ff', '#2fbf6a', '#8f52d9', '#ff7d22', '#ffffff', '#e8403a', '#5a6bff'], skin = ['#f2c9a0', '#d9a074', '#9c6a44', '#ffd9b8', '#c68642'];
   seats.forEach((q, i) => { CROWD.body.setColorAt(i, new THREE.Color(cols[i % cols.length])); CROWD.head.setColorAt(i, new THREE.Color(skin[(i * 7) % skin.length])); });
   world.add(CROWD.body, CROWD.head);
+  // roofs over the stands (purple with a white edge, on posts) and a row of flags along each roof
+  const roofM = new THREE.MeshStandardMaterial({ color: 0x6a34c4, roughness: 0.6 }), trimM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), poleM = new THREE.MeshStandardMaterial({ color: 0x3a3f55, roughness: 0.5, metalness: 0.4 });
+  for (const s of [-1, 1]) {
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.25, 36), roofM); roof.position.set(s * 15.4, 6.6, 0); roof.rotation.z = s * 0.16; world.add(roof);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.45, 36.2), trimM); edge.position.set(s * 11.3, 6.0, 0); world.add(edge);
+    for (let z = -16; z <= 16; z += 8) { const po = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 6.6, 8), poleM); po.position.set(s * 19.2, 3.3, z); world.add(po); }
+    for (let z = -15; z <= 15; z += 6) { const fp = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 5), poleM); fp.position.set(s * 13.2, 8.0, z); world.add(fp);
+      const fg = new THREE.PlaneGeometry(1.1, 0.65, 8, 2); fg.translate(0.55, 0, 0);
+      const fl = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ color: ['#ffcd1c', '#ff5d8f', '#48d8ff', '#66e08a', '#ff7d22', '#ffffff'][(z + 15) / 6 | 0], roughness: 0.7, side: THREE.DoubleSide }));
+      fl.position.set(s * 13.2, 8.75, z); fl.rotation.y = s > 0 ? Math.PI : 0; fl.userData.base = fg.attributes.position.array.slice(); world.add(fl); FLAGS.push(fl); }
+  }
+  // floodlights in the four corners
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const g = new THREE.Group(); g.position.set(sx * 12.2, 0, sz * 20.2);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 12, 8), poleM); pole.position.y = 6; g.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 0.35), poleM); head.position.set(0, 12.3, 0); g.add(head);
+    const lamps = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.1), new THREE.MeshBasicMaterial({ color: 0xfff6d6 })); lamps.position.set(0, 12.3, 0.19); g.add(lamps);
+    head.rotation.x = lamps.rotation.x = 0.35; g.rotation.y = Math.atan2(-g.position.x, -g.position.z);
+    world.add(g);
+  }
   // the umpire's chair
   const chair = new THREE.Group(); const cm = new THREE.MeshStandardMaterial({ color: 0x2b3a5c, roughness: 0.6 });
   for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2, 6), cm); l.position.set(x, 1, z); chair.add(l); }
@@ -123,8 +146,10 @@ function buildCourt() {
   chair.position.set(7.6, 0, 0); chair.traverse((o) => { if (o.isMesh) o.castShadow = true; }); world.add(chair);
 }
 const CROWD = { seats: [], body: null, head: null, cheer: 0 };
+const FLAGS = [];
 const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = new THREE.Vector3(1, 1, 1), _v4 = new THREE.Vector3();
 function updateCrowd(t, dt) {
+  for (const f of FLAGS) { const a = f.geometry.attributes.position, b = f.userData.base; for (let k = 0; k < a.count; k++) { const x = b[k * 3]; a.array[k * 3 + 2] = Math.sin(x * 5 - t * 6 + f.position.z) * 0.1 * x; } a.needsUpdate = true; }
   if (!CROWD.body) return;
   CROWD.cheer = Math.max(0, CROWD.cheer - dt * 0.5);
   CROWD.seats.forEach((q, i) => {
@@ -137,7 +162,7 @@ function updateCrowd(t, dt) {
 // trees around (the Adventures jungle models)
 async function loadTrees() {
   const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
-  const files = ['nature-tall', 'nature-tall-2', 'nature-pine', 'nature-palm', 'nature-palm-2'];
+  const files = ['nature-tall', 'nature-tall-2', 'nature-pine', 'nature-palm', 'nature-palm-2', 'nature-bush', 'detail-grass', 'detail-flowers', 'nature-fern'];
   const protos = (await Promise.all(files.map((f) => L.loadAsync(`/adventures/models/${f}.glb?v=1`).catch(() => null)))).filter(Boolean).map((g) => {
     g.scene.updateMatrixWorld(true); let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
     const box = new THREE.Box3().setFromObject(g.scene), h = box.max.y - box.min.y || 1;
@@ -146,9 +171,16 @@ async function loadTrees() {
     return { mesh, base, places: [] };
   });
   if (!protos.length) return;
-  for (let i = 0; i < 70; i++) { const a = (i / 70) * Math.PI * 2 + rand(-0.04, 0.04), r = rand(26, 46); const x = Math.cos(a) * r * 1.0, z = Math.sin(a) * r * 1.25; if (Math.abs(x) < 20 && Math.abs(z) < 24) continue; protos[i % protos.length].places.push([x, z, rand(6, 12), rand(0, 6)]); }
+  const trees = protos.slice(0, 5), [bush, grass, flower, fern] = protos.slice(5);
+  for (let i = 0; i < 60; i++) { const a = (i / 60) * Math.PI * 2 + rand(-0.04, 0.04), r = rand(27, 46); const x = Math.cos(a) * r * 1.0, z = Math.sin(a) * r * 1.25; if (Math.abs(x) < 21 && Math.abs(z) < 25) continue; trees[i % trees.length].places.push([x, z, rand(6, 12), rand(0, 6)]); }
+  // a hedge behind the back fences and behind the stands
+  if (bush) { for (let x = -10.5; x <= 10.5; x += 1.5) for (const s of [-1, 1]) bush.places.push([x + rand(-0.2, 0.2), s * (20.6 + rand(0, 0.5)), rand(1.4, 2.0), rand(0, 6)]);
+    for (let z = -19; z <= 19; z += 2.2) for (const s of [-1, 1]) bush.places.push([s * (20.2 + rand(0, 0.6)), z + rand(-0.3, 0.3), rand(1.6, 2.3), rand(0, 6)]); }
+  // grass tufts, ferns and flowers on the lawn around everything
+  const lawn = (n, p, h0, h1) => { if (!p) return; for (let i = 0; i < n; i++) { const x = rand(-34, 34), z = rand(-38, 38); if (Math.abs(x) < 21 && Math.abs(z) < 21.5) continue; p.places.push([x, z, rand(h0, h1), rand(0, 6)]); } };
+  lawn(260, grass, 0.4, 0.8); lawn(70, flower, 0.35, 0.6); lawn(40, fern, 0.8, 1.4);
   for (const p of protos) {
-    const im = new THREE.InstancedMesh(p.mesh.geometry, p.mesh.material, Math.max(1, p.places.length)); im.castShadow = false;
+    const im = new THREE.InstancedMesh(p.mesh.geometry, p.mesh.material, Math.max(1, p.places.length)); im.castShadow = false; im.userData.noCast = true;
     p.places.forEach(([x, z, h, r], i) => { _q4.setFromEuler(new THREE.Euler(0, r, 0)); _m4.compose(new THREE.Vector3(x, 0, z), _q4, new THREE.Vector3(h, h, h)).multiply(p.base); im.setMatrixAt(i, _m4); });
     world.add(im);
   }
@@ -572,10 +604,9 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
   updatePlayers(dt, T); updateBall(dt, T); updateBubbles(dt, T); updateCrowd(T, dt);
-  renderer.render(scene, camera);
+  POSTFX.draw(scene, camera, camera.position.length());
   updateLabels();
-  frames++; if (dt > 1 / 35) slow++;
-  if (frames >= 120) { if (slow > 60 && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); } frames = 0; slow = 0; }
+  if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
 }
 (async () => {
   resize();
@@ -589,5 +620,5 @@ function frame(now) {
   requestAnimationFrame(frame);
   setTimeout(() => $('loading').classList.add('gone'), 150);
   if (REMOTE) post({ ft: 'ready' }); else { renderStart(); $('start').classList.remove('hidden'); }
-  window.TN = { COURT, SOLO, B, P, renderer, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
+  window.TN = { COURT, SOLO, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();

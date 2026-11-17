@@ -1,8 +1,8 @@
 // Foxino Sports: the teacher's big screen. (2026-11-17, the user: "Foxino Sports on the Teachers platform: student or teacher;
 // the students join by code; the teacher presses play; penalties (random pairs, a goalkeeper and a shooter, two games side by
-// side when there are enough players), a team raft race where the majority answer steers and fast right answers win, tennis 1v1")
+// side when there are enough players), ... tennis 1v1"). (2026-11-17, the user: "delete that adventures game, only keep tennis and penalties": the River Raft team race is gone.)
 // The phones talk to this page over PeerJS (WebRTC; the free PeerJS server only introduces the devices), like Gummy's phone mode:
-// this page is the hub at peer id "fugio-sports-<code>". The 3D matches run in iframes (Penalty Star ?remote=1, raft/, tennis/)
+// this page is the hub at peer id "fugio-sports-<code>". The 3D matches run in iframes (Penalty Star ?remote=1, tennis/)
 // that this page drives with postMessage.
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -16,13 +16,10 @@
     { c: '#ff7d22', e: '🐯' }, { c: '#00b8ad', e: '🐢' }, { c: '#e8403a', e: '🦀' }, { c: '#5a6bff', e: '🚀' }, { c: '#b88a00', e: '🦁' },
     { c: '#7a5230', e: '🐻' }, { c: '#ff4fd8', e: '🐙' },
   ];
-  const TEAMS = [
-    { name: 'Red Crabs', c: '#ff4d5e', e: '🦀' }, { name: 'Blue Dolphins', c: '#2f8cff', e: '🐬' },
-    { name: 'Green Frogs', c: '#25b85e', e: '🐸' }, { name: 'Yellow Ducks', c: '#f2b300', e: '🦆' },
-  ];
-  const GAMES = { penalty: 'Penalties', raft: 'River Raft', tennis: 'Tennis' };
+  const GAMES = { penalty: 'Penalties', tennis: 'Tennis' };
   const SET = Object.assign({ game: 'penalty', teams: 2, kicks: 3, games: 2, secs: 15, packs: [] }, store.get('sports-set', {}));
   const PACKS = FSQ.packs();
+  if (!GAMES[SET.game]) SET.game = 'penalty';
   SET.packs = (SET.packs || []).filter((id) => PACKS.some((p) => p.id === id));
   if (!SET.packs.length && PACKS.length) SET.packs = [(PACKS.find((p) => p.level === 'A1') || PACKS[0]).id];
   const save = () => store.set('sports-set', SET);
@@ -143,11 +140,11 @@
     $('pCount').textContent = PL.length ? `· ${PL.length}` : '';
     $('plist').innerHTML = PL.length ? PL.map((p) => chip(p)).join('') : '<p class="empty">Waiting for the class to join…</p>';
     document.querySelectorAll('#games .game').forEach((b) => b.classList.toggle('on', b.dataset.game === SET.game));
-    $('optTeams').hidden = SET.game !== 'raft'; $('optKicks').hidden = SET.game !== 'penalty'; $('optGames').hidden = SET.game !== 'tennis';
+    $('optKicks').hidden = SET.game !== 'penalty'; $('optGames').hidden = SET.game !== 'tennis';
     document.querySelectorAll('.seg').forEach((s) => s.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.v === SET[s.dataset.opt])));
     const n = present().length;
     $('playBtn').disabled = n < 2;
-    $('need').textContent = n < 2 ? 'Two players needed' : SET.game === 'raft' ? `${Math.min(SET.teams, n)} teams of ${Math.floor(n / Math.min(SET.teams, n))}${n % Math.min(SET.teams, n) ? '+' : ''}` : n >= 4 ? 'Two matches at once' : 'One match at a time';
+    $('need').textContent = n < 2 ? 'Two players needed' : n >= 4 ? 'Two matches at once' : 'One match at a time';
     renderPack();
   }
   function renderPack() {
@@ -199,7 +196,7 @@
     slotsEl.innerHTML = '';
     $('barMid').textContent = GAMES[key];
     show('stage');
-    GAME = key === 'raft' ? Raft() : Duel(key);
+    GAME = Duel(GAMES[key] ? key : 'penalty');
     GAME.key = key;
     GAME.start();
     ticker();
@@ -397,106 +394,6 @@
         G.slots.forEach((x) => { if (x.ready && !x.m) nextMatch(x); });
       }, 4500);
       confetti(s.el.getBoundingClientRect());
-    }
-    return G;
-  }
-
-  // ---------- River Raft: teams; every question the most votes steer the raft, fast right answers give the biggest boost ----------
-  function Raft() {
-    const G = { live: true, n: 0, title: '' };
-    let s = null;
-    const teamOf = (p) => G.teams[p.team];
-    G.start = () => {
-      const ps = shuffle(present()), n = Math.max(2, Math.min(SET.teams, ps.length));
-      G.teams = TEAMS.slice(0, n).map((t, i) => Object.assign({ i, members: [], dist: 0 }, t));
-      ps.forEach((p, k) => { p.team = k % n; G.teams[p.team].members.push(p); });
-      const el = document.createElement('div'); el.className = 'slot';
-      el.innerHTML = `<iframe src="raft/?remote=1" allow="autoplay; fullscreen" title="River Raft"></iframe><div class="clock"><i></i></div>`;
-      slotsEl.appendChild(el);
-      s = { el, frame: el.querySelector('iframe'), ready: false };
-      mcard(el, `<p class="kick">RIVER RAFT</p><h3>Pumping up the rafts…</h3>`);
-      G.teams.forEach((t) => t.members.forEach((p) => watch(p, `${t.e} ${t.name.toUpperCase()}`, 'This is your team! Look at the big screen.', { accent: t.c, kind: 'team' })));
-    };
-    G.stop = () => { G.live = false; clearTimeout(G.timer); };
-    const post = (m) => { try { s.frame.contentWindow.postMessage(m, '*'); } catch (e) {} };
-    const teamsMsg = () => G.teams.map((t) => ({ name: t.name, c: t.c, e: t.e, members: t.members.map((p) => p.name) }));
-    G.msg = (src, d) => {
-      if (!s || src !== s.frame.contentWindow || !d.fr) return;
-      if (d.fr === 'ready' && !s.ready) { s.ready = true; post({ fr: 'setup', teams: teamsMsg(), secs: SET.secs }); intro(); }
-      if (d.fr === 'resolved' && G.onResolved) { const f = G.onResolved; G.onResolved = null; f(); }
-      if (d.fr === 'finish') finish(d.order || []);
-    };
-    G.join = (p) => {
-      if (p.team < 0 || !G.teams[p.team]) { const t = G.teams.slice().sort((a, b) => a.members.length - b.members.length)[0]; p.team = t.i; t.members.push(p); post({ fr: 'teams', teams: teamsMsg() }); }
-      const t = teamOf(p); watch(p, `${t.e} ${t.name.toUpperCase()}`, 'This is your team! Answer fast and right to win the race.', { accent: t.c, kind: 'team' });
-    };
-    G.leave = (p) => { const t = teamOf(p); if (t) { t.members = t.members.filter((x) => x !== p); post({ fr: 'teams', teams: teamsMsg() }); } };
-    G.next = null;
-    async function intro() {
-      mcard(s.el, `<p class="kick">THE TEAMS</p><div class="vs">${G.teams.map((t) => `<div class="who" style="--c:${t.c}"><i>${t.e}</i><b>${esc(t.name)}</b><small>${t.members.map((p) => esc(p.name)).join(', ')}</small></div>`).join('')}</div><p>The most votes in your team steer the raft. Fast, right answers give the biggest boost!</p>`);
-      await wait(5200);
-      if (!G.live) return;
-      mcard(s.el, null);
-      post({ fr: 'go' });
-      await wait(1200);
-      round();
-    }
-    function round() {
-      if (!G.live || G.finished) return;
-      G.n++;
-      const q = FSQ.make(PACKS, SET.packs, { n: 3, count: G.n }); if (!q) return;
-      const secs = SET.secs, id = (G.rid = (G.rid || 0) + 1);
-      G.q = q; G.votes = G.teams.map(() => []);
-      post({ fr: 'q', n: G.n, q, secs });
-      clock(s.el, secs);
-      const check = () => { if (G.teams.every((t, ti) => G.votes[ti].length >= t.members.filter((p) => p.conn).length)) resolve(id); };
-      G.teams.forEach((t, ti) => t.members.forEach((p) => {
-        ask(p, { role: 'team', title: `${t.e} ${t.name.toUpperCase()}`, sub: 'Steer the raft: tap the right word!', q, secs, accent: t.c, colors: true }, (i, ms) => {
-          if (G.rid !== id) return;
-          G.votes[ti].push({ p, i, ms });
-          post({ fr: 'votes', team: ti, answered: G.votes[ti].filter((v) => v.i >= 0).length, total: t.members.length });
-          if (i >= 0) watch(p, 'Locked in! 🛶', `Your team: ${G.votes[ti].filter((v) => v.i >= 0).length} of ${t.members.length} answered.`, { accent: t.c, kind: 'locked' });
-          check();
-        });
-      }));
-      clearTimeout(G.timer); G.timer = setTimeout(() => resolve(id), secs * 1000 + 900);
-    }
-    function resolve(id) {
-      if (G.rid !== id || !G.live) return;
-      G.rid++; clearTimeout(G.timer); clockStop(s.el);
-      const q = G.q, secs = SET.secs;
-      const res = G.teams.map((t, ti) => {
-        const v = G.votes[ti].filter((x) => x.i >= 0), counts = q.words.map((_, k) => v.filter((x) => x.i === k).length);
-        let choice = -1, best = 0, bestMs = Infinity;
-        counts.forEach((c, k) => { const ms = c ? v.filter((x) => x.i === k).reduce((a, x) => a + x.ms, 0) / c : Infinity; if (c > best || (c === best && c > 0 && ms < bestMs)) { choice = k; best = c; bestMs = ms; } });
-        const ok = choice === q.correct, rightV = v.filter((x) => x.i === q.correct), n = Math.max(1, t.members.length);
-        const speed = rightV.length ? 1 - rightV.reduce((a, x) => a + x.ms, 0) / rightV.length / (secs * 1000) : 0;
-        const quality = ok ? Math.min(1, 0.45 + 0.35 * (rightV.length / n) + 0.25 * Math.max(0, speed)) : 0;
-        return { choice, ok, quality, counts };
-      });
-      // the players: right +2, fast and right +1
-      G.teams.forEach((t, ti) => t.members.forEach((p) => {
-        const v = G.votes[ti].find((x) => x.p === p), ok = v && v.i === q.correct, fast = ok && v.ms < secs * 500;
-        p.asked++; if (ok) { p.right++; p.pts += 2 + (fast ? 1 : 0); }
-        const r = res[ti];
-        reply(p, { ok, title: ok ? (fast ? 'RIGHT & FAST! +3' : 'RIGHT! +2') : !v || v.i < 0 ? 'TOO SLOW!' : 'NOT QUITE', right: q.right, accent: t.c,
-          msg: r.ok ? 'Your team steered the raft through the right gate!' : r.choice < 0 ? 'Your team did not answer in time.' : 'Your team hit a rock!' });
-      }));
-      post({ fr: 'resolve', res, right: q.right, correct: q.correct });
-      ticker();
-      G.onResolved = () => { G.timer = setTimeout(round, 600); };
-      setTimeout(() => { if (G.onResolved) { const f = G.onResolved; G.onResolved = null; f(); } }, 6000);
-    }
-    function finish(order) {
-      if (G.finished) return; G.finished = true; clearTimeout(G.timer);
-      const ranked = order.length ? order.map((i) => G.teams[i]).filter(Boolean) : G.teams.slice();
-      G.teams.forEach((t) => { if (!ranked.includes(t)) ranked.push(t); });
-      const win = ranked[0];
-      win.members.forEach((p) => { p.pts += 5; p.wins++; });
-      G.teamsRank = ranked; G.title = `${win.e} ${win.name} win the race!`;
-      ranked.forEach((t, i) => t.members.forEach((p) => watch(p, i === 0 ? 'YOUR TEAM WON! 🏆' : `${['', '1st', '2nd', '3rd', '4th'][i + 1]} PLACE`, i === 0 ? '+5 points for everybody in the team!' : `${win.name} won the race.`, { accent: t.c, kind: i === 0 ? 'win' : 'lose' })));
-      ticker();
-      setTimeout(() => endGame(false), 5200);
     }
     return G;
   }
