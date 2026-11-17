@@ -25,6 +25,7 @@ const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e
 const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
+  { id: 'streetball', name: 'Streetball', tag: 'BASKETBALL', pic: 'art/card-streetball.webp?v=1' },
 ];
 const FRIEND_KIT = { shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ff7d22' };
 let myName = store.get('tennis-name', '') || '';
@@ -274,6 +275,7 @@ function srcFor(id, i) {
     if (inParty()) return `tennis/?list=1&friend=${PT.host ? 'host' : 'join'}&room=${PT.code}r${RUN.round}s${i}&name=${encodeURIComponent(myName || 'Player')}`;
     return 'tennis/?list=1';
   }
+  if (id === 'streetball') return 'streetball/?list=1';
   return 'about:blank';
 }
 function nextSport() {
@@ -289,6 +291,7 @@ addEventListener('message', (e) => {
   if (m.fugio === 'leave') { send({ t: 'abort' }); stopList(); return; }
   const i = RUN.i, id = RUN.list[i];
   if (m.fs === 'finished' && id === 'penalty') { const r = { goals: m.goals, of: m.of || 10, stars: m.stars }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
+  if (m.fb === 'finished' && id === 'streetball') { const r = { goals: m.score[0], vs: m.score[1], won: !!m.won }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   if (m.ft === 'finished' && id === 'tennis') { const r = { won: !!m.won, games: m.games, friend: !!m.friend }; RUN.mine[i] = r; setTimeout(() => showResult(i), 2600); }
 });
 function showResult(i) {
@@ -301,6 +304,12 @@ function showResult(i) {
     else if (th) { const win = r.goals > th.goals, draw = r.goals === th.goals;
       body = `<p class="kick">PENALTIES</p><h2>${draw ? "It's a draw!" : win ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${win ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!win && !draw ? ' win' : ''}"><b>${th.goals}</b><span>${esc(fname.toUpperCase())}</span></div></div>`; }
     else body = `<p class="kick">PENALTIES</p><h2>${r.goals} / ${r.of} points</h2><p class="line">${'⭐'.repeat(r.stars || 1)}</p>`;
+  } else if (id === 'streetball') {
+    const th = RUN.their[i];
+    if (inParty() && !th) { RUN.waitTheirs = i; body = `<p class="kick">STREETBALL</p><h2>${r.goals} – ${r.vs}</h2><p class="line">Waiting for ${esc(fname)} to finish…</p>`; }
+    else if (th) { const md = r.goals - r.vs, td = th.goals - th.vs, win = md > td, draw = md === td;
+      body = `<p class="kick">STREETBALL · against Rob</p><h2>${draw ? "It's a draw!" : win ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${win ? ' win' : ''}"><b>${r.goals}–${r.vs}</b><span>YOU</span></div><b>·</b><div class="who${!win && !draw ? ' win' : ''}"><b>${th.goals}–${th.vs}</b><span>${esc(fname.toUpperCase())}</span></div></div>`; }
+    else body = `<p class="kick">STREETBALL</p><h2>${r.won ? 'You beat Rob!' : 'Rob won this time'}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${r.vs}</b><span>ROB</span></div></div><p class="line">baskets</p>`;
   } else {
     const g = r.games || [0, 0];
     body = `<p class="kick">TENNIS</p><h2>${r.won ? (r.friend ? 'You win!' : 'You beat Rob!') : r.friend ? `${esc(fname)} wins!` : 'Rob won this time'}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${g[0]}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${g[1]}</b><span>${esc((r.friend ? fname : 'ROB').toUpperCase())}</span></div></div><p class="line">games</p>`;
@@ -308,7 +317,7 @@ function showResult(i) {
   if (RUN.waitTheirs === i && !(inParty() && !RUN.their[i])) RUN.waitTheirs = -1;
   let btns;
   if (last) {
-    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
+    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
     btns = `${RUN.list.length > 1 ? `<ul class="list">${sum}</ul>` : ''}<div class="btns"><button class="big" type="button" id="rDone">BACK TO THE STADIUM</button></div>`;
   } else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
   else btns = `<p class="line">Waiting for ${esc(fname)}…</p>`;

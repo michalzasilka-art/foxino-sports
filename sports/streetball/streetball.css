@@ -1,0 +1,135 @@
+/* Streetball: the court under a HUD (solo on a phone, or ?remote=1 inside the teacher's screen) */
+:root { --ink: #1d1640; --ink2: #5a4a8c; --purple: #5b2bb0; --orange: #ff7d22; --gold: #ffcd1c; --green: #2fbf6a; --red: #ff4d5e;
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px); --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #6cc3ea; font: 800 16px/1.3 'Nunito', system-ui, sans-serif; color: var(--ink); -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#tags, #labels { position: fixed; inset: 0; pointer-events: none; }
+.hidden { display: none !important; }
+.tag { position: absolute; left: 0; top: 0; padding: 3px 10px; border-radius: 999px; background: #fff; color: var(--c, var(--purple)); font: 400 15px/1 'Lilita One', sans-serif; white-space: nowrap; box-shadow: 0 3px 0 rgba(0,0,0,.2); will-change: transform; }
+/* the word bubbles (tap them) */
+.blabel { --c: #ffd84a; position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); border: 0; background: none; padding: 14px; pointer-events: auto; cursor: pointer; opacity: 0; transition: opacity .25s; will-change: transform; }
+.blabel span { display: block; padding: 7px 14px; border-radius: 999px; background: rgba(29, 22, 64, .72); border: 3px solid var(--c); color: #fff; font: 400 clamp(19px, 5vw, 26px)/1 'Lilita One', sans-serif; letter-spacing: .5px; white-space: nowrap; text-shadow: 0 2px 0 rgba(0,0,0,.35); box-shadow: 0 4px 14px rgba(0,0,0,.25); transition: transform .12s, background .2s; }
+.blabel:active span { transform: scale(.94); }
+.blabel.picked span { background: rgba(255, 125, 34, .9); border-color: #fff; }
+.blabel.right span { background: rgba(20, 150, 70, .92); border-color: #b9ffcf; box-shadow: 0 0 22px rgba(77, 255, 138, .9); }
+.blabel.wrong { opacity: .25 !important; }
+body.remote .blabel { pointer-events: none; }
+/* the question card */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#card { position: absolute; left: 50%; top: calc(10px + var(--safe-t)); transform: translateX(-50%); width: min(640px, calc(100% - 20px)); padding: 8px 14px 9px; text-align: center; background: #fff; border-radius: 20px; box-shadow: 0 4px 0 rgba(60,30,120,.18), 0 10px 26px rgba(20,40,90,.22); }
+body:not(.remote) #card { top: calc(58px + var(--safe-t)); }
+#cardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#cardWho { font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cardWho em { font-style: normal; padding: 1px 8px 0; border-radius: 8px; background: var(--c, var(--orange)); color: #fff; }
+.score { font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1px; color: var(--ink2); white-space: nowrap; }
+.score b { color: var(--ink); font-weight: 400; }
+#sentence { margin: 6px 0 6px; font-weight: 900; font-size: clamp(19px, 5vw, 27px); line-height: 1.25; }
+#sentence i { font-style: normal; color: var(--ink2); font-weight: 700; font-size: .8em; }
+#sentence .gap { display: inline-block; min-width: 3em; border-bottom: 4px solid var(--gold); margin: 0 .1em; }
+#sentence .gap.ok { border: 0; padding: 0 .3em; border-radius: 8px; background: var(--green); color: #fff; }
+.tbar { height: 7px; border-radius: 99px; background: #ece6fb; overflow: hidden; }
+.tbar i { display: block; height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, #66e08a, #ffcd1c); transform-origin: left; transform: scaleX(0); }
+.tbar.low i { background: var(--red); }
+#note { min-height: 22px; margin-top: 5px; font-size: 15px; color: var(--ink2); }
+#note.good { color: var(--green); } #note.bad { color: #d23447; }
+#note b { color: var(--purple); }
+#banner { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; text-align: center; font: 400 clamp(46px, 13vw, 100px)/1 'Lilita One', sans-serif; color: #fff; text-shadow: 0 6px 0 #1b0f4a, 0 12px 26px rgba(0,0,0,.35); white-space: nowrap; }
+#banner small { display: block; font-size: .4em; color: var(--gold); margin-top: .15em; }
+#banner.pop { animation: bpop .9s cubic-bezier(.2,1.6,.4,1); }
+@keyframes bpop { from { transform: translate(-50%, -50%) scale(.3); opacity: 0; } }
+.topbtn { position: fixed; top: calc(10px + var(--safe-t)); z-index: 4; height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(29,22,64,.55); color: #fff; font: 400 15px/1 'Lilita One', sans-serif; letter-spacing: 1px; cursor: pointer; }
+#leaveBtn { left: calc(10px + var(--safe-l)); }
+#muteBtn { right: calc(10px + var(--safe-r)); width: 40px; padding: 0; justify-content: center; }
+#muteBtn .ico-off { display: none; } #muteBtn.muted .ico-on { display: none; } #muteBtn.muted .ico-off { display: block; }
+body.remote .topbtn { display: none; }
+/* screens */
+.screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: calc(60px + var(--safe-t)) max(16px, var(--safe-r)) calc(20px + var(--safe-b)) max(16px, var(--safe-l)); overflow-y: auto; z-index: 3; }
+.title-wrap { text-align: center; }
+.title-wrap img { width: min(380px, 84vw); filter: drop-shadow(0 8px 14px rgba(0,0,0,.3)); }
+.title-wrap img + .title { display: none; }
+.title { margin: 0; display: flex; flex-direction: column; font: 400 clamp(52px, 15vw, 96px)/.9 'Lilita One', sans-serif; color: #fff; text-shadow: 0 6px 0 #1b0f4a, 0 12px 24px rgba(0,0,0,.3); }
+.title .t2 { color: var(--gold); font-size: 1.15em; }
+.subtitle { margin: 10px auto 0; max-width: 320px; color: #fff; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.start-panel { width: min(420px, 100%); display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.best-line { text-align: center; color: #fff; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,.4); min-height: 1.2em; }
+.packcard { border: 0; border-radius: 16px; padding: 10px 14px; background: rgba(255,255,255,.95); color: var(--purple); font-weight: 900; text-align: left; box-shadow: 0 4px 0 rgba(0,0,0,.15); cursor: pointer; }
+.packcard small { display: block; color: var(--ink2); font-weight: 700; font-size: 12px; }
+.seg { display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.95); box-shadow: 0 4px 0 rgba(0,0,0,.15); }
+.seg span { padding: 0 8px 0 10px; color: var(--ink2); font-weight: 900; font-size: 14px; }
+.seg button { flex: 1; border: 0; background: none; padding: 8px 6px; border-radius: 999px; font: inherit; font-weight: 900; color: var(--ink2); cursor: pointer; }
+.seg button.on { background: var(--purple); color: #fff; }
+.bigbtn { border: 0; border-radius: 999px; padding: 16px; font: 400 32px/1 'Lilita One', sans-serif; letter-spacing: 2px; color: #fff; background: linear-gradient(180deg, #ffb13b, #ff6a1a); box-shadow: 0 6px 0 #c4470b, 0 12px 22px rgba(196,71,11,.35); cursor: pointer; }
+.bigbtn:active { transform: translateY(3px); box-shadow: 0 3px 0 #c4470b; }
+.linkbtn { border: 0; background: none; color: var(--ink2); font: inherit; font-weight: 900; padding: 10px; cursor: pointer; }
+#end { justify-content: center; background: rgba(20, 30, 80, .35); }
+.panel { width: min(420px, 100%); background: #fff; border-radius: 26px; padding: 20px 18px 10px; text-align: center; box-shadow: 0 6px 0 rgba(0,0,0,.15), 0 18px 34px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 8px; }
+.panel h2 { margin: 0; font: 400 38px/1 'Lilita One', sans-serif; color: var(--purple); }
+.stars { display: flex; justify-content: center; gap: 6px; }
+.stars i { width: 44px; height: 44px; background: #e6e0f6; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); transition: transform .3s; }
+.stars i.on { background: var(--gold); transform: scale(1.15); }
+.endscore b { font: 400 46px/1 'Lilita One', sans-serif; color: var(--ink); }
+.endscore span { display: block; color: var(--ink2); font-weight: 900; }
+.endline { margin: 0; color: var(--ink2); }
+.missed { text-align: left; background: #f5f2fd; border-radius: 14px; padding: 8px 12px; }
+.missed small { color: var(--ink2); font-weight: 900; }
+.missed ol { margin: 4px 0 0; padding-left: 20px; } .missed li { margin: 3px 0; } .missed li b { color: var(--green); }
+#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+#loading { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: linear-gradient(#5fb4ef, #2f6fd6); transition: opacity .4s; }
+#loading.gone { opacity: 0; pointer-events: none; }
+.load-box { width: min(300px, 80vw); text-align: center; color: #fff; }
+.load-title { font: 400 40px/1 'Lilita One', sans-serif; text-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.load-bar { margin: 14px 0 8px; height: 12px; border-radius: 99px; background: rgba(255,255,255,.3); overflow: hidden; }
+.load-bar i { display: block; height: 100%; width: 10%; background: var(--gold); border-radius: 99px; transition: width .3s; }
+
+[hidden] { display: none !important; }
+
+/* (2026-11-17) the words are drawn inside the 3D bubbles now: the buttons are invisible round tap areas over them */
+.blabel { padding: 0; border-radius: 50%; width: 90px; height: 90px; }
+.blabel span { display: none; }
+
+/* (2026-11-17) the juice: the words that pop out of a hit bubble, the combo, the flash */
+#fxText { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+.ptext { position: absolute; transform: translate(-50%, -50%); font: 400 clamp(26px, 8vw, 40px)/1 'Lilita One', sans-serif; letter-spacing: 1px; white-space: nowrap; color: #fff;
+  text-shadow: 0 4px 0 #1b0f4a, 0 8px 18px rgba(0,0,0,.35); animation: ptext 1.1s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ptext.perfect { color: #ffd84a; } .ptext.good { color: #b9ffcf; } .ptext.bad { color: #ff8a96; }
+@keyframes ptext { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 18% { transform: translate(-50%, -70%) scale(1.25); opacity: 1; } 70% { transform: translate(-50%, -120%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -150%) scale(.9); opacity: 0; } }
+#combo { position: fixed; left: 50%; top: calc(178px + var(--safe-t)); transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 999px; background: linear-gradient(180deg, #ff9a3c, #ff5d1a); color: #fff; font: 400 18px/1 'Lilita One', sans-serif; letter-spacing: 1px; box-shadow: 0 4px 0 #b83d0b, 0 8px 18px rgba(0,0,0,.25); pointer-events: none; white-space: nowrap; }
+#combo b { font-weight: 400; font-size: 1.25em; }
+#combo.bump { animation: cbump .45s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes cbump { 0% { transform: translateX(-50%) scale(.6); } 60% { transform: translateX(-50%) scale(1.2); } }
+#flash2 { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; }
+#flash2.good { animation: fgood .45s ease-out; background: radial-gradient(circle at 50% 55%, rgba(255,255,220,.0) 30%, rgba(255,235,140,.55) 100%); }
+#flash2.bad { animation: fgood .5s ease-out; background: radial-gradient(circle at 50% 55%, rgba(255,60,80,0) 35%, rgba(255,60,80,.5) 100%); }
+@keyframes fgood { 0% { opacity: 1; } 100% { opacity: 0; } }
+#labels.theirs .blabel { pointer-events: none; }
+/* play a friend */
+.bigbtn.alt { background: linear-gradient(180deg, #a77bff, #6a34c4); box-shadow: 0 6px 0 #45207f, 0 12px 22px rgba(69,32,127,.35); font-size: 26px; }
+.bigbtn.alt:active { box-shadow: 0 3px 0 #45207f; }
+#friend { justify-content: center; background: rgba(20, 30, 80, .35); }
+.fpanel { gap: 10px; }
+.fname { display: flex; flex-direction: column; gap: 4px; text-align: left; font-weight: 900; color: var(--ink2); font-size: 14px; }
+.fpanel input { border: 3px solid #e3dcf7; border-radius: 14px; padding: 11px 12px; font: 900 20px/1 'Nunito', sans-serif; color: var(--ink); background: #faf8ff; outline: none; min-width: 0; -webkit-user-select: text; user-select: text; }
+.fpanel input:focus { border-color: var(--purple); }
+#fHome, #fHost { display: flex; flex-direction: column; gap: 10px; }
+#fHome[hidden], #fHost[hidden] { display: none; }
+.or { margin: 4px 0 0; color: var(--ink2); font-weight: 900; }
+.frow { display: flex; gap: 8px; }
+.frow input { flex: 1; font: 400 26px/1 'Lilita One', sans-serif; letter-spacing: .12em; text-align: center; }
+.bigbtn.small { font-size: 22px; padding: 12px 18px; }
+.hint2 { margin: 0; color: var(--ink2); font-size: 13px; }
+.kick { margin: 0; font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: var(--ink2); }
+.fqr { width: min(220px, 56vw); aspect-ratio: 1; margin: 0 auto; }
+.fqr svg { width: 100%; height: 100%; }
+.fcode { font: 400 46px/1 'Lilita One', sans-serif; letter-spacing: .08em; color: var(--ink); }
+.fwait { margin: 0; color: var(--purple); font-weight: 900; animation: fpulse 1.4s ease-in-out infinite; }
+@keyframes fpulse { 50% { opacity: .5; } }
+.ferr { margin: 0; min-height: 1.2em; color: #d23447; font-weight: 800; }
+
+/* (2026-11-17) inside a Foxino Sports playlist: the lobby goes on after the match */
+body.list #againBtn, body.list #menuBtn { display: none; }
+
+/* Streetball: the play label over the card (YOUR BALL / ROB'S BALL / DEFENCE) */
+#cardWho em { background: var(--c, var(--orange)); }
+.lanehint { display: block; margin-top: 2px; font-size: 13px; color: var(--ink2); }
+body.list #againBtn, body.list #menuBtn { display: none; }

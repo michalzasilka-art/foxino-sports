@@ -64,7 +64,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* the picker */
 .title { margin: 0; font: 400 clamp(30px, 8vw, 46px)/1 'Lilita One', sans-serif; letter-spacing: 2px; color: var(--yellow); text-shadow: 0 4px 0 #1b1f5c, 0 0 20px rgba(255, 225, 74, .35); text-align: center; }
 .sub { margin: -4px 0 4px; font-size: 14px; opacity: .85; text-align: center; }
-.acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(560px, 100%); }
+.acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; width: min(780px, 100%); }
+/* (three sports) a phone: two on top, the third under them in the middle */
+@media (max-width: 600px) { .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(420px, 100%); } .acts .act:nth-child(3):last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 8px); } .act .nm { font-size: 22px; } }
 .act { position: relative; aspect-ratio: 1; padding: 0; border-radius: 20px; overflow: hidden; border: 4px solid var(--ink); background: #2b2f7a; box-shadow: 0 6px 0 var(--ink), 0 16px 26px -10px rgba(8,16,40,.6);
   transition: transform .14s, box-shadow .14s, filter .2s; color: #fff; }
 .act .pic { position: absolute; inset: 0; background: center/cover no-repeat; }
