@@ -263,7 +263,7 @@ function wordSprite() {
 const bubbles = TINTS.map((c) => { const b = makeBubble(c); b.mesh.visible = false; b.mesh.scale.setScalar(0.62); scene.add(b.mesh);
   const word = wordSprite(); b.mesh.add(word);
   return Object.assign(b, { k: 0, x: 0, y: 0, z: 0, state: 'off', t: 0, word, size: 0.62 }); });
-let BUBW = null;   // whose bubbles are showing
+let BUBW = null, POPPED = -1;   // whose bubbles are showing, the set already popped
 const labelEls = CSS_TINTS.map((c, k) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'blabel'; b.style.setProperty('--c', c); b.innerHTML = '<span></span>';
   b.addEventListener('pointerdown', (e) => { e.preventDefault(); unlock(); if (FR.on) FR.tap(k); else SOLO.tap(k); });
@@ -397,7 +397,7 @@ function doHit(w, k, ok, serve = false) {
   if (ok) shotTo(w, C, k, serve);
   else if (k >= 0) { const N = new THREE.Vector3(clamp(C.x * 0.6 + (k - 1) * 1.5, -5, 5), 0.55, side(w) * 0.25); launch([{ a: C, b: N, h: 0.5, d: 0.55 }, { a: N, b: new THREE.Vector3(N.x, 0.1, side(w) * 0.9), h: 0.1, d: 0.35 }], null); B.netAt = 0.55; }
   else { launch([], null); }
-  if (BUBW === w) popBubbles(k, ok);
+  // (the bubbles were popped already when the answer came in: COURT.hit)
 }
 const _bp = new THREE.Vector3();
 function updateBall(dt, t) {
@@ -510,6 +510,10 @@ const COURT = {
   },
   hit(w, k, ok, right) {
     const q = this.q;
+    // (2026-11-17, the user: "I had a question and I didn't have the bubbles") the bubbles pop the moment the answer comes in.
+    // Before, they popped when the ball reached the racket: after a quick answer the NEXT question's bubbles were already
+    // showing by then, and those were popped instead.
+    if (BUBW === w && this.who === w && POPPED !== labelGen) { POPPED = labelGen; popBubbles(k, ok); }
     if (B.mode === 'hold' && B.holder === w) { tossServe(w, k, ok); }
     else if (B.mode === 'fly' && B.to === w) { if (k < 0) { B.missed = true; B.pending = null; } else B.pending = { w, k, ok }; }
     else if (B.mode === 'fly' && B.to && B.to !== w) B.queued = { w, k, ok };
@@ -887,7 +891,7 @@ function fitCamera() {
   camera.updateProjectionMatrix(); placeCamera(0);
 }
 function placeCamera(dt) {
-  const fx = P.a ? clamp(P.a.x, -4, 4) : 0; CAMV.x = dt ? damp(CAMV.x, fx, 2.2, dt) : fx;
+  const fx = P.a ? clamp(P.a.x, -6, 6) : 0; CAMV.x = dt ? damp(CAMV.x, fx, 2.2, dt) : fx;
   SHAKE = Math.max(0, SHAKE - (dt || 0) * 1.6); const sh = SHAKE * SHAKE * 0.35;
   camera.position.set(CAMV.pos.x + CAMV.x * (CAMV.follow || 0.5) + (Math.random() - 0.5) * sh, CAMV.pos.y + (Math.random() - 0.5) * sh, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * (CAMV.follow || 0.5) * 0.5, CAMV.look.y, CAMV.look.z);
 }
