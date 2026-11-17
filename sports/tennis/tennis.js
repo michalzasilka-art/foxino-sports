@@ -23,6 +23,10 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const REMOTE = /[?&]remote=1/.test(location.search), RSLOT = +(new URLSearchParams(location.search).get('slot') || 0);
 if (REMOTE) document.body.classList.add('remote');
+// (2026-11-17) ?list=1: a sport picked in the Foxino Sports lobby: it starts at once (against Rob, or ?friend=host|join&room=…
+// &name=… against the party friend) and tells the lobby the result at the end ({ft: 'finished', won, games})
+const LIST = /[?&]list=1/.test(location.search), LP = new URLSearchParams(location.search);
+if (LIST) document.body.classList.add('list');
 const post = (m) => { if (REMOTE && window.parent !== window) window.parent.postMessage(Object.assign({ slot: RSLOT }, m), '*'); };
 const TINTS = [0xff6fb5, 0xffcd1c, 0x48d8ff], CSS_TINTS = ['#ff8fc4', '#ffd84a', '#6fe2ff'];
 const HALF_L = 11.885, HALF_W = 5.485, SINGLE_W = 4.115;
@@ -618,6 +622,7 @@ const SOLO = {
     $('end').classList.remove('hidden');
     if (won) { CROWD.cheer = 1; confetti(); P.a.mood = 'cheer'; P.a.moodT = -2; }
     renderStart();
+    if (LIST && window.parent !== window) window.parent.postMessage({ ft: 'finished', won, games: [ga, gb], right: SOLO.right, asked: SOLO.asked }, '*');
   },
 };
 // ---------- the juice (2026-11-17, the user: "make the answering more satisfying") ----------
@@ -685,12 +690,12 @@ const FR = {
   },
   close() { FR.on = false; clearTimeout(FR.tmo); try { FR.conn && FR.conn.close(); } catch (e) {} try { FR.peer && FR.peer.destroy(); } catch (e) {} FR.conn = null; FR.peer = null; FR.turn = null; FR.my = null; },
   back() { sfx.click && sfx.click(); FR.close(); $('friend').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.add('hidden'); COURT.idle(); setOpponent('rob'); COURT.setNames('YOU', 'ROB', '#8f52d9', '#23a6d4', false); $('start').classList.remove('hidden'); renderStart(); },
-  async create() {
-    const nm = FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
+  async create(fixed) {
+    const nm = fixed ? FR.fixedName : FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
     FR.err(''); try { await FR.libsReady(); } catch (e) { FR.err('No internet connection.'); return; }
     FR.close(); FR.host = true; FR.names = { h: nm, g: '' }; FR.games = gamesToWin;
     const go = () => {
-      FR.code = String(Math.floor(100000 + Math.random() * 900000));
+      FR.code = fixed || String(Math.floor(100000 + Math.random() * 900000));
       const peer = new Peer('fugio-tennis-' + FR.code); FR.peer = peer;
       peer.on('open', () => {
         $('fHome').hidden = true; $('fHost').hidden = false; $('fCodeBig').textContent = FR.code.replace(/(\d{3})(\d{3})/, '$1 $2'); $('fWait').textContent = 'Waiting for your friend…';
@@ -701,17 +706,17 @@ const FR = {
         FR.conn = conn; FR.wire(conn);
       });
       peer.on('disconnected', () => { if (FR.peer === peer && !peer.destroyed) peer.reconnect(); });
-      peer.on('error', (e) => { if (FR.peer !== peer) return; if (e.type === 'unavailable-id') { peer.destroy(); go(); } else if (!FR.on) FR.err('Connection problem. Try again.'); });
+      peer.on('error', (e) => { if (FR.peer !== peer) return; if (e.type === 'unavailable-id') { peer.destroy(); if (fixed) setTimeout(go, 1500); else go(); } else if (!FR.on) FR.err('Connection problem. Try again.'); });
     };
     go();
   },
-  async join() {
-    const nm = FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
-    const code = $('fCode').value.replace(/\D/g, ''); if (code.length !== 6) { FR.err("Type your friend's 6-number code."); return; }
+  async join(fixed, tries = 0) {
+    const nm = fixed ? FR.fixedName : FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
+    const code = fixed || $('fCode').value.replace(/\D/g, ''); if (!fixed && code.length !== 6) { FR.err("Type your friend's 6-number code."); return; }
     FR.err('Joining…'); try { await FR.libsReady(); } catch (e) { FR.err('No internet connection.'); return; }
     FR.close(); FR.host = false; FR.code = code;
     const peer = new Peer(); FR.peer = peer;
-    peer.on('error', (e) => { if (FR.peer !== peer) return; FR.err(e.type === 'peer-unavailable' ? 'No game with this code. Check the code on your friend\'s phone.' : 'Connection problem. Try again.'); });
+    peer.on('error', (e) => { if (FR.peer !== peer) return; if (fixed && e.type === 'peer-unavailable' && tries < 20) { setTimeout(() => FR.join(fixed, tries + 1), 1500); return; } FR.err(e.type === 'peer-unavailable' ? 'No game with this code. Check the code on your friend\'s phone.' : 'Connection problem. Try again.'); });
     peer.on('open', () => { const conn = peer.connect('fugio-tennis-' + code, { reliable: true }); FR.conn = conn; FR.wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: nm })); });
   },
   wire(conn) {
@@ -821,6 +826,7 @@ const FR = {
     $('againBtn').textContent = 'REMATCH';
     $('end').classList.remove('hidden');
     if (won) { CROWD.cheer = 1; confetti(); P.a.mood = 'cheer'; P.a.moodT = -2; }
+    if (LIST && window.parent !== window) window.parent.postMessage({ ft: 'finished', won, games: [ga, gb], right: FR.right, asked: FR.asked, friend: true }, '*');
   },
 };
 
@@ -910,6 +916,9 @@ function frame(now) {
   $('loadFill').style.width = '100%';
   requestAnimationFrame(frame);
   setTimeout(() => $('loading').classList.add('gone'), 150);
-  if (REMOTE) post({ ft: 'ready' }); else { renderStart(); const jc = (new URLSearchParams(location.search).get('join') || '').replace(/\D/g, ''); if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
+  if (REMOTE) post({ ft: 'ready' }); else { renderStart(); const jc = (new URLSearchParams(location.search).get('join') || '').replace(/\D/g, '');
+    if (LIST) { const fm = LP.get('friend'), room = LP.get('room'); FR.fixedName = (LP.get('name') || 'Player').slice(0, 12);
+      if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
+    else if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
   window.TN = { COURT, SOLO, FR, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();

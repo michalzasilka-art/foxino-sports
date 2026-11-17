@@ -6,78 +6,75 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Foxino Sports · Fugio</title>
-<meta name="description" content="Foxino Sports: Penalties and Tennis against Rob the robot. Tap the bubble with the right English word to score and to hit the ball.">
+<meta name="description" content="Foxino Sports: stand in the stadium with Foxino, add a friend, pick your sports (Penalties, Tennis) and play them one after another. Tap the bubble with the right English word.">
 <meta name="theme-color" content="#3a2392">
 <link rel="icon" href="/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
-<style>
-/* Foxino Sports (2026-11-17, the user: "put tennis and penalties into one app named Foxino Sports, an app only for
-   students"; the teacher's class version was removed): the menu of the two sports; each game's LEAVE comes back here */
-:root { --ink: #241552; --ink2: #5a4a8c; --purple: #5b2bb0; --gold: #ffcd1c; color-scheme: light; }
-* { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
-body { font: 800 16px/1.3 'Nunito', system-ui, sans-serif; color: var(--ink); background: #2b1a6b; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-.bg { position: fixed; inset: 0; background: #2b1a6b url(art/lobby-bg.webp?v=1) center / cover no-repeat; }
-.bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(30, 17, 88, .15) 0%, rgba(30, 17, 88, .35) 45%, rgba(30, 17, 88, .7) 100%); }
-main { position: relative; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; gap: 14px;
-  padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
-.top { align-self: stretch; display: flex; justify-content: flex-start; }
-.back { border: 0; height: 40px; padding: 0 14px; border-radius: 999px; background: rgba(29, 22, 64, .55); color: #fff; font: 400 15px/1 'Lilita One', sans-serif; letter-spacing: 1px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.logo { width: min(400px, 82vw); height: auto; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, .35)); animation: drop .6s cubic-bezier(.2, 1.4, .4, 1); }
-.logo-text { display: none; margin: 0; flex-direction: column; align-items: center; font: 400 54px/.9 'Lilita One', sans-serif; color: #fff; text-shadow: 0 5px 0 #1b0f4a; }
-.logo-text b { font-weight: 400; color: var(--gold); font-size: 1.2em; }
-.pick { margin: 0; color: #fff; font: 400 22px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; text-shadow: 0 3px 0 rgba(0, 0, 0, .3); }
-.games { width: min(860px, 100%); display: grid; grid-template-columns: 1fr; gap: 14px; }
-@media (min-width: 640px) { .games { grid-template-columns: 1fr 1fr; } }
-.game { position: relative; display: flex; flex-direction: column; border: 0; padding: 0; border-radius: 26px; overflow: hidden; background: #fff; text-align: left; cursor: pointer;
-  box-shadow: 0 6px 0 rgba(36, 21, 82, .25), 0 16px 34px rgba(10, 5, 40, .4); transition: transform .15s; animation: rise .55s cubic-bezier(.2, 1.3, .4, 1) both; color: inherit; font: inherit; text-decoration: none; }
-.game:nth-child(2) { animation-delay: .1s; }
-.game:active { transform: scale(.97); }
-@media (hover: hover) { .game:hover { transform: translateY(-4px) rotate(-.4deg); } }
-.game img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: linear-gradient(135deg, #8f52d9, #48d8ff); }
-.info { display: flex; align-items: center; gap: 12px; padding: 12px 14px 14px; }
-.info div { flex: 1; min-width: 0; }
-.info b { display: block; font: 400 28px/1 'Lilita One', sans-serif; color: var(--purple); }
-.info span { display: block; margin-top: 3px; color: var(--ink2); font-size: 14px; }
-.info em { display: block; margin-top: 5px; font-style: normal; font-size: 13px; color: #e2541a; min-height: 1em; }
-.play { flex: none; padding: 12px 20px; border-radius: 999px; font: 400 22px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: #fff; background: linear-gradient(180deg, #ffb13b, #ff6a1a); box-shadow: 0 5px 0 #c4470b; }
-.note { margin: auto 0 0; color: #fff; opacity: .8; font-size: 13px; text-align: center; }
-@media (max-width: 639px) { .game img { aspect-ratio: 2.3 / 1; } .logo { width: min(290px, 70vw); } .info b { font-size: 25px; } .info { padding: 10px 12px 12px; } main { gap: 10px; } }
-@keyframes drop { from { transform: translateY(-30px) scale(.9); opacity: 0; } }
-@keyframes rise { from { transform: translateY(40px); opacity: 0; } }
-</style>
+<link rel="stylesheet" href="lobby.css?v=1">
 </head>
 <body>
-<div class="bg"></div>
-<main>
-  <div class="top"><button class="back" id="back" type="button" aria-label="Leave"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>LEAVE</button></div>
-  <img class="logo" src="art/logo.webp?v=1" alt="Foxino Sports" onerror="this.remove(); document.querySelector('.logo-text').style.display = 'flex';">
-  <h1 class="logo-text"><span>FOXINO</span><b>SPORTS</b></h1>
-  <p class="pick">PICK YOUR SPORT</p>
-  <div class="games">
-    <a class="game" href="/penalty/?from=sports">
-      <img src="art/card-penalties.webp?v=1" alt="">
-      <div class="info"><div><b>Penalties</b><span>Tap the bubble with the right word to score. Then save Rob's shots!</span><em id="bestPen"></em></div><span class="play">PLAY</span></div>
-    </a>
-    <a class="game" href="tennis/?from=sports">
-      <img src="art/card-tennis.webp?v=1" alt="">
-      <div class="info"><div><b>Tennis</b><span>Tap the right word to hit the ball back. Beat Rob!</span><em id="bestTen"></em></div><span class="play">PLAY</span></div>
-    </a>
+<canvas id="gl"></canvas>
+<div id="tags">
+  <button class="nametag me" id="meTag" type="button" title="Change your name"><i>✎</i><span id="meName">YOU</span></button>
+  <div class="nametag friend" id="frTag" hidden><span id="frName"></span><button id="frLeave" type="button" aria-label="Leave the party">✕</button></div>
+  <button class="slot" id="slot" type="button"><b>+</b><span>ADD FRIEND</span></button>
+</div>
+
+<!-- the lobby's buttons (like the big shooter games' lobbies: the play button bottom right) -->
+<div id="ui">
+  <div class="top">
+    <button class="pill" id="leaveBtn" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>LEAVE</button>
+    <img class="toplogo" src="art/logo.webp?v=1" alt="Foxino Sports">
+    <span class="pill code" id="partyCode" hidden></span>
   </div>
-  <p class="note">English words A0–A2 · choose your words inside each game</p>
-</main>
-<script>
-(() => {
-  const get = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
-  // the best results from each game (they keep them on this device)
-  const pen = Object.values(get('penalty-best', {}) || {}).reduce((m, x) => Math.max(m, (x && x.goals) || 0), 0);
-  if (pen) document.getElementById('bestPen').textContent = `Your best: ${pen} / 10 points`;
-  const ten = (get('tennis-best', {}) || {}).wins || 0;
-  if (ten) document.getElementById('bestTen').textContent = `You have beaten Rob ${ten} time${ten > 1 ? 's' : ''}!`;
-  document.getElementById('back').onclick = () => { if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/'; };
-})();
-</script>
+  <div class="bottom">
+    <p class="hint" id="hint">Drag Foxino to turn him round</p>
+    <div class="playbox">
+      <span class="mode" id="modeLine">SOLO · against Rob</span>
+      <button class="play" id="playBtn" type="button"><span>PLAY</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- add a friend: make a party (a QR code + a code) or join one -->
+<section class="veil" id="party" hidden>
+  <div class="card">
+    <h2>Add a friend</h2>
+    <label class="fld">Your name<input id="pName" maxlength="12" placeholder="Your name" autocomplete="off"></label>
+    <div id="pHome">
+      <button class="big" id="pCreate" type="button">MAKE A PARTY</button>
+      <p class="or">or join your friend's party</p>
+      <div class="row"><input id="pCode" inputmode="numeric" maxlength="7" placeholder="123 456" autocomplete="off"><button class="big small" id="pJoin" type="button">JOIN</button></div>
+      <p class="small-note">Scan your friend's QR code with your phone's camera, or type the code from their screen.</p>
+    </div>
+    <div id="pHost" hidden>
+      <p class="kick">Your friend scans this</p>
+      <div class="qr" id="pQr"></div>
+      <p class="kick">or types this code</p>
+      <div class="bigcode" id="pCodeBig">··· ···</div>
+      <p class="wait">Waiting for your friend…</p>
+    </div>
+    <p class="err" id="pErr"></p>
+    <button class="link" id="pClose" type="button">Close</button>
+  </div>
+</section>
+
+<!-- choose the sports (like choosing the track in FoxKarts, but more than one: tap to pick, tap again to drop) -->
+<section class="veil dark" id="picker" hidden>
+  <h2 class="title">CHOOSE YOUR SPORTS</h2>
+  <p class="sub" id="pickSub">Tap to pick · tap again to drop · they are played one after another</p>
+  <div class="acts" id="acts"></div>
+  <div class="pbtns"><button class="link light" id="pickBack" type="button">‹ Back</button><button class="play inline" id="pickPlay" type="button"><span>PLAY</span></button></div>
+</section>
+
+<!-- the sport being played, then its result -->
+<div id="game" hidden><iframe id="frame" title="Foxino Sports" allow="autoplay; fullscreen; vibrate"></iframe></div>
+<section class="veil dark" id="result" hidden><div class="rcard" id="rcard"></div></section>
+<div id="toast"></div>
+<div id="loading"><div><img src="art/logo.webp?v=1" alt=""><div class="bar"><i id="loadBar"></i></div><span id="loadTxt">Opening the stadium…</span></div></div>
+
+<script type="module" src="lobby.js?v=1"></script>
 </body>
 </html>

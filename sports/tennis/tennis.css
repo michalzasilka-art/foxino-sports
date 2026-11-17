@@ -125,3 +125,6 @@ body.remote .topbtn { display: none; }
 .fwait { margin: 0; color: var(--purple); font-weight: 900; animation: fpulse 1.4s ease-in-out infinite; }
 @keyframes fpulse { 50% { opacity: .5; } }
 .ferr { margin: 0; min-height: 1.2em; color: #d23447; font-weight: 800; }
+
+/* (2026-11-17) inside a Foxino Sports playlist: the lobby goes on after the match */
+body.list #againBtn, body.list #menuBtn { display: none; }

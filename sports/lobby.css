@@ -1,0 +1,107 @@
+/* Foxino Sports: the 3D stadium lobby (Foxino on a platform, a friend's slot, PLAY bottom right), the party panel,
+   the sports picker (cards like the FoxKarts track choice), the playlist frame and the result cards */
+:root { --ink: #1b1f5c; --ink2: #5a4a8c; --purple: #5b2bb0; --yellow: #ffe14a; --gold: #ffc324; --green: #3fcf5a; --red: #ff4d5e;
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #2b2f7a; font: 800 16px/1.3 'Nunito', system-ui, sans-serif; color: #fff; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+button { font: inherit; color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#tags { position: fixed; inset: 0; pointer-events: none; }
+.nametag { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 10px; border: 0; background: rgba(27, 31, 92, .78); color: #fff;
+  font: 400 17px/1 'Lilita One', sans-serif; letter-spacing: 1px; white-space: nowrap; pointer-events: auto; transform: translate(-50%, -100%); box-shadow: 0 4px 12px rgba(0,0,0,.3); will-change: transform; }
+.nametag i { font-style: normal; font-size: 13px; opacity: .7; }
+.nametag.friend { background: rgba(255, 125, 34, .9); }
+.nametag.friend button { border: 0; background: rgba(0,0,0,.25); width: 22px; height: 22px; border-radius: 6px; font-size: 12px; padding: 0; }
+.slot { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px; border: 0; background: none; pointer-events: auto; will-change: transform; }
+.slot b { width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center; font: 400 52px/1 'Lilita One', sans-serif; color: #fff; background: rgba(255, 255, 255, .16);
+  border: 4px dashed rgba(255, 255, 255, .75); box-shadow: 0 0 24px rgba(120, 200, 255, .5); animation: slotPulse 1.8s ease-in-out infinite; backdrop-filter: blur(3px); }
+.slot span { font: 400 16px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; padding: 5px 10px; border-radius: 8px; background: rgba(27, 31, 92, .75); }
+@keyframes slotPulse { 50% { transform: scale(1.08); box-shadow: 0 0 34px rgba(120, 200, 255, .8); } }
+#ui { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+  padding: calc(10px + var(--st)) max(14px, var(--sr)) calc(14px + var(--sb)) max(14px, var(--sl)); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pill { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 0; border-radius: 999px; background: rgba(27, 31, 92, .6); color: #fff; font: 400 15px/1 'Lilita One', sans-serif; letter-spacing: 1px; }
+.pill.code { background: rgba(255, 125, 34, .9); }
+.toplogo { height: 54px; width: auto; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+.bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.hint { margin: 0 0 8px; font-size: 13px; opacity: .85; text-shadow: 0 2px 4px rgba(0,0,0,.5); max-width: 40vw; }
+.playbox { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: auto; }
+.mode { font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1px; padding: 5px 10px; border-radius: 8px; background: rgba(27, 31, 92, .7); }
+/* the big yellow PLAY, slanted */
+.play { border: 0; padding: 0; background: none; filter: drop-shadow(0 6px 0 #b07800) drop-shadow(0 12px 20px rgba(0,0,0,.35)); transition: transform .12s; }
+.play span { display: block; padding: 16px 46px; clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%); background: linear-gradient(180deg, #fff27a, #ffd21a 55%, #ffb800);
+  font: 400 40px/1 'Lilita One', sans-serif; letter-spacing: 3px; color: #2a1a00; }
+.play:active { transform: translateY(4px) scale(.98); }
+.play:disabled { filter: grayscale(1) opacity(.5); }
+.play.inline span { font-size: 32px; padding: 14px 40px; }
+.play.waiting span { font-size: 18px; letter-spacing: 1px; padding: 18px 26px; background: linear-gradient(180deg, #d7dbef, #aab1d4); color: var(--ink); }
+/* panels */
+.veil { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow-y: auto;
+  padding: calc(16px + var(--st)) max(16px, var(--sr)) calc(16px + var(--sb)) max(16px, var(--sl)); background: rgba(11, 20, 48, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.veil.dark { background: rgba(11, 20, 48, .82); }
+.card { width: min(420px, 100%); background: #fff; color: var(--ink); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px; text-align: center; box-shadow: 0 6px 0 rgba(0,0,0,.2), 0 18px 34px rgba(0,0,0,.35); }
+.card h2 { margin: 0; font: 400 32px/1 'Lilita One', sans-serif; color: var(--purple); }
+.fld { display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--ink2); font-size: 14px; font-weight: 900; }
+.card input { border: 3px solid #e3dcf7; border-radius: 14px; padding: 11px 12px; font: 900 20px/1 'Nunito', sans-serif; color: var(--ink); background: #faf8ff; outline: none; min-width: 0; -webkit-user-select: text; user-select: text; }
+.card input:focus { border-color: var(--purple); }
+#pHome, #pHost { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; font: 400 26px/1 'Lilita One', sans-serif; letter-spacing: .12em; text-align: center; }
+.big { border: 0; border-radius: 999px; padding: 14px; font: 400 26px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: #fff; background: linear-gradient(180deg, #ffb13b, #ff6a1a); box-shadow: 0 5px 0 #c4470b; }
+.big.small { font-size: 22px; padding: 12px 18px; }
+.big:active { transform: translateY(3px); box-shadow: 0 2px 0 #c4470b; }
+.or { margin: 4px 0 0; color: var(--ink2); }
+.small-note { margin: 0; color: var(--ink2); font-size: 13px; font-weight: 700; }
+.kick { margin: 0; font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: var(--ink2); }
+.qr { width: min(220px, 56vw); aspect-ratio: 1; margin: 0 auto; } .qr svg { width: 100%; height: 100%; }
+.bigcode { font: 400 46px/1 'Lilita One', sans-serif; letter-spacing: .08em; }
+.wait { margin: 0; color: var(--purple); animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .45; } }
+.err { margin: 0; min-height: 1.2em; color: #d23447; }
+.link { border: 0; background: none; color: var(--ink2); padding: 8px; font-weight: 900; }
+.link.light { color: #fff; font: 400 20px/1 'Lilita One', sans-serif; letter-spacing: 1px; }
+/* the picker */
+.title { margin: 0; font: 400 clamp(30px, 8vw, 46px)/1 'Lilita One', sans-serif; letter-spacing: 2px; color: var(--yellow); text-shadow: 0 4px 0 #1b1f5c, 0 0 20px rgba(255, 225, 74, .35); text-align: center; }
+.sub { margin: -4px 0 4px; font-size: 14px; opacity: .85; text-align: center; }
+.acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: min(560px, 100%); }
+.act { position: relative; aspect-ratio: 1; padding: 0; border-radius: 20px; overflow: hidden; border: 4px solid var(--ink); background: #2b2f7a; box-shadow: 0 6px 0 var(--ink), 0 16px 26px -10px rgba(8,16,40,.6);
+  transition: transform .14s, box-shadow .14s, filter .2s; color: #fff; }
+.act .pic { position: absolute; inset: 0; background: center/cover no-repeat; }
+.act .nm { position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 10px 12px; text-align: center; font: 400 26px/1 'Lilita One', sans-serif; letter-spacing: 1px; text-shadow: 0 2px 0 rgba(0,0,0,.5); background: linear-gradient(180deg, rgba(11,20,48,0), rgba(11,20,48,.92)); }
+.act .tag { position: absolute; top: 10px; left: 10px; padding: 3px 10px; border-radius: 10px; background: var(--ink); color: var(--yellow); font: 400 13px/1.3 'Lilita One', sans-serif; letter-spacing: 1px; }
+.act .tick { position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(11,20,48,.55); border: 3px solid rgba(255,255,255,.7); font-size: 22px; color: transparent; transition: all .15s; }
+.act .num { position: absolute; top: 52px; right: 8px; width: 40px; text-align: center; font: 400 15px/40px 'Lilita One', sans-serif; color: var(--yellow); text-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.act.on { border-color: var(--yellow); box-shadow: 0 6px 0 #b07800, 0 0 0 4px rgba(255, 225, 74, .35), 0 18px 30px -8px rgba(255, 200, 40, .5); transform: translateY(-4px); }
+.act.on .tick { background: var(--green); border-color: #fff; color: #fff; transform: scale(1.1); }
+.act:not(.on) { filter: grayscale(.65) brightness(.7); }
+.act:active { transform: translateY(2px) scale(.98); }
+.acts.view .act { pointer-events: none; }
+.pbtns { display: flex; align-items: center; gap: 22px; }
+/* the sport being played */
+#game { position: fixed; inset: 0; z-index: 20; background: #111; }
+#game iframe { width: 100%; height: 100%; border: 0; display: block; }
+#result { z-index: 30; }
+.rcard { width: min(440px, 100%); background: #fff; color: var(--ink); border-radius: 26px; padding: 22px 18px 14px; text-align: center; display: flex; flex-direction: column; gap: 10px; animation: pop .45s cubic-bezier(.2, 1.5, .4, 1); box-shadow: 0 6px 0 rgba(0,0,0,.2), 0 18px 34px rgba(0,0,0,.4); }
+.rcard .kick { color: var(--ink2); }
+.rcard h2 { margin: 0; font: 400 38px/1.05 'Lilita One', sans-serif; color: var(--purple); }
+.rcard .vs { display: flex; justify-content: center; align-items: center; gap: 16px; }
+.rcard .who { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 100px; }
+.rcard .who b { font: 400 46px/1 'Lilita One', sans-serif; }
+.rcard .who span { color: var(--ink2); font-weight: 900; }
+.rcard .who.win b { color: #1fae54; }
+.rcard .line { margin: 0; color: var(--ink2); }
+.rcard .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.rcard .list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 12px; background: #f3effd; font-weight: 900; }
+.rcard .list li em { font-style: normal; color: var(--purple); }
+.rcard .btns { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+@keyframes pop { from { transform: scale(.7); opacity: 0; } }
+#toast { position: fixed; left: 50%; top: calc(80px + var(--st)); transform: translateX(-50%); z-index: 40; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#toast div { padding: 10px 18px; border-radius: 14px; background: rgba(27, 31, 92, .92); font: 400 18px/1.1 'Lilita One', sans-serif; letter-spacing: 1px; text-align: center; animation: pop .35s cubic-bezier(.2, 1.5, .4, 1); box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+#loading { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #4b39b8, #1b1f5c); transition: opacity .5s; }
+#loading > div { width: min(320px, 80vw); text-align: center; }
+#loading img { width: 100%; filter: drop-shadow(0 8px 14px rgba(0,0,0,.4)); }
+#loading .bar { margin: 14px 0 8px; height: 12px; border-radius: 99px; background: rgba(255,255,255,.2); overflow: hidden; }
+#loading .bar i { display: block; height: 100%; width: 8%; border-radius: 99px; background: var(--yellow); transition: width .3s; }
+#loading.gone { opacity: 0; pointer-events: none; }
+@media (max-width: 520px) { .toplogo { height: 44px; } .play span { font-size: 34px; padding: 14px 36px; } .hint { display: none; } }
