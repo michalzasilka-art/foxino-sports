@@ -87,3 +87,41 @@ body.remote .topbtn { display: none; }
 /* (2026-11-17) the words are drawn inside the 3D bubbles now: the buttons are invisible round tap areas over them */
 .blabel { padding: 0; border-radius: 50%; width: 90px; height: 90px; }
 .blabel span { display: none; }
+
+/* (2026-11-17) the juice: the words that pop out of a hit bubble, the combo, the flash */
+#fxText { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+.ptext { position: absolute; transform: translate(-50%, -50%); font: 400 clamp(26px, 8vw, 40px)/1 'Lilita One', sans-serif; letter-spacing: 1px; white-space: nowrap; color: #fff;
+  text-shadow: 0 4px 0 #1b0f4a, 0 8px 18px rgba(0,0,0,.35); animation: ptext 1.1s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+.ptext.perfect { color: #ffd84a; } .ptext.good { color: #b9ffcf; } .ptext.bad { color: #ff8a96; }
+@keyframes ptext { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 18% { transform: translate(-50%, -70%) scale(1.25); opacity: 1; } 70% { transform: translate(-50%, -120%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -150%) scale(.9); opacity: 0; } }
+#combo { position: fixed; left: 50%; top: calc(178px + var(--safe-t)); transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 999px; background: linear-gradient(180deg, #ff9a3c, #ff5d1a); color: #fff; font: 400 18px/1 'Lilita One', sans-serif; letter-spacing: 1px; box-shadow: 0 4px 0 #b83d0b, 0 8px 18px rgba(0,0,0,.25); pointer-events: none; white-space: nowrap; }
+#combo b { font-weight: 400; font-size: 1.25em; }
+#combo.bump { animation: cbump .45s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes cbump { 0% { transform: translateX(-50%) scale(.6); } 60% { transform: translateX(-50%) scale(1.2); } }
+#flash2 { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; }
+#flash2.good { animation: fgood .45s ease-out; background: radial-gradient(circle at 50% 55%, rgba(255,255,220,.0) 30%, rgba(255,235,140,.55) 100%); }
+#flash2.bad { animation: fgood .5s ease-out; background: radial-gradient(circle at 50% 55%, rgba(255,60,80,0) 35%, rgba(255,60,80,.5) 100%); }
+@keyframes fgood { 0% { opacity: 1; } 100% { opacity: 0; } }
+#labels.theirs .blabel { pointer-events: none; }
+/* play a friend */
+.bigbtn.alt { background: linear-gradient(180deg, #a77bff, #6a34c4); box-shadow: 0 6px 0 #45207f, 0 12px 22px rgba(69,32,127,.35); font-size: 26px; }
+.bigbtn.alt:active { box-shadow: 0 3px 0 #45207f; }
+#friend { justify-content: center; background: rgba(20, 30, 80, .35); }
+.fpanel { gap: 10px; }
+.fname { display: flex; flex-direction: column; gap: 4px; text-align: left; font-weight: 900; color: var(--ink2); font-size: 14px; }
+.fpanel input { border: 3px solid #e3dcf7; border-radius: 14px; padding: 11px 12px; font: 900 20px/1 'Nunito', sans-serif; color: var(--ink); background: #faf8ff; outline: none; min-width: 0; -webkit-user-select: text; user-select: text; }
+.fpanel input:focus { border-color: var(--purple); }
+#fHome, #fHost { display: flex; flex-direction: column; gap: 10px; }
+#fHome[hidden], #fHost[hidden] { display: none; }
+.or { margin: 4px 0 0; color: var(--ink2); font-weight: 900; }
+.frow { display: flex; gap: 8px; }
+.frow input { flex: 1; font: 400 26px/1 'Lilita One', sans-serif; letter-spacing: .12em; text-align: center; }
+.bigbtn.small { font-size: 22px; padding: 12px 18px; }
+.hint2 { margin: 0; color: var(--ink2); font-size: 13px; }
+.kick { margin: 0; font: 400 14px/1 'Lilita One', sans-serif; letter-spacing: 1.5px; color: var(--ink2); }
+.fqr { width: min(220px, 56vw); aspect-ratio: 1; margin: 0 auto; }
+.fqr svg { width: 100%; height: 100%; }
+.fcode { font: 400 46px/1 'Lilita One', sans-serif; letter-spacing: .08em; color: var(--ink); }
+.fwait { margin: 0; color: var(--purple); font-weight: 900; animation: fpulse 1.4s ease-in-out infinite; }
+@keyframes fpulse { 50% { opacity: .5; } }
+.ferr { margin: 0; min-height: 1.2em; color: #d23447; font-weight: 800; }

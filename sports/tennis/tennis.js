@@ -262,7 +262,7 @@ const bubbles = TINTS.map((c) => { const b = makeBubble(c); b.mesh.visible = fal
 let BUBW = null;   // whose bubbles are showing
 const labelEls = CSS_TINTS.map((c, k) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'blabel'; b.style.setProperty('--c', c); b.innerHTML = '<span></span>';
-  b.addEventListener('pointerdown', (e) => { e.preventDefault(); unlock(); SOLO.tap(k); });
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); unlock(); if (FR.on) FR.tap(k); else SOLO.tap(k); });
   $('labels').appendChild(b); return b;
 });
 // a soft round shadow under the ball (it is small, so the real shadow is hard to see)
@@ -300,12 +300,24 @@ function robSwing(t, u) {
   return p;
 }
 function robRun(t, amt) { const p = RPOSES.ready(t), s = Math.sin(t * 13); p.legL = [-0.5 * s * amt, 0, 0.18]; p.legR = [0.5 * s * amt, 0, -0.18]; p.body = [0.18, 0, 0.06 * s * amt]; return p; }
+// the far player: Rob (against the computer) or a second Foxino in orange (a friend)
+async function setOpponent(kind) {
+  const p = P.b; if (!p) return;
+  if (kind === 'fox' && !p.fox) {
+    p.fox = await loadFoxino().catch(() => null);
+    if (p.fox) { p.fox.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(p.fox.root); p.fox.setKit({ shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ffffff', boots: '#f4f4f4' }); }
+  }
+  const fox = kind === 'fox' && p.fox;
+  if (p.fox) p.fox.root.visible = !!fox; p.rob.root.visible = !fox;
+  p.ch = fox ? p.fox : p.rob; p.kind = fox ? 'fox' : 'rob'; p.ch.root.rotation.y = 0;
+  p.racket.children.forEach((m) => { if (m.material && m.material.color && m.geometry.type === 'TorusGeometry') m.material.color.set(fox ? 0xff7d22 : 0x3cc6ef); });
+}
 async function makePlayers(kitA) {
   const fox = await loadFoxino().catch(() => null);
   if (fox) { fox.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); fox.root.rotation.y = Math.PI; scene.add(fox.root); fox.setKit(kitA || { shirt: '#ffffff', trim: '#8f52d9', shorts: '#8f52d9', socks: '#ffffff', boots: '#f4f4f4' }); }
   const rob = makeRob(); rob.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(rob.root);
-  P.a = { w: 'a', ch: fox, x: 0, z: HALF_L + 0.6, tx: 0, tz: HALF_L + 0.6, swing: -1, mood: '', moodT: 0, racket: makeRacket(0x8f52d9), tag: null };
-  P.b = { w: 'b', ch: rob, x: 0, z: -HALF_L - 0.6, tx: 0, tz: -HALF_L - 0.6, swing: -1, mood: '', moodT: 0, racket: makeRacket(0x3cc6ef), tag: null };
+  P.a = { w: 'a', kind: 'fox', ch: fox, x: 0, z: HALF_L + 0.6, tx: 0, tz: HALF_L + 0.6, swing: -1, mood: '', moodT: 0, racket: makeRacket(0x8f52d9), tag: null };
+  P.b = { w: 'b', kind: 'rob', rob, ch: rob, x: 0, z: -HALF_L - 0.6, tx: 0, tz: -HALF_L - 0.6, swing: -1, mood: '', moodT: 0, racket: makeRacket(0x3cc6ef), tag: null };
   for (const w of ['a', 'b']) { const t = document.createElement('div'); t.className = 'tag'; t.style.display = 'none'; $('tags').appendChild(t); P[w].tag = t; }
 }
 function updatePlayers(dt, t) {
@@ -318,7 +330,7 @@ function updatePlayers(dt, t) {
     if (p.swing >= 0) p.swing += dt / 0.5;
     if (p.swing > 1) p.swing = -1;
     p.moodT += dt; if (p.moodT > 1.8) p.mood = '';
-    if (w === 'a') {
+    if (p.kind === 'fox') {
       let pose;
       if (p.mood === 'cheer') pose = POSES.celebrate(p.moodT);
       else if (p.mood === 'sad') pose = POSES.sad(p.moodT);
@@ -337,7 +349,7 @@ function updatePlayers(dt, t) {
     }
     // the racket in the right paw / glove, along the forearm
     let hand, elbow;
-    if (w === 'a') { const bn = p.ch.bones || {}; if (bn.RightHand && bn.RightForeArm) { hand = bn.RightHand.getWorldPosition(new THREE.Vector3()); elbow = bn.RightForeArm.getWorldPosition(new THREE.Vector3()); } }
+    if (p.kind === 'fox') { const bn = p.ch.bones || {}; if (bn.RightHand && bn.RightForeArm) { hand = bn.RightHand.getWorldPosition(new THREE.Vector3()); elbow = bn.RightForeArm.getWorldPosition(new THREE.Vector3()); } }
     else { const J = p.ch.J; if (J && J.gloveR) { hand = J.gloveR.localToWorld(new THREE.Vector3(0, -0.12, 0)); elbow = J.elbowR ? J.elbowR.getWorldPosition(new THREE.Vector3()) : J.gloveR.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.3, 0)); } }
     if (hand && elbow) {
       _dir.subVectors(hand, elbow).normalize(); _dir.y += 0.35; _dir.normalize();
@@ -432,9 +444,9 @@ function showBubbles(w, words) {
   words.forEach((wd, k) => {
     const b = bubbles[k]; if (!b) return;
     b.word.userData.draw(wd); b.word.material.opacity = 1;
-    const narrow = camera.aspect < 0.8, spread = s > 0 ? (narrow ? 0.68 : 1) : 1.12;
-    b.size = s > 0 ? (narrow ? 0.82 : 0.8) : 1.15;
-    Object.assign(b, { x: BUB_X[k] * spread, y: (s > 0 ? 1.45 : 1.6) + (k === 1 ? 0.55 : 0), z: s * (s > 0 ? 5.6 : 3.7), state: 'in', t: -k * 0.1 });
+    const narrow = camera.aspect < 0.8, spread = s > 0 ? (narrow ? 0.58 : 0.9) : 1.12;
+    b.size = s > 0 ? (narrow ? 0.74 : 0.8) : 1.15;
+    Object.assign(b, { near: s > 0, x: BUB_X[k] * spread, y: (s > 0 ? 1.55 : 1.6) + (k === 1 ? 0.5 : 0), z: s * (s > 0 ? 6.4 : 3.7), state: 'in', t: -k * 0.1 });
     b.mesh.visible = true; b.u.uAlpha.value = 1; b.u.uGlow.value = 0; b.u.uHot.value = 0; b.mesh.scale.setScalar(0.001);
     const l = labelEls[k]; l.className = 'blabel'; l.firstChild.textContent = wd; l.style.opacity = '1';
   });
@@ -457,7 +469,7 @@ function updateBubbles(dt, t) {
     if (b.state === 'pop') { b.mesh.scale.setScalar(b.size * (1 + b.t * 2)); b.u.uAlpha.value = Math.max(0, 1 - b.t * 3); b.word.material.opacity = Math.max(0, 1 - b.t * 3); if (b.t > 0.35) { b.mesh.visible = false; b.state = 'off'; } }
     if (b.state === 'fade') { b.u.uAlpha.value = Math.max(0, 1 - b.t * 2); b.word.material.opacity = Math.max(0, 1 - b.t * 2.5); if (b.t > 0.5) { b.mesh.visible = false; b.state = 'off'; } }
     if (b.state === 'right') { b.mesh.scale.setScalar(b.size * (1 + 0.08 * Math.sin(b.t * 12))); if (b.t > 1.4) { b.state = 'fade'; b.t = 0; } }
-    b.mesh.position.set(b.x, b.y + Math.sin(t * 2 + b.x) * 0.06, b.z);
+    b.mesh.position.set(b.x + (b.near ? camera.position.x * 0.92 : 0), b.y + Math.sin(t * 2 + b.x) * 0.06, b.z);   // (the near ones stay in front of the camera)
   }
 }
 function updateLabels() {
@@ -543,7 +555,7 @@ const SOLO = {
   on: false, pts: [0, 0], games: [0, 0], server: 'a', rally: 0, right: 0, asked: 0, missed: [], q: null, t0: 0, waiting: false, tmo: null,
   start() {
     unlock(); sfx.click && sfx.click();
-    Object.assign(SOLO, { on: true, pts: [0, 0], games: [0, 0], server: 'a', rally: 0, right: 0, asked: 0, missed: [] });
+    Object.assign(SOLO, { on: true, pts: [0, 0], games: [0, 0], server: 'a', rally: 0, right: 0, asked: 0, missed: [] }); combo = 0; renderCombo(); $('againBtn').textContent = 'PLAY AGAIN'; setOpponent('rob'); $('labels').classList.remove('theirs');
     $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
     COURT.setNames('YOU', 'ROB', '#8f52d9', '#23a6d4', false); COURT.pointN = 0;
     SOLO.score(); sfx.whistle && sfx.whistle();
@@ -571,6 +583,7 @@ const SOLO = {
     const q = SOLO.q, ok = k === q.correct, ms = performance.now() - SOLO.t0;
     SOLO.asked++; if (ok) SOLO.right++; else SOLO.missed.push(q);
     if (k >= 0) sfx.pick && sfx.pick();
+    juice(ok, ms, k);
     COURT.hit('a', k, ok);
     if (!ok) { setTimeout(() => SOLO.point(1), k < 0 ? 2300 : 1700); return; }
     SOLO.rally++;
@@ -607,6 +620,210 @@ const SOLO = {
     renderStart();
   },
 };
+// ---------- the juice (2026-11-17, the user: "make the answering more satisfying") ----------
+const BURST = (() => {
+  const N = 260, geo = new THREE.BufferGeometry(), Pp = new Float32Array(N * 3), C = new Float32Array(N * 3), S = new Float32Array(N);
+  geo.setAttribute('position', new THREE.BufferAttribute(Pp, 3)); geo.setAttribute('color', new THREE.BufferAttribute(C, 3)); geo.setAttribute('size', new THREE.BufferAttribute(S, 1));
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, vertexColors: true, uniforms: { uScale: { value: 500 } },
+    vertexShader: 'attribute float size; varying vec3 vC; uniform float uScale; void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * uScale / -mv.z; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'varying vec3 vC; void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d); if (r > 0.5) discard; gl_FragColor = vec4(vC * 1.25, smoothstep(0.5, 0.1, r)); }' });
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 30; scene.add(pts);
+  const parts = Array.from({ length: N }, () => ({ life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), c: new THREE.Color(), s: 0 })); let head = 0;
+  return {
+    emit(pos, n, color, speed = 5, size = 0.16) { const c = new THREE.Color(color); for (let i = 0; i < n; i++) { const q = parts[head = (head + 1) % N]; q.life = 0.5 + Math.random() * 0.5; q.p.copy(pos);
+      q.v.set(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(speed * (0.4 + Math.random() * 0.8)); q.c.copy(c); q.s = size * (0.6 + Math.random() * 0.9); } },
+    update(dt) { for (let i = 0; i < N; i++) { const q = parts[i]; if (q.life > 0) { q.life -= dt; q.v.y -= 6 * dt; q.v.multiplyScalar(1 - 1.8 * dt); q.p.addScaledVector(q.v, dt); }
+      Pp[i * 3] = q.p.x; Pp[i * 3 + 1] = q.life > 0 ? q.p.y : -999; Pp[i * 3 + 2] = q.p.z; C[i * 3] = q.c.r; C[i * 3 + 1] = q.c.g; C[i * 3 + 2] = q.c.b; S[i] = q.life > 0 ? q.s * Math.min(1, q.life * 3) : 0; }
+      geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.attributes.size.needsUpdate = true; },
+    scale(h) { mat.uniforms.uScale.value = h * 0.7; },
+  };
+})();
+const vib = (pat) => { try { navigator.vibrate && navigator.vibrate(pat); } catch (e) {} };
+let combo = 0;
+function popText(pos, text, cls) {
+  _v4.copy(pos).project(camera); const el = document.createElement('div'); el.className = 'ptext ' + cls; el.textContent = text;
+  el.style.left = `${(_v4.x * 0.5 + 0.5) * innerWidth}px`; el.style.top = `${(-_v4.y * 0.5 + 0.5) * innerHeight}px`;
+  $('fxText').appendChild(el); setTimeout(() => el.remove(), 1100);
+}
+function flashScreen(cls) { const f = $('flash2'); f.className = ''; void f.offsetWidth; f.className = cls; }
+function renderCombo() { const c = $('combo'); c.hidden = combo < 2; if (combo >= 2) { c.innerHTML = `🔥 <b>${combo}</b> in a row`; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); } }
+// the player's own answer: a burst out of the bubble, PERFECT! / GREAT! / GOOD! by speed, the combo, a shake, a buzz
+function juice(ok, ms, k) {
+  const b = bubbles[k], at = b && b.mesh.visible ? b.mesh.position.clone() : P.a.ch ? P.a.ch.root.position.clone().setY(1.6) : new THREE.Vector3(0, 1.6, 8);
+  if (ok) {
+    combo++;
+    const tier = ms < 2500 ? 'PERFECT!' : ms < 5000 ? 'GREAT!' : 'GOOD!';
+    BURST.emit(at, 34, CSS_TINTS[k] || '#ffd84a', 6); BURST.emit(at, 20, '#ffffff', 4, 0.12); if (tier === 'PERFECT!') BURST.emit(at, 30, '#ffd84a', 9, 0.2);
+    popText(at, combo >= 2 ? `${tier} ×${combo}` : tier, tier === 'PERFECT!' ? 'perfect' : 'good');
+    SHAKE = tier === 'PERFECT!' ? 0.9 : 0.6; FREEZE = 0.06; vib(tier === 'PERFECT!' ? [25, 40, 45] : 30);
+    flashScreen('good'); sfx.star && sfx.star(Math.min(2, combo - 1)); CROWD.cheer = Math.max(CROWD.cheer, Math.min(1, 0.35 + combo * 0.15));
+  } else {
+    combo = 0; popText(at, k < 0 ? 'TOO SLOW!' : 'OOPS!', 'bad'); flashScreen('bad'); vib([70, 40, 70]); SHAKE = 0.5;
+  }
+  renderCombo();
+  trail.material.color.set(combo >= 3 ? 0xff9a3c : 0xf2ff9a); trail.material.opacity = combo >= 3 ? 0.6 : 0.35;
+}
+
+// ---------- play a friend (2026-11-17, the user: "add a join part where you can join your friend with a QR code or a code") ----------
+// Two phones over PeerJS (WebRTC; the PeerJS server only introduces them). The one who creates the game is the referee
+// (questions, times, points) at peer id "fugio-tennis-<code>"; the friend joins with the code or by scanning the QR code
+// (the link /sports/tennis/?join=<code>). On each phone you are Foxino in purple at the near end; your friend is Foxino in
+// orange at the far end. Messages: begin, ask, hit, point, end (referee → both) · hello, ans, again (friend → referee).
+const FR = {
+  on: false, host: false, peer: null, conn: null, code: '', names: { h: '', g: '' }, games: 2, pts: [0, 0], gms: [0, 0], server: 'h', rally: 0, turn: null, my: null, n: 0,
+  right: 0, asked: 0, missed: [], libs: null,
+  me() { return FR.host ? 'h' : 'g'; }, them() { return FR.host ? 'g' : 'h'; },
+  loc(who) { return who === FR.me() ? 'a' : 'b'; },
+  load(src) { return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); }); },
+  async libsReady() { return FR.libs || (FR.libs = Promise.all([window.Peer ? 0 : FR.load('https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js'), window.qrcode ? 0 : FR.load('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js')]).catch((e) => { FR.libs = null; throw e; })); },
+  name() { const n = $('fName').value.trim().replace(/\s+/g, ' ').slice(0, 12); if (n) store.set('tennis-name', n); return n; },
+  err(t) { $('fErr').textContent = t || ''; },
+  open(code) {
+    unlock(); $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('friend').classList.remove('hidden');
+    $('fName').value = store.get('tennis-name', '') || ''; $('fHome').hidden = false; $('fHost').hidden = true; FR.err('');
+    if (code) { $('fCode').value = code.replace(/(\d{3})(\d{3})/, '$1 $2'); if ($('fName').value) FR.join(); else $('fName').focus(); }
+  },
+  close() { FR.on = false; clearTimeout(FR.tmo); try { FR.conn && FR.conn.close(); } catch (e) {} try { FR.peer && FR.peer.destroy(); } catch (e) {} FR.conn = null; FR.peer = null; FR.turn = null; FR.my = null; },
+  back() { sfx.click && sfx.click(); FR.close(); $('friend').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.add('hidden'); COURT.idle(); setOpponent('rob'); COURT.setNames('YOU', 'ROB', '#8f52d9', '#23a6d4', false); $('start').classList.remove('hidden'); renderStart(); },
+  async create() {
+    const nm = FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
+    FR.err(''); try { await FR.libsReady(); } catch (e) { FR.err('No internet connection.'); return; }
+    FR.close(); FR.host = true; FR.names = { h: nm, g: '' }; FR.games = gamesToWin;
+    const go = () => {
+      FR.code = String(Math.floor(100000 + Math.random() * 900000));
+      const peer = new Peer('fugio-tennis-' + FR.code); FR.peer = peer;
+      peer.on('open', () => {
+        $('fHome').hidden = true; $('fHost').hidden = false; $('fCodeBig').textContent = FR.code.replace(/(\d{3})(\d{3})/, '$1 $2'); $('fWait').textContent = 'Waiting for your friend…';
+        const qr = qrcode(0, 'M'); qr.addData(`${location.origin}/sports/tennis/?join=${FR.code}`); qr.make(); $('fQr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      });
+      peer.on('connection', (conn) => {
+        if (FR.conn && FR.conn.open) { conn.on('open', () => { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 300); }); return; }
+        FR.conn = conn; FR.wire(conn);
+      });
+      peer.on('disconnected', () => { if (FR.peer === peer && !peer.destroyed) peer.reconnect(); });
+      peer.on('error', (e) => { if (FR.peer !== peer) return; if (e.type === 'unavailable-id') { peer.destroy(); go(); } else if (!FR.on) FR.err('Connection problem. Try again.'); });
+    };
+    go();
+  },
+  async join() {
+    const nm = FR.name(); if (!nm) { FR.err('Type your name first.'); $('fName').focus(); return; }
+    const code = $('fCode').value.replace(/\D/g, ''); if (code.length !== 6) { FR.err("Type your friend's 6-number code."); return; }
+    FR.err('Joining…'); try { await FR.libsReady(); } catch (e) { FR.err('No internet connection.'); return; }
+    FR.close(); FR.host = false; FR.code = code;
+    const peer = new Peer(); FR.peer = peer;
+    peer.on('error', (e) => { if (FR.peer !== peer) return; FR.err(e.type === 'peer-unavailable' ? 'No game with this code. Check the code on your friend\'s phone.' : 'Connection problem. Try again.'); });
+    peer.on('open', () => { const conn = peer.connect('fugio-tennis-' + code, { reliable: true }); FR.conn = conn; FR.wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: nm })); });
+  },
+  wire(conn) {
+    conn.on('data', (m) => { if (m && typeof m === 'object') FR.msg(m, true); });
+    conn.on('close', () => { if (FR.conn !== conn) return; const was = FR.on || !$('friend').classList.contains('hidden'); FR.close(); if (was) { banner('YOUR FRIEND LEFT', ''); setTimeout(() => FR.back(), 1800); } });
+  },
+  send(m) { try { if (FR.conn && FR.conn.open) FR.conn.send(m); } catch (e) {} },
+  // the referee: to the friend and to this phone
+  cast(m) { FR.send(m); FR.apply(m); },
+  msg(m, remote) {
+    if (m.t === 'full') { FR.err('That game already has two players.'); return; }
+    if (FR.host && remote) {
+      if (m.t === 'hello') { FR.names.g = String(m.name || 'Friend').slice(0, 12); $('fWait').textContent = `${FR.names.g} joined!`; setTimeout(() => FR.startMatch(), 700); return; }
+      if (m.t === 'ans') { FR.resolve('g', m.id, +m.k, +m.ms); return; }
+      if (m.t === 'again') { FR.startMatch(); return; }
+      return;
+    }
+    FR.apply(m);
+  },
+  startMatch() {
+    Object.assign(FR, { pts: [0, 0], gms: [0, 0], server: 'h', rally: 0, n: 0 });
+    FR.cast({ t: 'begin', names: FR.names, games: FR.games });
+    setTimeout(() => FR.serveNext(), 1600);
+  },
+  serveNext() { if (!FR.on) return; FR.rally = 0; FR.askTurn(FR.server, true); },
+  askTurn(who, serve) {
+    if (!FR.on) return;
+    const q = FSQ.make(PACKS, packIds, { n: 3, count: FR.n++ }); if (!q) return;
+    const secs = Math.max(6, 12 - FR.rally * 0.8), id = (FR.turn ? FR.turn.id : 0) + 1;
+    FR.turn = { who, q, id, done: false };
+    FR.cast({ t: 'ask', who, q, secs, serve, id });
+    clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + 900);
+  },
+  resolve(who, id, k, ms) {
+    const T = FR.turn; if (!T || T.id !== id || T.done || T.who !== who) return;
+    T.done = true; clearTimeout(FR.tmo);
+    const ok = k === T.q.correct;
+    FR.cast({ t: 'hit', who, k: k >= 0 && k < 3 ? k : -1, ok, right: T.q.right, ms: Math.round(Math.min(ms, 99999)) });
+    if (ok) { FR.rally++; setTimeout(() => FR.askTurn(who === 'h' ? 'g' : 'h', false), 1300); }
+    else setTimeout(() => FR.point(who === 'h' ? 'g' : 'h'), k < 0 ? 2300 : 1700);
+  },
+  point(w) {
+    if (!FR.on) return;
+    const i = w === 'h' ? 0 : 1; FR.pts[i]++;
+    let label, game = false;
+    if (FR.pts[i] >= 4) { game = true; FR.gms[i]++; FR.pts = [0, 0]; FR.server = FR.server === 'h' ? 'g' : 'h'; label = `GAME ${FR.names[w].toUpperCase()}`; }
+    else label = FR.pts[0] === 3 && FR.pts[1] === 3 ? 'DEUCE' : `${CALL[FR.pts[0]]} – ${CALL[FR.pts[1]]}`;
+    const over = FR.gms[i] >= FR.games;
+    FR.cast({ t: 'point', w, label, game, pts: FR.pts.slice(), gms: FR.gms.slice() });
+    if (over) setTimeout(() => FR.cast({ t: 'end', w, gms: FR.gms.slice() }), 2200);
+    else setTimeout(() => FR.serveNext(), game ? 2600 : 2200);
+  },
+  // both phones: show what the referee says
+  apply(m) {
+    const me = FR.me(), them = FR.them();
+    if (m.t === 'begin') {
+      FR.on = true; FR.names = m.names; FR.games = m.games; Object.assign(FR, { right: 0, asked: 0, missed: [] }); combo = 0; renderCombo();
+      $('friend').classList.add('hidden'); $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
+      setOpponent('fox').then(() => { COURT.setNames('YOU', FR.names[them], '#8f52d9', '#ff7d22', true); P.a.tag.style.display = 'none'; });
+      COURT.pointN = 0; COURT.resetForServe(FR.loc('h'));
+      FR.scoreLine([0, 0], [0, 0]);
+      banner(`YOU vs ${FR.names[them].toUpperCase()}`, `first to ${m.games} game${m.games > 1 ? 's' : ''}`); sfx.whistle && sfx.whistle();
+      return;
+    }
+    if (!FR.on) return;
+    if (m.t === 'ask') {
+      const mine = m.who === me;
+      COURT.ask(FR.loc(m.who), m.q, m.secs, m.serve);
+      $('labels').classList.toggle('theirs', !mine);
+      FR.my = mine ? { id: m.id, q: m.q, t0: performance.now(), done: false } : null; if (mine) FR.lastQ = m.q;
+      if (!mine) $('cardWho').innerHTML = `${esc(FR.names[them].toUpperCase())}'S SHOT · watch!`;
+    }
+    if (m.t === 'hit') {
+      COURT.hit(FR.loc(m.who), m.k, m.ok, m.right);
+      if (m.who === me) { FR.asked++; if (m.ok) FR.right++; else if (FR.lastQ) FR.missed.push(FR.lastQ); juice(m.ok, m.ms, m.k); }
+      else if (m.ok && bubbles[m.k] && bubbles[m.k].mesh.visible) BURST.emit(bubbles[m.k].mesh.position.clone(), 20, CSS_TINTS[m.k], 5);
+    }
+    if (m.t === 'point') {
+      COURT.point(FR.loc(m.w), m.label, m.game ? `games ${FR.mine(m.gms)}` : '');
+      if (m.w !== me) setTimeout(() => sfx.aww && sfx.aww(), 200);
+      FR.scoreLine(m.pts, m.gms);
+    }
+    if (m.t === 'end') { FR.finish(m.w === me, m.gms); }
+  },
+  mine(arr) { return FR.host ? `${arr[0]}–${arr[1]}` : `${arr[1]}–${arr[0]}`; },
+  scoreLine(pts, gms) {
+    const a = FR.host ? pts[0] : pts[1], b = FR.host ? pts[1] : pts[0], ga = FR.host ? gms[0] : gms[1], gb = FR.host ? gms[1] : gms[0], th = FR.names[FR.them()] || 'FRIEND';
+    setScore(`YOU <b>${CALL[Math.min(3, a)]} : ${CALL[Math.min(3, b)]}</b> ${esc(th.toUpperCase())} · <b>${ga}–${gb}</b>`);
+    Object.assign(SCREEN, { a: (FR.names[FR.me()] || 'YOU').toUpperCase(), b: th.toUpperCase(), pts: `${CALL[Math.min(3, a)]} : ${CALL[Math.min(3, b)]}`, games: `${ga} – ${gb}` }); drawScreen();
+  },
+  tap(k) {
+    const M = FR.my; if (!M || M.done) return; M.done = true; FR.lastQ = M.q;
+    const ms = performance.now() - M.t0; sfx.pick && sfx.pick();
+    if (FR.host) FR.resolve('h', M.id, k, ms); else FR.send({ t: 'ans', id: M.id, k, ms: Math.round(ms) });
+  },
+  finish(won, gms) {
+    FR.on = false; FR.my = null;
+    $('hud').classList.add('hidden'); bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; });
+    const ga = FR.host ? gms[0] : gms[1], gb = FR.host ? gms[1] : gms[0], th = FR.names[FR.them()];
+    $('endTitle').textContent = won ? 'You won!' : `${th} won!`;
+    $('endGames').textContent = `${ga} – ${gb}`;
+    $('endLine').textContent = `${FR.right} of ${FR.asked} answers right`;
+    const stars = won ? (gb === 0 ? 3 : 2) : ga > 0 ? 1 : 0;
+    const st = [...document.querySelectorAll('#stars i')]; st.forEach((e) => e.classList.remove('on')); st.forEach((e, i) => { if (i < stars) setTimeout(() => { e.classList.add('on'); sfx.star && sfx.star(i); }, 500 + i * 300); });
+    const list = $('missedList'); list.innerHTML = FR.missed.slice(-6).map((q) => `<li>${hints(q.before)}<b>${esc(q.right)}</b>${hints(q.after)}</li>`).join('');
+    $('missed').classList.toggle('hidden', !FR.missed.length);
+    $('againBtn').textContent = 'REMATCH';
+    $('end').classList.remove('hidden');
+    if (won) { CROWD.cheer = 1; confetti(); P.a.mood = 'cheer'; P.a.moodT = -2; }
+  },
+};
+
 function renderStart() {
   const ps = packIds.map((id) => PACKS.find((p) => p.id === id)).filter(Boolean);
   const label = (p) => (window.FugioPacks && FugioPacks.label ? FugioPacks.label(p) : p.level);
@@ -615,11 +832,16 @@ function renderStart() {
   const best = store.get('tennis-best', { wins: 0 }); $('bestLine').textContent = best.wins ? `You have beaten Rob ${best.wins} time${best.wins > 1 ? 's' : ''}!` : '';
 }
 $('playBtn').onclick = () => SOLO.start();
-$('againBtn').onclick = () => SOLO.start();
-$('menuBtn').onclick = () => { sfx.click && sfx.click(); $('end').classList.add('hidden'); $('start').classList.remove('hidden'); };
+$('againBtn').onclick = () => { if (FR.conn && FR.conn.open) { if (FR.host) FR.startMatch(); else { FR.send({ t: 'again' }); $('endTitle').textContent = 'Waiting for your friend…'; } } else SOLO.start(); };
+$('menuBtn').onclick = () => { if (FR.conn) { FR.back(); return; } sfx.click && sfx.click(); $('end').classList.add('hidden'); $('start').classList.remove('hidden'); };
+$('friendBtn').onclick = () => { sfx.click && sfx.click(); FR.open(); };
+$('fCreate').onclick = () => FR.create();
+$('fJoin').onclick = () => FR.join();
+$('fBack').onclick = () => FR.back();
+$('fCode').addEventListener('input', (e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = d.length > 3 ? d.slice(0, 3) + ' ' + d.slice(3) : d; });
 $('lenSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; gamesToWin = +b.dataset.v; store.set('tennis-len', gamesToWin); renderStart(); });
 $('packBtn').onclick = async () => { if (!window.FugioPacks) return; const ids = await FugioPacks.open(PACKS, packIds, { theme: 'gummy' }); if (ids && ids.length) { packIds = ids; store.set('tennis-packs', ids); renderStart(); } };
-$('leaveBtn').onclick = () => { sfx.click && sfx.click(); if (/[?&]from=sports/.test(location.search)) { location.href = '/sports/'; return; } if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/'; };
+$('leaveBtn').onclick = () => { sfx.click && sfx.click(); FR.close(); if (/[?&]from=sports/.test(location.search)) { location.href = '/sports/'; return; } if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/'; };
 const muteBtn = $('muteBtn'); muteBtn.classList.toggle('muted', isMuted()); muteBtn.onclick = () => { unlock(); setMuted(!isMuted()); muteBtn.classList.toggle('muted', isMuted()); };
 
 // ---------- the teacher's page ----------
@@ -649,18 +871,21 @@ function confetti() {
 // ---------- the camera ----------
 // (2026-11-17, the user: "make the tennis game more from behind") low behind Foxino, looking down the court at Rob
 const CAMV = { pos: new THREE.Vector3(), look: new THREE.Vector3(), x: 0 };
+let SHAKE = 0, FREEZE = 0;
 function fitCamera() {
   const a = camera.aspect;
-  if (a < 0.8) { camera.fov = 62; CAMV.pos.set(0, 5.4, 19.6); CAMV.look.set(0, 0.9, -3.5); }
-  else if (a < 1.25) { camera.fov = 54; CAMV.pos.set(0, 5.6, 21.0); CAMV.look.set(0, 0.9, -2.5); }
-  else { camera.fov = 46; CAMV.pos.set(0, 5.2, 21.5); CAMV.look.set(0, 1.0, -2.0); }
+  // (2026-11-17, the user: "make the tennis camera more up close")
+  if (a < 0.8) { camera.fov = 60; CAMV.pos.set(0, 4.5, 18.3); CAMV.look.set(0, 0.45, 1.0); CAMV.follow = 0.82; }
+  else if (a < 1.25) { camera.fov = 54; CAMV.pos.set(0, 4.5, 18.8); CAMV.look.set(0, 0.6, 0.5); CAMV.follow = 0.72; }
+  else { camera.fov = 46; CAMV.pos.set(0, 4.3, 19.2); CAMV.look.set(0, 0.7, 0.0); CAMV.follow = 0.62; }
   camera.updateProjectionMatrix(); placeCamera(0);
 }
 function placeCamera(dt) {
   const fx = P.a ? clamp(P.a.x, -4, 4) : 0; CAMV.x = dt ? damp(CAMV.x, fx, 2.2, dt) : fx;
-  camera.position.set(CAMV.pos.x + CAMV.x * 0.55, CAMV.pos.y, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * 0.25, CAMV.look.y, CAMV.look.z);
+  SHAKE = Math.max(0, SHAKE - (dt || 0) * 1.6); const sh = SHAKE * SHAKE * 0.35;
+  camera.position.set(CAMV.pos.x + CAMV.x * (CAMV.follow || 0.5) + (Math.random() - 0.5) * sh, CAMV.pos.y + (Math.random() - 0.5) * sh, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * (CAMV.follow || 0.5) * 0.5, CAMV.look.y, CAMV.look.z);
 }
-function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); }
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); BURST.scale(h * pr); }
 addEventListener('resize', resize);
 
 // ---------- the loop ----------
@@ -668,7 +893,8 @@ let last = performance.now(), T = 0, slow = 0, frames = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
-  updatePlayers(dt, T); updateBall(dt, T); updateBubbles(dt, T); updateCrowd(T, dt); placeCamera(dt);
+  const bdt = FREEZE > 0 ? 0 : dt; FREEZE = Math.max(0, FREEZE - dt);
+  updatePlayers(dt, T); updateBall(bdt, T); updateBubbles(dt, T); updateCrowd(T, dt); BURST.update(dt); placeCamera(dt);
   POSTFX.draw(scene, camera, 30);
   updateLabels();
   if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
@@ -684,6 +910,6 @@ function frame(now) {
   $('loadFill').style.width = '100%';
   requestAnimationFrame(frame);
   setTimeout(() => $('loading').classList.add('gone'), 150);
-  if (REMOTE) post({ ft: 'ready' }); else { renderStart(); $('start').classList.remove('hidden'); }
-  window.TN = { COURT, SOLO, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
+  if (REMOTE) post({ ft: 'ready' }); else { renderStart(); const jc = (new URLSearchParams(location.search).get('join') || '').replace(/\D/g, ''); if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
+  window.TN = { COURT, SOLO, FR, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();
