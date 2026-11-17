@@ -54,6 +54,11 @@ function courtTexture() {
   const sx = W / 20, sz = H / 38;   // the texture covers 20 m × 38 m
   g.fillStyle = '#3e9a5b'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#2f6fc4'; g.fillRect(W / 2 - 8.5 * sx, H / 2 - 17 * sz, 17 * sx, 34 * sz);
+  // (2026-11-17) worn patches where the players run, a lighter sheen along the middle
+  const wear = (x, z, rx, rz, a) => { const gr = g.createRadialGradient(W / 2 + x * sx, H / 2 + z * sz, 0, W / 2 + x * sx, H / 2 + z * sz, rx * sx); gr.addColorStop(0, `rgba(170,205,240,${a})`); gr.addColorStop(1, 'rgba(170,205,240,0)'); g.save(); g.translate(W / 2 + x * sx, H / 2 + z * sz); g.scale(1, rz / rx); g.translate(-(W / 2 + x * sx), -(H / 2 + z * sz)); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore(); };
+  for (const zz of [-12.6, 12.6]) { wear(0, zz, 4.5, 1.6, 0.22); wear(-1.5, zz, 2.2, 1.0, 0.12); wear(1.5, zz, 2.2, 1.0, 0.12); }
+  for (const zz of [-6.4, 6.4]) wear(0, zz, 1.8, 1.2, 0.1);
+  { const gr = g.createLinearGradient(W / 2 - 5 * sx, 0, W / 2 + 5 * sx, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.05)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
   // a soft grain
   for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.035})`; g.fillRect(Math.random() * W, Math.random() * H, 2, 2); }
   g.strokeStyle = '#ffffff'; g.lineWidth = 0.06 * sx;
@@ -111,6 +116,11 @@ function buildCourt() {
     const st = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5 + r * 0.6, 34), r % 2 ? standM2 : standM); st.position.set(s * (11.6 + r * 1.4), (0.5 + r * 0.6) / 2, 0); st.receiveShadow = true; world.add(st);
     for (let z = -16; z <= 16; z += 1.05) if (Math.random() < 0.75) seats.push({ x: s * (11.6 + r * 1.4), y: 0.5 + r * 0.6, z: z + rand(-0.15, 0.15), s, ph: Math.random() * 6 });
   }
+  // (2026-11-17) behind Rob: a small stand with fans
+  for (let r = 0; r < 4; r++) {
+    const st = new THREE.Mesh(new THREE.BoxGeometry(22, 0.6 + r * 0.7, 1.4), r % 2 ? standM2 : standM); st.position.set(0, (0.6 + r * 0.7) / 2, -(22.2 + r * 1.4)); world.add(st);
+    for (let x = -10.2; x <= 10.2; x += 1.0) if (Math.random() < 0.8) seats.push({ x: x + rand(-0.15, 0.15), y: 0.6 + r * 0.7, z: -(22.2 + r * 1.4), s: 0, ph: Math.random() * 6 });
+  }
   CROWD.seats = seats;
   const bodyG = new THREE.BoxGeometry(0.38, 0.52, 0.3), headG = new THREE.IcosahedronGeometry(0.18, 0);
   CROWD.body = new THREE.InstancedMesh(bodyG, new THREE.MeshStandardMaterial({ roughness: 0.8 }), seats.length);
@@ -138,6 +148,15 @@ function buildCourt() {
     head.rotation.x = lamps.rotation.x = 0.35; g.rotation.y = Math.atan2(-g.position.x, -g.position.z);
     world.add(g);
   }
+  // (2026-11-17) the big score screen behind Rob's end
+  const sbc = document.createElement('canvas'); sbc.width = 1024; sbc.height = 320;
+  const sbt = new THREE.CanvasTexture(sbc); sbt.colorSpace = THREE.SRGBColorSpace; sbt.anisotropy = 4;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 2.6), new THREE.MeshBasicMaterial({ map: sbt, toneMapped: false, fog: false }));
+  screen.position.set(0, 7.2, -27.2); world.add(screen);
+  const frameM = new THREE.MeshStandardMaterial({ color: 0x23233a, roughness: 0.5, metalness: 0.3 });
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(9, 3.2, 0.3), frameM); fr.position.set(0, 7.2, -27.4); world.add(fr);
+  for (const x of [-3.6, 3.6]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 6, 8), frameM); leg.position.set(x, 3, -27.5); world.add(leg); }
+  SCREEN.c = sbc; SCREEN.t = sbt; drawScreen();
   // the umpire's chair
   const chair = new THREE.Group(); const cm = new THREE.MeshStandardMaterial({ color: 0x2b3a5c, roughness: 0.6 });
   for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2, 6), cm); l.position.set(x, 1, z); chair.add(l); }
@@ -147,6 +166,22 @@ function buildCourt() {
 }
 const CROWD = { seats: [], body: null, head: null, cheer: 0 };
 const FLAGS = [];
+// the big score screen behind Rob: the two names, the points, the games
+const SCREEN = { c: null, t: null, a: 'YOU', b: 'ROB', pts: '0 : 0', games: '0 – 0' };
+function drawScreen() {
+  if (!SCREEN.c) return; const g = SCREEN.c.getContext('2d'), W = 1024, H = 320;
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1d1450'); bg.addColorStop(1, '#0e0a2c'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#ffcd1c'; g.lineWidth = 10; g.strokeRect(5, 5, W - 10, H - 10);
+  g.textBaseline = 'middle'; g.font = '400 64px "Lilita One", sans-serif';
+  g.textAlign = 'left'; g.fillStyle = '#ffffff'; g.fillText(SCREEN.a.slice(0, 12), 44, 92); g.fillText(SCREEN.b.slice(0, 12), 44, 214);
+  g.textAlign = 'center'; g.fillStyle = '#ffcd1c'; g.font = '400 110px "Lilita One", sans-serif';
+  const [pa, pb] = SCREEN.pts.split(':').map((x) => x.trim());
+  g.fillText(pa || '0', 700, 96); g.fillText(pb || '0', 700, 218);
+  g.fillStyle = '#7fe0ff'; g.font = '400 54px "Lilita One", sans-serif'; const [ga, gb] = SCREEN.games.split('–').map((x) => x.trim());
+  g.fillText(ga || '0', 900, 92); g.fillText(gb || '0', 900, 214);
+  g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '400 26px "Lilita One", sans-serif'; g.fillText('POINTS', 700, 22); g.fillText('GAMES', 900, 22);
+  SCREEN.t.needsUpdate = true;
+}
 const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = new THREE.Vector3(1, 1, 1), _v4 = new THREE.Vector3();
 function updateCrowd(t, dt) {
   for (const f of FLAGS) { const a = f.geometry.attributes.position, b = f.userData.base; for (let k = 0; k < a.count; k++) { const x = b[k * 3]; a.array[k * 3 + 2] = Math.sin(x * 5 - t * 6 + f.position.z) * 0.1 * x; } a.needsUpdate = true; }
@@ -207,10 +242,27 @@ function makeRacket(color) {
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   scene.add(g); return g;
 }
-const bubbles = TINTS.map((c) => { const b = makeBubble(c); b.mesh.visible = false; b.mesh.scale.setScalar(0.62); scene.add(b.mesh); return Object.assign(b, { k: 0, x: 0, y: 0, z: 0, state: 'off', t: 0 }); });
+// (2026-11-17, the user: "make the answers in bubbles, sometimes they bug and I cannot see them") each bubble carries its
+// word itself: a sprite drawn on a canvas, in front of everything, inside the bubble
+function wordSprite() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  sp.renderOrder = 20; sp.scale.set(2.0, 1.0, 1);
+  sp.userData.draw = (word, col) => { const g = c.getContext('2d'); g.clearRect(0, 0, 512, 256);
+    let fs = 176; g.font = `400 ${fs}px "Lilita One", "Arial Black", sans-serif`; while (g.measureText(word).width > 470 && fs > 40) { fs -= 6; g.font = `400 ${fs}px "Lilita One", "Arial Black", sans-serif`; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.lineWidth = fs * 0.2; g.strokeStyle = 'rgba(29,22,64,0.92)'; g.strokeText(word, 256, 136);
+    g.fillStyle = col || '#ffffff'; g.fillText(word, 256, 136); t.needsUpdate = true; };
+  return sp;
+}
+const bubbles = TINTS.map((c) => { const b = makeBubble(c); b.mesh.visible = false; b.mesh.scale.setScalar(0.62); scene.add(b.mesh);
+  const word = wordSprite(); b.mesh.add(word);
+  return Object.assign(b, { k: 0, x: 0, y: 0, z: 0, state: 'off', t: 0, word, size: 0.62 }); });
+let BUBW = null;   // whose bubbles are showing
 const labelEls = CSS_TINTS.map((c, k) => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'blabel'; b.style.setProperty('--c', c); b.innerHTML = '<span></span>';
-  b.addEventListener('click', (e) => { e.preventDefault(); unlock(); SOLO.tap(k); });
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); unlock(); SOLO.tap(k); });
   $('labels').appendChild(b); return b;
 });
 // a soft round shadow under the ball (it is small, so the real shadow is hard to see)
@@ -329,7 +381,7 @@ function doHit(w, k, ok, serve = false) {
   if (ok) shotTo(w, C, k, serve);
   else if (k >= 0) { const N = new THREE.Vector3(clamp(C.x * 0.6 + (k - 1) * 1.5, -5, 5), 0.55, side(w) * 0.25); launch([{ a: C, b: N, h: 0.5, d: 0.55 }, { a: N, b: new THREE.Vector3(N.x, 0.1, side(w) * 0.9), h: 0.1, d: 0.35 }], null); B.netAt = 0.55; }
   else { launch([], null); }
-  popBubbles(k, ok);
+  if (BUBW === w) popBubbles(k, ok);
 }
 const _bp = new THREE.Vector3();
 function updateBall(dt, t) {
@@ -376,10 +428,13 @@ function updateBall(dt, t) {
 // ---------- the bubbles on the answering player's side ----------
 let labelGen = 0;
 function showBubbles(w, words) {
-  const s = side(w); labelGen++;
+  const s = side(w); labelGen++; BUBW = w;
   words.forEach((wd, k) => {
     const b = bubbles[k]; if (!b) return;
-    Object.assign(b, { x: BUB_X[k], y: (s > 0 ? 1.7 : 1.25) + (k === 1 ? 0.35 : 0), z: s * (s > 0 ? 5.6 : 4.6), state: 'in', t: -k * 0.1 });
+    b.word.userData.draw(wd); b.word.material.opacity = 1;
+    const narrow = camera.aspect < 0.8, spread = s > 0 ? (narrow ? 0.68 : 1) : 1.12;
+    b.size = s > 0 ? (narrow ? 0.82 : 0.8) : 1.15;
+    Object.assign(b, { x: BUB_X[k] * spread, y: (s > 0 ? 1.45 : 1.6) + (k === 1 ? 0.55 : 0), z: s * (s > 0 ? 5.6 : 3.7), state: 'in', t: -k * 0.1 });
     b.mesh.visible = true; b.u.uAlpha.value = 1; b.u.uGlow.value = 0; b.u.uHot.value = 0; b.mesh.scale.setScalar(0.001);
     const l = labelEls[k]; l.className = 'blabel'; l.firstChild.textContent = wd; l.style.opacity = '1';
   });
@@ -392,14 +447,16 @@ function popBubbles(k, ok) {
   const g = labelGen; setTimeout(() => { if (g === labelGen) labelEls.forEach((l) => { l.style.opacity = '0'; }); }, 700);
   if (k >= 0) sfx.pop && sfx.pop();
 }
-function revealRight(k) { if (labelEls[k]) { labelEls[k].classList.remove('wrong'); labelEls[k].classList.add('right'); } if (bubbles[k]) { bubbles[k].u.uGlow.value = 1; } }
+function revealRight(k) { if (labelEls[k]) { labelEls[k].classList.remove('wrong'); labelEls[k].classList.add('right'); }
+  const b = bubbles[k]; if (b && b.mesh.visible) { b.u.uGlow.value = 1; b.u.uAlpha.value = 1; b.state = 'right'; b.t = 0; b.word.userData.draw(labelEls[k].firstChild.textContent, '#b9ffcf'); } }
 function updateBubbles(dt, t) {
   for (const b of bubbles) {
     if (!b.mesh.visible) continue;
     b.t += dt; b.u.uTime.value = t;
-    if (b.state === 'in') { const s = 0.62 * smooth(b.t / 0.35); b.mesh.scale.setScalar(Math.max(0.001, s)); }
-    if (b.state === 'pop') { b.mesh.scale.setScalar(0.62 * (1 + b.t * 2)); b.u.uAlpha.value = Math.max(0, 1 - b.t * 3); if (b.t > 0.35) { b.mesh.visible = false; b.state = 'off'; } }
-    if (b.state === 'fade') { b.u.uAlpha.value = Math.max(0, 1 - b.t * 2); if (b.t > 0.5) { b.mesh.visible = false; b.state = 'off'; } }
+    if (b.state === 'in') { const s = b.size * smooth(b.t / 0.35); b.mesh.scale.setScalar(Math.max(0.001, s)); }
+    if (b.state === 'pop') { b.mesh.scale.setScalar(b.size * (1 + b.t * 2)); b.u.uAlpha.value = Math.max(0, 1 - b.t * 3); b.word.material.opacity = Math.max(0, 1 - b.t * 3); if (b.t > 0.35) { b.mesh.visible = false; b.state = 'off'; } }
+    if (b.state === 'fade') { b.u.uAlpha.value = Math.max(0, 1 - b.t * 2); b.word.material.opacity = Math.max(0, 1 - b.t * 2.5); if (b.t > 0.5) { b.mesh.visible = false; b.state = 'off'; } }
+    if (b.state === 'right') { b.mesh.scale.setScalar(b.size * (1 + 0.08 * Math.sin(b.t * 12))); if (b.t > 1.4) { b.state = 'fade'; b.t = 0; } }
     b.mesh.position.set(b.x, b.y + Math.sin(t * 2 + b.x) * 0.06, b.z);
   }
 }
@@ -408,6 +465,8 @@ function updateLabels() {
   bubbles.forEach((b, k) => {
     const l = labelEls[k]; if (!b.mesh.visible) return;
     _v4.copy(b.mesh.position).project(camera);
+    const d = camera.position.distanceTo(b.mesh.position), px = Math.max(70, (b.size * 1.15 / (d * Math.tan(camera.fov * Math.PI / 360))) * h);
+    l.style.width = l.style.height = `${px.toFixed(0)}px`;
     l.style.transform = `translate(${(_v4.x * 0.5 + 0.5) * w}px, ${(-_v4.y * 0.5 + 0.5) * h}px) translate(-50%, -50%)`;
   });
   for (const k of ['a', 'b']) { const p = P[k]; if (!p || !p.tag || p.tag.style.display === 'none') continue;
@@ -439,8 +498,7 @@ const COURT = {
     else if (B.mode === 'fly' && B.to === w) { if (k < 0) { B.missed = true; B.pending = null; } else B.pending = { w, k, ok }; }
     else if (B.mode === 'fly' && B.to && B.to !== w) B.queued = { w, k, ok };
     else if (k >= 0) doHit(w, k, ok);
-    if (q) { if (!ok) setTimeout(() => revealRight(q.correct), 350); cardResult(ok, k, q, right); }
-    timerStop();
+    if (q && this.who === w) { const g = labelGen; if (!ok) setTimeout(() => { if (g === labelGen) revealRight(q.correct); }, 350); cardResult(ok, k, q, right); timerStop(); }
   },
   point(w, label, sub) { banner(label, sub); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); P[w].mood = 'cheer'; P[w].moodT = 0; P[other(w)].mood = 'sad'; P[other(w)].moodT = 0; COURT.pointN = (COURT.pointN || 0) + 1; },
   idle() { $('hud').classList.add('hidden'); bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; }); B.mode = 'hold'; B.holder = 'a'; },
@@ -491,7 +549,8 @@ const SOLO = {
     SOLO.score(); sfx.whistle && sfx.whistle();
     setTimeout(() => SOLO.serve(), 700);
   },
-  score() { const [a, b] = SOLO.pts, [ga, gb] = SOLO.games; setScore(`YOU <b>${a === 3 && b === 3 ? '40 : 40' : CALL[Math.min(3, a)] + ' : ' + CALL[Math.min(3, b)]}</b> ROB · <b>${ga}–${gb}</b>`); },
+  score() { const [a, b] = SOLO.pts, [ga, gb] = SOLO.games;
+    Object.assign(SCREEN, { a: 'FOXINO', b: 'ROB', pts: `${CALL[Math.min(3, a)]} : ${CALL[Math.min(3, b)]}`, games: `${ga} – ${gb}` }); drawScreen(); setScore(`YOU <b>${a === 3 && b === 3 ? '40 : 40' : CALL[Math.min(3, a)] + ' : ' + CALL[Math.min(3, b)]}</b> ROB · <b>${ga}–${gb}</b>`); },
   serve() {
     if (!SOLO.on) return;
     SOLO.rally = 0;
@@ -567,10 +626,10 @@ const muteBtn = $('muteBtn'); muteBtn.classList.toggle('muted', isMuted()); mute
 if (REMOTE) addEventListener('message', (e) => {
   const m = e.data; if (!m || typeof m !== 'object' || !m.ft) return;
   if (RSLOT === 0) unlock();
-  if (m.ft === 'match') { COURT.setNames(m.a.name, m.b.name, m.a.c, m.b.c, true); if (P.a.ch) P.a.ch.setKit({ shirt: '#ffffff', trim: m.a.c, shorts: m.a.c, socks: '#ffffff', boots: '#f4f4f4' }); COURT.pointN = 0; COURT.resetForServe('a'); $('hud').classList.add('hidden'); setScore(''); }
+  if (m.ft === 'match') { COURT.setNames(m.a.name, m.b.name, m.a.c, m.b.c, true); if (P.a.ch) P.a.ch.setKit({ shirt: '#ffffff', trim: m.a.c, shorts: m.a.c, socks: '#ffffff', boots: '#f4f4f4' }); COURT.pointN = 0; COURT.resetForServe('a'); $('hud').classList.add('hidden'); setScore(''); Object.assign(SCREEN, { a: m.a.name.toUpperCase(), b: m.b.name.toUpperCase(), pts: '0 : 0', games: '0 – 0' }); drawScreen(); }
   if (m.ft === 'ask') COURT.ask(m.who, m.q, m.secs, m.serve);
   if (m.ft === 'hit') COURT.hit(m.who, m.k, m.ok, m.right);
-  if (m.ft === 'point') { COURT.point(m.w, m.label, m.game ? `games ${m.games[0]}–${m.games[1]}` : ''); }
+  if (m.ft === 'point') { COURT.point(m.w, m.label, m.game ? `games ${m.games[0]}–${m.games[1]}` : ''); Object.assign(SCREEN, { pts: `${CALL[Math.min(3, m.pts[0])]} : ${CALL[Math.min(3, m.pts[1])]}`, games: `${m.games[0]} – ${m.games[1]}` }); drawScreen(); }
   if (m.ft === 'end') { banner(`${COURT.names[m.w]} WINS!`, ''); CROWD.cheer = 1; }
   if (m.ft === 'idle') COURT.idle();
 });
@@ -588,12 +647,18 @@ function confetti() {
 }
 
 // ---------- the camera ----------
+// (2026-11-17, the user: "make the tennis game more from behind") low behind Foxino, looking down the court at Rob
+const CAMV = { pos: new THREE.Vector3(), look: new THREE.Vector3(), x: 0 };
 function fitCamera() {
   const a = camera.aspect;
-  if (a < 0.8) { camera.fov = 58; camera.position.set(0, 11.2, 23.2); camera.lookAt(0, 0, -1.6); }
-  else if (a < 1.25) { camera.fov = 54; camera.position.set(0, 12.5, 25.5); camera.lookAt(0, 0, 0.2); }
-  else { camera.fov = 44; camera.position.set(0, 10.5, 24.5); camera.lookAt(0, 0, 0.4); }
-  camera.updateProjectionMatrix();
+  if (a < 0.8) { camera.fov = 62; CAMV.pos.set(0, 5.4, 19.6); CAMV.look.set(0, 0.9, -3.5); }
+  else if (a < 1.25) { camera.fov = 54; CAMV.pos.set(0, 5.6, 21.0); CAMV.look.set(0, 0.9, -2.5); }
+  else { camera.fov = 46; CAMV.pos.set(0, 5.2, 21.5); CAMV.look.set(0, 1.0, -2.0); }
+  camera.updateProjectionMatrix(); placeCamera(0);
+}
+function placeCamera(dt) {
+  const fx = P.a ? clamp(P.a.x, -4, 4) : 0; CAMV.x = dt ? damp(CAMV.x, fx, 2.2, dt) : fx;
+  camera.position.set(CAMV.pos.x + CAMV.x * 0.55, CAMV.pos.y, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * 0.25, CAMV.look.y, CAMV.look.z);
 }
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); }
 addEventListener('resize', resize);
@@ -603,8 +668,8 @@ let last = performance.now(), T = 0, slow = 0, frames = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
-  updatePlayers(dt, T); updateBall(dt, T); updateBubbles(dt, T); updateCrowd(T, dt);
-  POSTFX.draw(scene, camera, camera.position.length());
+  updatePlayers(dt, T); updateBall(dt, T); updateBubbles(dt, T); updateCrowd(T, dt); placeCamera(dt);
+  POSTFX.draw(scene, camera, 30);
   updateLabels();
   if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
 }
