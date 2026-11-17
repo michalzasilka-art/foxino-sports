@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Foxino Sports · Join</title>
+<meta name="theme-color" content="#3a2392">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="play.css?v=1">
+</head>
+<body>
+<!-- join -->
+<section id="join" class="screen show">
+  <div class="head"><img src="../art/logo.webp?v=1" alt="Foxino Sports" onerror="this.remove()"><h1 class="logo-text"><span>FOXINO</span><b>SPORTS</b></h1></div>
+  <form class="jcard" id="joinForm" autocomplete="off">
+    <label>Game code<input id="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="123 456"></label>
+    <label>Your name<input id="name" maxlength="14" placeholder="Your name" autocapitalize="words"></label>
+    <p class="lbl">Your picture</p>
+    <div class="avs" id="avs"></div>
+    <button class="go" id="goBtn" type="submit">JOIN</button>
+    <p class="err" id="err"></p>
+  </form>
+  <a class="host-link" href="../">I'm the teacher ›</a>
+</section>
+
+<!-- waiting / watching the big screen -->
+<section id="wait" class="screen">
+  <div class="me" id="me1"></div>
+  <div class="wbox">
+    <div class="wico" id="wIco">📺</div>
+    <h2 id="wTitle">You're in!</h2>
+    <p id="wMsg">Look at the big screen.</p>
+  </div>
+  <p class="conn" id="conn1"></p>
+</section>
+
+<!-- a question -->
+<section id="ask" class="screen">
+  <div class="qtop"><b id="qTitle">YOUR TURN</b><span id="qSub"></span></div>
+  <div class="timer"><i id="tBar"></i></div>
+  <div class="qcard" id="qText"></div>
+  <div class="opts" id="opts"></div>
+  <p class="locked" id="locked" hidden>Locked in! Look at the big screen 👀</p>
+</section>
+
+<!-- the result of an answer -->
+<section id="res" class="screen">
+  <div class="me" id="me2"></div>
+  <div class="rbox">
+    <div class="rico" id="rIco">✓</div>
+    <h2 id="rTitle">RIGHT!</h2>
+    <p class="right" id="rRight"></p>
+    <p id="rMsg"></p>
+  </div>
+</section>
+
+<!-- the end -->
+<section id="end" class="screen">
+  <div class="me" id="me3"></div>
+  <div class="ebox">
+    <div class="medal" id="eMedal">🏆</div>
+    <h2 id="eTitle">CHAMPION!</h2>
+    <p class="place" id="ePlace"></p>
+    <div class="estats"><div><b id="ePts">0</b><span>points</span></div><div><b id="eRight">0</b><span>right answers</span></div></div>
+    <p>Look at the big screen for the next game!</p>
+  </div>
+</section>
+
+<script src="play.js?v=1"></script>
+</body>
+</html>

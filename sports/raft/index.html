@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>River Raft · Foxino Sports</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="raft.css?v=1">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="tags"></div>
+<div id="hud">
+  <div class="qcard" id="qcard" hidden>
+    <div class="qhead"><span id="qNum">QUESTION 1</span><span class="qhint">Vote on your phones · the most votes steer!</span></div>
+    <div class="qs" id="qs"></div>
+    <div class="qopts" id="qopts"></div>
+  </div>
+  <div class="track" id="track"><i class="start">START</i><div class="lane" id="lane"></div><i class="fin">🏁</i></div>
+  <div class="teams" id="teams"></div>
+</div>
+<div id="big"></div>
+<div id="loading"><div><b>RIVER RAFT</b><span id="loadTxt">Filling the river…</span></div></div>
+<script type="module" src="raft.js?v=1"></script>
+</body>
+</html>
