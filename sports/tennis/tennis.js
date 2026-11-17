@@ -619,7 +619,7 @@ $('againBtn').onclick = () => SOLO.start();
 $('menuBtn').onclick = () => { sfx.click && sfx.click(); $('end').classList.add('hidden'); $('start').classList.remove('hidden'); };
 $('lenSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; gamesToWin = +b.dataset.v; store.set('tennis-len', gamesToWin); renderStart(); });
 $('packBtn').onclick = async () => { if (!window.FugioPacks) return; const ids = await FugioPacks.open(PACKS, packIds, { theme: 'gummy' }); if (ids && ids.length) { packIds = ids; store.set('tennis-packs', ids); renderStart(); } };
-$('leaveBtn').onclick = () => { sfx.click && sfx.click(); if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/'; };
+$('leaveBtn').onclick = () => { sfx.click && sfx.click(); if (/[?&]from=sports/.test(location.search)) { location.href = '/sports/'; return; } if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/'; };
 const muteBtn = $('muteBtn'); muteBtn.classList.toggle('muted', isMuted()); muteBtn.onclick = () => { unlock(); setMuted(!isMuted()); muteBtn.classList.toggle('muted', isMuted()); };
 
 // ---------- the teacher's page ----------
