@@ -11,7 +11,8 @@ import { GLTFLoader } from '/penalty/lib/GLTFLoader.js';
 import { MeshoptDecoder } from '/adventures/lib/meshopt_decoder.module.js';
 
 export const WS = { stadium: new THREE.Vector3(0, 0, -78), entrance: new THREE.Vector3(0, 0, -40), cauldron: new THREE.Vector3(13, 0, -14), rings: new THREE.Vector3(-11, 0, -8) };
-const FILES = ['ws-stadium', 'ws-plaza', 'ws-props', 'ws-far'];
+const FILES = ['ws-stadium', 'ws-plaza', 'ws-props', 'ws-far', 'ws-podium', 'ws-front', 'ws-people'];   // (v2: the podium, the foreground, the visitors)
+const LOOSE = new Set(['ws-podium', 'ws-people']);   // (pieces the code places itself: not added where they were modelled)
 
 // ---------- falling snow: soft round flakes in a box that follows the camera (one draw call) ----------
 function makeSnow(n = 1400) {
@@ -84,28 +85,61 @@ function standIns(scene, missing) {
   }
 }
 
+// ---------- (v2) the LED screen: slides of the logo and the sports (art/*.webp), cross-fading ----------
+function makeScreen(o) {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 576; const g = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false; tex.anisotropy = 4;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+  o.traverse((m) => { if (!m.isMesh) return; m.material = mat; m.userData.noCast = true;
+    // (packing drops UVs a material does not use: rebuild them from the face, left→right and top→bottom)
+    const g = m.geometry; if (!g.attributes.uv) { g.computeBoundingBox(); const b = g.boundingBox, P = g.attributes.position, uv = new Float32Array(P.count * 2), w = Math.max(1e-6, b.max.x - b.min.x), h = Math.max(1e-6, b.max.y - b.min.y);
+      for (let i = 0; i < P.count; i++) { uv[i * 2] = (P.getX(i) - b.min.x) / w; uv[i * 2 + 1] = (b.max.y - P.getY(i)) / h; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); } });
+  const base = new URL('art/', import.meta.url).href;
+  const slides = [{ img: 'logo.webp', t: '' }, { img: 'card-penalties.webp', t: 'PENALTIES' }, { img: 'card-tennis.webp', t: 'TENNIS' }, { img: 'card-streetball.webp', t: 'STREETBALL' }].map((s) => { const im = new Image(); im.src = base + s.img + '?v=1'; return { ...s, im }; });
+  const draw = (sl, a) => { if (!sl.im.complete || !sl.im.naturalWidth) return; g.globalAlpha = a;
+    if (!sl.t) { g.fillStyle = '#2a1466'; g.fillRect(0, 0, 1024, 576); const r = Math.min(900 / sl.im.naturalWidth, 420 / sl.im.naturalHeight); const w = sl.im.naturalWidth * r, h = sl.im.naturalHeight * r; g.drawImage(sl.im, 512 - w / 2, 288 - h / 2, w, h); }
+    else { const r = 1024 / sl.im.naturalWidth, h = sl.im.naturalHeight * r; g.drawImage(sl.im, 0, 288 - h / 2, 1024, h); g.fillStyle = 'rgba(20,10,50,.55)'; g.fillRect(0, 470, 1024, 106);
+      g.font = '800 64px Lilita One, Arial Black, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ffd84a'; g.fillText(sl.t, 512, 525); }
+    g.globalAlpha = 1; };
+  let i = 0, t = 0, fade = 1, last = -1;
+  return { update(dt) { t += dt; if (t > 4.2) { t = 0; i = (i + 1) % slides.length; fade = 0; } fade = Math.min(1, fade + dt * 1.6);
+    if (fade < 1 || last !== i) { draw(slides[(i + slides.length - 1) % slides.length], 1); draw(slides[i], fade); g.fillStyle = 'rgba(0,0,0,.08)'; for (let y = 0; y < 576; y += 4) g.fillRect(0, y, 1024, 1); tex.needsUpdate = true; if (fade >= 1) last = i; } } };
+}
+
 // ---------- the scene ----------
 export async function makeWinterPlaza(scene) {
   const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder); const MODELS = {};
   await Promise.all(FILES.map(async (n) => { try { MODELS[n] = (await L.loadAsync(new URL(`models/${n}.glb?v=1`, import.meta.url).href)).scene; } catch (e) { /* not delivered yet */ } }));
   const flags = [], glows = [];
   for (const [n, g] of Object.entries(MODELS)) {
+    if (LOOSE.has(n)) continue;
     g.traverse((o) => {
       if (!o.isMesh) return; const m = o.material;
       if (m && m.map) m.map.colorSpace = THREE.SRGBColorSpace;
       if (m && /glow|window|lit|bulb|lamp/i.test(m.name || '')) { o.material = new THREE.MeshBasicMaterial({ color: m.emissive && m.emissive.getHex() ? m.emissive : (m.color || new THREE.Color(1, .85, .5)), map: m.emissiveMap || m.map || null, toneMapped: false }); o.userData.noCast = true; glows.push(o); }
-      if (/^Flag/i.test(o.name) || (o.parent && /^Flag/i.test(o.parent.name))) flags.push(o);
+      if (/^(Roof)?Flag/i.test(o.name) || (o.parent && /^(Roof)?Flag/i.test(o.parent.name))) flags.push(o);
       if (/Snow(Ground|Field)|Ground|Decal/i.test(o.name)) o.userData.noCast = true;
     });
     scene.add(g);
   }
-  const missing = FILES.filter((n) => !MODELS[n] && n !== 'ws-far');
+  const missing = FILES.filter((n) => !MODELS[n] && ['ws-stadium', 'ws-plaza', 'ws-props'].includes(n));
+  { const pl = MODELS['ws-front'] && MODELS['ws-front'].getObjectByName('Planters'); if (pl) pl.position.z -= 7.5; }   // (the PC put them at z 19-20, beside the wide camera: forward, into the picture)
   if (missing.length) standIns(scene, missing);
   // the flame: on the PC's FlameAnchor (an empty on top of the cauldron), or on the stand-in cauldron
   let anchor = null; for (const g of Object.values(MODELS)) { const a = g.getObjectByName('FlameAnchor'); if (a) anchor = a; }
   const fp = anchor ? anchor.getWorldPosition(new THREE.Vector3()) : WS.cauldron.clone().setY(16.3);
   const flame = makeFlame(fp, anchor ? 3.4 : 3.2); scene.add(flame);
   const snow = makeSnow(); scene.add(snow);
+  // (v2) the LED screen over the entrance: the Foxino Sports logo and the three sports, changing every few seconds
+  let screen = null; for (const g of Object.values(MODELS)) { const o = g.getObjectByName('Screen'); if (o) screen = o; }
+  if (screen) screen = makeScreen(screen);
+  // (v2) visitors walking up and down the walkway sides, a few standing and looking at the stadium
+  const walkers = []; const P = MODELS['ws-people'];
+  if (P) { P.updateMatrixWorld(true); const kinds = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => P.getObjectByName('Visitor' + i)).filter(Boolean);
+    const spots = [[-5.2, 4, 1], [5.6, 1, -1], [-6, -6, 1], [5, -9, -1], [-5.4, -15, -1], [6.1, -19, 1], [-4.8, -24, 1], [5.4, -28, -1], [-8.6, 2.5, 0], [9.4, 1, 0], [-10.5, -4.5, 0], [11.5, -9.5, 0]];
+    spots.forEach(([x, z, dir], i) => { const src = kinds[i % kinds.length]; if (!src) return; const v = src.clone(true); v.position.set(x, 0, z); v.rotation.set(0, dir === 0 ? Math.PI + (x < 0 ? .5 : -.5) : dir > 0 ? Math.PI : 0, 0);
+      v.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.userData.noCast = true; } }); scene.add(v); walkers.push({ v, x, z, dir, sp: .7 + Math.random() * .5, ph: Math.random() * 6, z0: -30, z1: 6, turn: 0 }); }); }
+  const podium = MODELS['ws-podium'] ? (MODELS['ws-podium'].getObjectByName('Podium') || MODELS['ws-podium']) : null;
   // the flags ripple: a travelling wave along the cloth, stronger away from the pole (x = local distance from the pole)
   const FLAGU = { uT: { value: 0 } };
   flags.forEach((f, i) => {
@@ -119,10 +153,16 @@ export async function makeWinterPlaza(scene) {
     m.customProgramCacheKey = () => 'flag' + ph; f.material = m;
   });
   return {
-    MODELS, missing,
+    MODELS, missing, podium,
     update(dt, T, camera, pr) {
       snow.material.uniforms.uT.value = T; snow.material.uniforms.uC.value.copy(camera.position); snow.material.uniforms.uPx.value = pr;
       flame.userData.m.uniforms.uT.value = T; FLAGU.uT.value = T; flame.userData.light.intensity = 36 + Math.sin(T * 17) * 4 + Math.sin(T * 7.3) * 5;
+      if (screen) screen.update(dt, T);
+      for (const w of walkers) {
+        if (w.dir === 0) { w.v.rotation.z = Math.sin(T * .9 + w.ph) * .03; w.v.position.y = 0; continue; }   // (standing: a little sway)
+        if (w.turn > 0) { w.turn -= dt; w.v.rotation.y += dt * Math.PI / .8; continue; }
+        w.z -= w.dir * w.sp * dt; if (w.z < w.z0 || w.z > w.z1) { w.dir *= -1; w.z = Math.max(w.z0, Math.min(w.z1, w.z)); w.turn = .8; }
+        w.v.position.set(w.x, Math.abs(Math.sin(T * w.sp * 5.5 + w.ph)) * .045, w.z); w.v.rotation.z = Math.sin(T * w.sp * 5.5 + w.ph) * .04; }
       for (const f of flags) { const r = f.userData.r0; f.rotation.set(r.x, r.y + Math.sin(T * 1.1 + f.userData.ph) * .14, r.z); }
     },
   };

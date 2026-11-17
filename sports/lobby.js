@@ -10,7 +10,7 @@
 //    (tennis/?list=1&friend=host|join&room=…) and in Penalties both play and the points are compared
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { RoomEnvironment } from '/penalty/lib/RoomEnvironment.js';
-import { makeWinterPlaza } from './winter.js?v=1';
+import { makeWinterPlaza } from './winter.js?v=4';
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { POSES } from '/penalty/foxino.js';
 import { makeBall } from '/penalty/props.js';
@@ -56,14 +56,22 @@ function makePlatform(col) {
   const base = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.12, 0.28, 40), new THREE.MeshStandardMaterial({ color: 0x241a5c, roughness: 0.35, metalness: 0.3 })); base.position.y = 0.14; base.receiveShadow = true; base.castShadow = true; g.add(base);
   const top = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.04, 40), new THREE.MeshStandardMaterial({ color: 0x3a2a8c, roughness: 0.25, metalness: 0.4 })); top.position.y = 0.29; top.receiveShadow = true; g.add(top);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.97, 0.035, 8, 64), new THREE.MeshBasicMaterial({ color: c, toneMapped: false })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.29; g.add(ring);
-  const glowM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uC: { value: c }, uT: { value: 0 } },
+  const glowM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uC: { value: c }, uT: { value: 0 }, uA: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'varying vec2 vUv; uniform vec3 uC; uniform float uT; void main(){ float a = (1.0 - vUv.y) * (0.35 + 0.15 * sin(vUv.x * 40.0 + uT * 2.0)); gl_FragColor = vec4(uC * a, a); }' });
+    fragmentShader: 'varying vec2 vUv; uniform vec3 uC; uniform float uT, uA; void main(){ float a = (1.0 - vUv.y) * (0.35 + 0.15 * sin(vUv.x * 40.0 + uT * 2.0)) * uA; gl_FragColor = vec4(uC * a, a); }' });
   const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.9, 48, 1, true), glowM); glow.position.y = 0.74; g.add(glow);
   g.userData = { ring, glowM };
   return g;
 }
 const platMe = makePlatform(0xffd84a), platFr = makePlatform(0x6fe2ff);
+// (winter v2) the PC's winter podium replaces the code disc: a clone in each platform; its PodiumRing takes the player's colour
+function dressPlatform(g, podium, col) {
+  const c = podium.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); g.add(c);
+  g.children.forEach((o) => { if (o !== c && o.userData.glowM !== true && !o.material?.uniforms) o.visible = false; });   // (the code base, top and ring go; the light glow stays)
+  let ring = null; c.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; if (/PodiumRing/.test(o.name) || /PodiumGlow/.test(o.material?.name || '')) ring = o; });
+  if (ring) { ring.material = new THREE.MeshBasicMaterial({ color: col, toneMapped: false }); g.userData.ring = ring; }
+  g.userData.glowM.uniforms.uA.value = .5;
+}
 platMe.position.copy(SPOT.me); platFr.position.copy(SPOT.fr); scene.add(platMe, platFr);
 let ball = null;
 
@@ -340,8 +348,8 @@ $('leaveBtn').onclick = () => { sfx.click && sfx.click(); send({ t: 'bye' }); cl
   resize();
   const bar = (p, t) => { $('loadBar').style.width = `${p}%`; if (t) $('loadTxt').textContent = t; };
   bar(20, 'Opening the stadium…');
-  paintedSky(scene, WINTER_SKY, { yaw: 0.5, envRenderer: renderer, base: 0.3, span: 0.75 }); scene.environmentIntensity = 0.3;
-  try { stadium = await makeWinterPlaza(scene); } catch (e) { console.warn('winter plaza', e); }
+  paintedSky(scene, WINTER_SKY, { yaw: 0.5, envRenderer: renderer, base: 0.34, span: 1.05 });   // (v2: higher up the picture: the aurora shows) scene.environmentIntensity = 0.3;
+  try { stadium = await makeWinterPlaza(scene); if (stadium.podium) { dressPlatform(platMe, stadium.podium, 0xffd84a); dressPlatform(platFr, stadium.podium, 0x6fe2ff); } } catch (e) { console.warn('winter plaza', e); }
   bar(65, 'Foxino is on his way…');
   try { ME.fox = await addFox(myKit()); } catch (e) { console.warn('foxino', e); }
   ball = makeBall(); ball.castShadow = true; ball.position.set(SPOT.me.x - 0.55, 0.31 + 0.11, SPOT.me.z + 0.35); scene.add(ball);
