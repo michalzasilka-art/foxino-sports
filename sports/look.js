@@ -41,7 +41,7 @@ export function paintedSky(scene, url, { yaw = 0, onFog = null, envRenderer = nu
   return mesh;
 }
 
-export function makePost(renderer, { aoRange = 120, focusMul = 1.15, blur = 0.75, grade = {} } = {}) {
+export function makePost(renderer, { aoRange = 120, focusMul = 1.15, blur = 0.75, grade = {}, glow = 0 } = {}) {
   const forced = /[?&]gfx=(\d)/.exec(location.search);
   const GFX = { level: forced ? +forced[1] : 2, forced: !!forced, t: 0 };
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -51,9 +51,9 @@ export function makePost(renderer, { aoRange = 120, focusMul = 1.15, blur = 0.75
     const dt = new THREE.DepthTexture(w, h); dt.type = THREE.UnsignedIntType;
     P.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4, depthTexture: dt, depthBuffer: true });
     P.mat = new THREE.ShaderMaterial({ depthTest: false, depthWrite: false,
-      uniforms: { tC: { value: P.rt.texture }, tD: { value: dt }, uRes: { value: new THREE.Vector2(w, h) }, uNear: { value: 0.1 }, uFar: { value: 1000 }, uAO: { value: 1 }, uBlur: { value: 1 }, uFocus: { value: 20 }, uAOR: { value: aoRange } },
+      uniforms: { tC: { value: P.rt.texture }, tD: { value: dt }, uRes: { value: new THREE.Vector2(w, h) }, uNear: { value: 0.1 }, uFar: { value: 1000 }, uAO: { value: 1 }, uBlur: { value: 1 }, uFocus: { value: 20 }, uAOR: { value: aoRange }, uGlow: { value: glow } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-      fragmentShader: `uniform sampler2D tC, tD; uniform vec2 uRes; uniform float uNear, uFar, uAO, uBlur, uFocus, uAOR; varying vec2 vUv;
+      fragmentShader: `uniform sampler2D tC, tD; uniform vec2 uRes; uniform float uNear, uFar, uAO, uBlur, uFocus, uAOR, uGlow; varying vec2 vUv;
         float lin(vec2 uv) { float z = texture2D(tD, uv).x * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
         void main() {
           vec2 px = 1.0 / uRes; float d = lin(vUv); vec3 c = texture2D(tC, vUv).rgb;
@@ -65,6 +65,11 @@ export function makePost(renderer, { aoRange = 120, focusMul = 1.15, blur = 0.75
             for (int i = 0; i < 10; i++) { float a = float(i) * 2.399963 + .5; float rr = rad * (.35 + .65 * fract(float(i) * .618)); vec2 o = vec2(cos(a), sin(a)) * rr * px; float dd = lin(vUv + o);
               float diff = d - dd; occ += smoothstep(.02, .35, diff) * (1.0 - smoothstep(.6, 2.4, diff)); }
             occ = clamp(occ / 10.0, 0.0, 1.0) * (1.0 - smoothstep(uAOR * .6, uAOR, d)); c *= mix(vec3(1.0), vec3(.6, .6, .78), occ * uAO * .85); }
+          // (2026-11-17, Streetball "ultimate") a soft glow round the bright things (lamps, lit windows, neon): the bright part
+          // of 16 taps on two rings, added back on top (a cheap one-pass bloom; off when uGlow is 0)
+          if (uGlow > .001) { vec3 gl = vec3(0.0); for (int i = 0; i < 16; i++) { float a = float(i) * .3927 + (i > 7 ? .2 : 0.0); float r = (i > 7 ? 22.0 : 9.0);
+              vec3 s = texture2D(tC, vUv + vec2(cos(a), sin(a)) * px * r).rgb; gl += max(s - vec3(.95), vec3(0.0)) * (i > 7 ? .6 : 1.0); }
+            c += gl * uGlow * .14; }
           // the pastel grade: a little more colour, cool lilac shadows, warm highlights, a soft vignette
           float L = dot(c, vec3(.299, .587, .114));
           c = mix(vec3(L), c, ${sat.toFixed(3)});

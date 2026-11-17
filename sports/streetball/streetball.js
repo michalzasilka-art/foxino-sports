@@ -16,8 +16,9 @@ import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
-import { paintedSky, makePost } from '../look.js?v=1';
+import { paintedSky, makePost } from '../look.js?v=2';
 import { BPOSES } from './poses.js?v=1';
+import { makeAnimChar } from './charanim.js?v=1';
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -41,12 +42,13 @@ const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xf2d2b0, 45, 140);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
 paintedSky(scene, '/adventures/sky/sky-sea-sunset.webp?v=1', { envRenderer: renderer, yaw: 0.25 });
 { const pm = new THREE.PMREMGenerator(renderer); const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 16, 8), new THREE.MeshBasicMaterial({ color: 0xf2c9a0, side: THREE.BackSide }))); scene.environment = pm.fromScene(es, 0.02).texture; pm.dispose(); }
-scene.add(new THREE.HemisphereLight(0xfff0dc, 0x6a5a8a, 1.0));
-const sun = new THREE.DirectionalLight(0xffd2a0, 1.9); sun.position.set(-9, 15, 13); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+// (2026-11-17, "ultimate" pass) golden hour: a low warm sun with long soft shadows, a cool sky fill, a cyan rim from behind
+scene.add(new THREE.HemisphereLight(0xffe8d0, 0x5a4a7a, 0.9));
+const sun = new THREE.DirectionalLight(0xffd3a2, 2.1); sun.position.set(-13, 10, 11); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 1, far: 60 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 4;
 sun.target.position.set(0, 0, 5); scene.add(sun, sun.target);
-const back = new THREE.DirectionalLight(0xb8d4ff, 0.7); back.position.set(8, 8, -14); scene.add(back);
-const POSTFX = makePost(renderer, { aoRange: 70, focusMul: 1.4, blur: 0.5, grade: { sat: 1.08 } });
+const back = new THREE.DirectionalLight(0x9fd0ff, 1.15); back.position.set(9, 7, -14); scene.add(back);
+const POSTFX = makePost(renderer, { aoRange: 70, focusMul: 1.4, blur: 0.5, grade: { sat: 1.06, warm: 1.05 }, glow: 0.9 });
 
 // ---------- the court: the Blender models, or simple stand-ins until they are delivered ----------
 const SB_FILES = ['sb-court', 'sb-hoop', 'sb-fences', 'sb-wall', 'sb-city', 'sb-bleachers', 'sb-props', 'sb-ball'];
@@ -117,7 +119,7 @@ function makeCrowd() {
 const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = new THREE.Vector3(1, 1, 1), _v4 = new THREE.Vector3();
 function updateCrowd(t, dt) {
   if (!CROWD.body) return; CROWD.cheer = Math.max(0, CROWD.cheer - dt * 0.5);
-  CROWD.seats.forEach((q, i) => { const hop = Math.max(0, Math.sin(t * 9 + q.ph)) * 0.25 * CROWD.cheer + Math.sin(t * 2 + q.ph) * 0.02;
+  CROWD.seats.forEach((q, i) => { const hop = Math.max(0, Math.sin(t * 9 + q.ph)) * 0.25 * Math.min(1, CROWD.cheer) + Math.min(0.35, Math.max(0, CROWD.cheer - 0.6) * 0.5) + Math.sin(t * 2 + q.ph) * 0.02;
     _v4.set(q.p.x, q.p.y + 0.3 + hop, q.p.z); _m4.compose(_v4, _q4, _s4); CROWD.body.setMatrixAt(i, _m4); _v4.y += 0.42; _m4.compose(_v4, _q4, _s4); CROWD.head.setMatrixAt(i, _m4); });
   CROWD.body.instanceMatrix.needsUpdate = true; CROWD.head.instanceMatrix.needsUpdate = true;
 }
@@ -146,14 +148,22 @@ const RB = {
   stumble: (u, t) => (RPOSES.oops ? RPOSES.oops(t) : RPOSES.ready(t)),
   cheer: (t) => (RPOSES.hold ? RPOSES.hold(t) : RPOSES.ready(t)),
 };
+async function loadAnimChar(file, opts) {
+  try { const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder); const g = await L.loadAsync(`models/${file}?v=1`);
+    if (!g.animations || g.animations.length < 5) return null; const ch = makeAnimChar(g, opts); scene.add(ch.root); return ch; } catch (e) { return null; }
+}
 async function makePlayers() {
-  const fox = await loadFoxino().catch(() => null);
-  if (fox) { fox.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(fox.root); fox.setKit({ shirt: '#ffcd1c', trim: '#5b2bb0', shorts: '#5b2bb0', socks: '#ffffff', boots: '#f4f4f4' }); }
-  const rob = makeRob(); rob.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(rob.root);
+  // (the animated Blender characters when they are there; else the Tripo Foxino with code poses and the code-built Rob)
+  const [fa, ra] = await Promise.all([loadAnimChar('foxino-baller.glb', { height: 1.3, kind: 'fox' }), loadAnimChar('rob-baller.glb', { height: 1.45, kind: 'rob' })]);
+  const fox = fa || await loadFoxino().catch(() => null);
+  if (fox && !fa) { fox.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(fox.root); fox.setKit({ shirt: '#ffcd1c', trim: '#5b2bb0', shorts: '#5b2bb0', socks: '#ffffff', boots: '#f4f4f4' }); }
+  const rob = ra || makeRob(); if (!ra) { rob.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(rob.root); }
   P.me = { ch: fox, x: 0, z: TOP_Z, tx: 0, tz: TOP_Z, yaw: Math.PI, act: 'idle', u: 0, dir: 1 };
   P.rob = { ch: rob, x: 0, z: DEF_Z, tx: 0, tz: DEF_Z, yaw: 0, act: 'stance', u: 0, y: 0 };
 }
 const hand = (who, out) => {
+  const C = P[who] && P[who].ch;
+  if (C && C.isAnim && C.bones.RightHand) return C.bones.RightHand.getWorldPosition(out);
   if (who === 'me' && P.me.ch && P.me.ch.bones && P.me.ch.bones.RightHand) return P.me.ch.bones.RightHand.getWorldPosition(out);
   if (who === 'rob' && P.rob.ch.J && P.rob.ch.J.gloveR) return P.rob.ch.J.gloveR.localToWorld(out.set(0, -0.15, 0));
   const p = P[who]; return out.set(p.x + 0.3, 0.9, p.z);
@@ -166,6 +176,15 @@ function updatePlayers(dt, t, ts) {
     const moving = clamp(sp * 1.2, 0, 1) * (ts / Math.max(dt, 1e-4) > 0.2 ? 1 : 0.25);
     p.u = Math.min(1, p.u + ts / (p.dur || 0.7));
     let pose;
+    if (p.ch.isAnim) {   // the real clips: the action → a clip, sideways shuffles by which way he moves
+      let act = p.act;
+      if (act === 'dribble' && moving > 0.2) act = 'drive';
+      if (act === 'stance' && moving > 0.2) { const lx = Math.cos(p.yaw), lz = -Math.sin(p.yaw); act = vx * lx + vz * lz > 0 ? 'slideL' : 'slideR'; }
+      if (k === 'rob' && p.ch.face) p.ch.face(act === 'cheer' ? 'happy' : act === 'stumble' ? 'oops' : act === 'sad' ? 'sad' : act === 'stance' || act === 'slideL' || act === 'slideR' ? 'focus' : 'happy');
+      p.ch.play(act); p.ch.update(ts);
+      p.ch.root.position.set(p.x, 0, p.z); p.ch.root.rotation.y = p.yaw;
+      continue;
+    }
     if (k === 'me') {
       const b = 0.5 + 0.5 * Math.sin(t * 9);
       switch (p.act) {
@@ -224,8 +243,25 @@ function updateBall(dt, t, ts) {
     arcPos(BL.arcs[BL.i], BL.u, ball.position);
   }
 }
+// a soft trail behind the flying ball
+const trail = new THREE.Mesh(new THREE.ConeGeometry(0.1, 1, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffb36a, transparent: true, opacity: 0.4, depthWrite: false }));
+trail.geometry.translate(0, -0.5, 0); trail.geometry.rotateX(Math.PI / 2); trail.visible = false;
+const _tp = new THREE.Vector3();
+function updateTrail() {
+  if (BL.mode !== 'fly' || !ball) { trail.visible = false; _tp.copy(ball ? ball.position : _tp); return; }
+  if (!trail.parent) scene.add(trail);
+  const d = ball.position.distanceTo(_tp); trail.visible = d > 0.01;
+  if (trail.visible) { trail.position.copy(ball.position); trail.lookAt(_tp); trail.scale.set(1, 1, Math.min(1.8, d * 18)); trail.material.color.set(combo >= 3 ? 0xff7a2a : 0xffd8a0); }
+  _tp.copy(ball.position);
+}
 let netT = -9;
 function swish() { netT = 0; sfx.net && sfx.net(); }
+const CONF = ['#ffcd1c', '#ff5d8f', '#48d8ff', '#66e08a', '#8f52d9', '#ff7d22'];
+function celebrate(big) {
+  CROWD.cheer = 1.4; CAMV.punch = 1; SLOWMO = 0.45;
+  for (let i = 0; i < (big ? 6 : 3); i++) BURST.emit(RIM.clone().add(_v4.set(0, 0.2, 0)), 22, CONF[i % CONF.length], 7, 0.17);
+}
+function dust(x, z) { BURST.emit(new THREE.Vector3(x, 0.06, z), 14, '#c9b49a', 2.2, 0.16); }
 function updateNet(dt) { if (!NET) return; netT += dt; const k = netT < 0.6 ? Math.sin(netT * 22) * Math.exp(-netT * 5) : 0; const b = NET.userData.base || (NET.userData.base = NET.scale.clone());
   NET.scale.set(b.x * (1 - 0.12 * k), b.y * (1 + 0.25 * Math.abs(k)), b.z * (1 - 0.12 * k)); }
 
@@ -293,7 +329,7 @@ const BURST = (() => {
     scale(h) { mat.uniforms.uScale.value = h * 0.7; },
   };
 })();
-let SHAKE = 0, combo = 0;
+let SHAKE = 0, combo = 0, SLOWMO = 0;
 function popText(pos, text, cls) { _v4.copy(pos).project(camera); const el = document.createElement('div'); el.className = 'ptext ' + cls; el.textContent = text;
   el.style.left = `${(_v4.x * 0.5 + 0.5) * innerWidth}px`; el.style.top = `${(-_v4.y * 0.5 + 0.5) * innerHeight}px`; $('fxText').appendChild(el); setTimeout(() => el.remove(), 1100); }
 function flashScreen(cls) { const f = $('flash2'); f.className = ''; void f.offsetWidth; f.className = cls; }
@@ -367,12 +403,12 @@ async function attack() {
   Object.assign(P.me, { tx: side * 1.3, tz: 2.6, fast: true }); setPlay('dribble'); P.rob.tx = -side * 0.8; P.rob.tz = DEF_Z + 0.4; await wait(1.0); if (!G.on) return;
   const r2 = await ask(ME, 'shoot! tap the right word', [[-1.6, 3.0, 2.6], [0, 3.55, 2.3], [1.6, 3.0, 2.6]]);
   if (!G.on) return;
-  setPlay('shoot'); P.me.dur = 0.9; await wait(0.48);
+  setPlay('shoot'); P.me.dur = 0.9; await wait(0.48); setTimeout(() => dust(P.me.x, P.me.z), 450);
   hand('me', _h); const from = _h.clone().add(_v4.set(0, 0.25, -0.1));
   if (r2.ok) {   // swish: over the rim, down through the net, a bounce under the hoop
     fly([{ a: from, b: RIM.clone().add(_v4.set(0, 0.08, 0)), h: 1.1, d: 0.85 }, { a: RIM.clone().add(_v4.set(0, 0.08, 0)), b: RIM.clone().add(_v4.set(0, -0.45, 0)), h: 0, d: 0.18, net: true },
       { a: RIM.clone().add(_v4.set(0, -0.45, 0)), b: new THREE.Vector3(rand(-0.4, 0.4), BALL_R, 1.6), h: 0, d: 0.32, sound: 'thud' }, { a: new THREE.Vector3(0, BALL_R, 1.6), b: new THREE.Vector3(rand(-0.6, 0.6), BALL_R, 2.6), h: 0.35, d: 0.45 }]);
-    await wait(1.2); G.score[0]++; score(); banner('SCORE!', `${G.score[0]} : ${G.score[1]}`); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); setPlay('cheer'); BURST.emit(RIM.clone(), 50, '#ffd84a', 6, 0.18); vib([30, 40, 60]);
+    celebrate(true); await wait(1.2); G.score[0]++; score(); banner('SCORE!', `${G.score[0]} : ${G.score[1]}`); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); setPlay('cheer'); BURST.emit(RIM.clone(), 50, '#ffd84a', 6, 0.18); vib([30, 40, 60]);
     await wait(1.6); return 'rob';
   }
   // off the front of the rim and out: Rob takes the rebound
@@ -404,7 +440,7 @@ async function defence() {
   P.rob.yaw = Math.PI; setPlay(null, 'shoot'); P.rob.dur = 0.9; await wait(0.4);
   hand('rob', _h); const from = _h.clone().add(_v4.set(0, 0.2, -0.1));
   if (r2.ok && r2.ms < QUICK * 1000) {   // the block
-    setPlay('block'); P.me.dur = 0.9; await wait(0.25);
+    setPlay('block'); P.me.dur = 0.9; await wait(0.25); setTimeout(() => dust(P.me.x, P.me.z), 650);
     fly([{ a: from, b: new THREE.Vector3(from.x + rand(-2, 2), BALL_R, from.z + 3.2), h: 1.2, d: 0.8, sound: 'thud' }]);
     banner('BLOCKED!', 'your ball'); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); BURST.emit(from, 40, '#6fe2ff', 6, 0.18); await wait(1.4); BL.mode = 'dribble'; BL.who = 'me'; return 'me';
   }
@@ -464,7 +500,7 @@ $('leaveBtn').onclick = () => { sfx.click && sfx.click(); G.on = false; if (/[?&
 const muteBtn = $('muteBtn'); muteBtn.classList.toggle('muted', isMuted()); muteBtn.onclick = () => { unlock(); setMuted(!isMuted()); muteBtn.classList.toggle('muted', isMuted()); };
 
 // ---------- the camera: behind the top of the key, the hoop up ahead ----------
-const CAMV = { pos: new THREE.Vector3(), look: new THREE.Vector3(), x: 0, side: 0, s: 0 };
+const CAMV = { pos: new THREE.Vector3(), look: new THREE.Vector3(), x: 0, side: 0, s: 0, punch: 0, p: 0 };
 function fitCamera() {
   const a = camera.aspect;
   if (a < 0.8) { camera.fov = 58; CAMV.pos.set(0, 4.7, 12.6); CAMV.look.set(0, 1.85, 2.6); }
@@ -476,7 +512,10 @@ function placeCamera(dt) {
   const fx = P.me ? clamp((P.me.x + (P.rob ? P.rob.x : 0)) / 2, -3, 3) : 0; CAMV.x = damp(CAMV.x, fx, 2, dt);
   CAMV.s = damp(CAMV.s, CAMV.side, 1.6, dt);
   SHAKE = Math.max(0, SHAKE - dt * 1.6); const sh = SHAKE * SHAKE * 0.3;
-  camera.position.set(CAMV.pos.x + CAMV.x * 0.5 + CAMV.s + (Math.random() - 0.5) * sh, CAMV.pos.y + (Math.random() - 0.5) * sh, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * 0.35, CAMV.look.y, CAMV.look.z);
+  CAMV.p = damp(CAMV.p, CAMV.punch, 4, dt); CAMV.punch = Math.max(0, CAMV.punch - dt * 0.7);   // (a basket: a quick push in toward the hoop)
+  const pk = smooth(CAMV.p) * 0.28;
+  camera.position.set(lerp(CAMV.pos.x + CAMV.x * 0.5 + CAMV.s, RIM.x, pk) + (Math.random() - 0.5) * sh, lerp(CAMV.pos.y, RIM.y + 0.6, pk) + (Math.random() - 0.5) * sh, lerp(CAMV.pos.z, RIM.z + 4, pk));
+  camera.lookAt(lerp(CAMV.look.x + CAMV.x * 0.35, RIM.x, pk * 2), lerp(CAMV.look.y, RIM.y, pk * 2), lerp(CAMV.look.z, RIM.z, pk * 2));
 }
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); BURST.scale(h * pr); }
 addEventListener('resize', resize);
@@ -486,9 +525,9 @@ let last = performance.now(), T = 0, GT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
-  const ts = dt * G.slow; GT += ts;
+  SLOWMO = Math.max(0, SLOWMO - dt); const ts = dt * G.slow * (SLOWMO > 0 ? 0.4 : 1); GT += ts;
   tickWaits(ts);
-  updatePlayers(dt, GT, ts); updateBall(dt, GT, ts); updateBubbles(dt, T); updateNet(dt); updateCrowd(T, dt); BURST.update(dt); placeCamera(dt);
+  updatePlayers(dt, GT, ts); updateBall(dt, GT, ts); updateBubbles(dt, T); updateNet(dt); updateCrowd(T, dt); BURST.update(dt); updateTrail(); placeCamera(dt);
   POSTFX.draw(scene, camera, 9);
   updateLabels();
   if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
