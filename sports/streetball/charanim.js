@@ -21,20 +21,23 @@ export function makeAnimChar(gltf, { height = null, kind = 'fox' } = {}) {
   const bones = { RightHand: find('RightHand'), LeftHand: find('LeftHand'), Head: find('Head'), Hips: find('Hips') };
   // Rob's face screen: a 2×2 atlas (happy, focus / oops, sad)
   let faceMat = null; scene.traverse((o) => { if (o.isMesh && o.material && /face/i.test(o.material.name || '')) faceMat = o.material; });
-  const FACES = { happy: [0, 0.5], focus: [0.5, 0.5], oops: [0, 0], sad: [0.5, 0] };
+  // (the PC's atlas, offsets in glTF UV space = three.js with flipY false: happy, focus / oops, sad)
+  const FACES = { happy: [0, 0], focus: [0.5, 0], oops: [0, 0.5], sad: [0.5, 0.5] };
+  let faceNow = '';
   let cur = null, curName = '';
   const ch = {
     root, bones, mixer, clips, isAnim: true, kind,
     has: (n) => !!actions[n],
-    play(act, fade = 0.16) {
-      const name = ACT[act] || act; if (!actions[name] || name === curName) return;
+    play(act, fade = 0.2, force = false) {
+      const name = ACT[act] || act; if (!actions[name] || (name === curName && !(force && ONCE.has(name)))) return;
+      if (name === curName) { cur.reset(); cur.play(); return; }
       const next = actions[name]; next.reset(); next.enabled = true; next.setEffectiveTimeScale(1); next.setEffectiveWeight(1);
       if (cur) next.crossFadeFrom(cur, fade, false); next.play(); cur = next; curName = name;
     },
     get clip() { return curName; },
     get time() { return cur ? cur.time : 0; },
     duration: (n) => (clips[n] ? clips[n].duration : 1),
-    face(kind) { if (!faceMat || !faceMat.map || !FACES[kind]) return; faceMat.map.offset.set(FACES[kind][0], FACES[kind][1]); },
+    face(kind) { if (!faceMat || !FACES[kind] || kind === faceNow) return; faceNow = kind; for (const t of [faceMat.map, faceMat.emissiveMap]) if (t) { t.offset.set(FACES[kind][0], FACES[kind][1]); t.updateMatrix(); } },
     update(ts) { mixer.update(ts); },
     // (the old pose API, so code that still calls these does nothing harmful)
     apply() {}, setKit() {},
