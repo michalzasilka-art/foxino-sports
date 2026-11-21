@@ -26,7 +26,14 @@ const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
   { id: 'streetball', name: 'Streetball', tag: 'BASKETBALL', pic: 'art/card-streetball.webp?v=1' },
+  // (2026-11-21) the five snow sports (snow/index.html?sport=…): solo for the best score, with a friend side by side
+  { id: 'slalom', name: 'Slalom', tag: 'SKI', pic: 'art/card-slalom.webp?v=1', snow: true },
+  { id: 'halfpipe', name: 'Halfpipe', tag: 'SNOWBOARD', pic: 'art/card-halfpipe.webp?v=1', snow: true },
+  { id: 'skijump', name: 'Ski Jump', tag: 'SKI JUMP', pic: 'art/card-skijump.webp?v=1', snow: true },
+  { id: 'sled', name: 'Sled Run', tag: 'SLED', pic: 'art/card-sled.webp?v=1', snow: true },
+  { id: 'biathlon', name: 'Biathlon', tag: 'SNOWBALLS', pic: 'art/card-biathlon.webp?v=1', snow: true },
 ];
+const isSnow = (id) => !!(ACTS.find((a) => a.id === id) || {}).snow;
 const FRIEND_KIT = { shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ff7d22' };
 let myName = store.get('tennis-name', '') || '';
 
@@ -229,6 +236,7 @@ function onParty(m) {
   if (m.t === 'pick' && !PT.host) { if (m.open) openPicker(m.sel, true); else closePicker(); return; }
   if (m.t === 'start' && !PT.host) { closePicker(); runList(m.list, m.round); return; }
   if (m.t === 'score') { if (RUN) { RUN.their[m.i] = m.r; if (RUN.waitTheirs === m.i) showResult(m.i); } return; }
+  if (m.t === 'snow') { if (RUN && RUN.i === m.i) { try { $('frame').contentWindow.postMessage({ snowFriend: m.st, sport: m.sport, name: PT.friend ? PT.friend.name : '' }, '*'); } catch (e) {} } return; }
   if (m.t === 'next' && !PT.host) { if (RUN && RUN.i === m.i) nextSport(); return; }
   if (m.t === 'abort') { if (RUN) { stopList(); toast(`${esc(PT.friend ? PT.friend.name : 'Your friend')} left the game`); } return; }
 }
@@ -249,11 +257,11 @@ function renderMode() {
 }
 
 // ---------- choose the sports ----------
-let SEL = (store.get('sports-sel', null) || ACTS.map((a) => a.id)).filter((id) => ACTS.some((a) => a.id === id));
+let SEL = (store.get('sports-sel', null) || ['slalom', 'halfpipe', 'skijump', 'sled', 'biathlon']).filter((id) => ACTS.some((a) => a.id === id));
 if (!SEL.length) SEL = ACTS.map((a) => a.id);
 function renderPicker(view) {
   $('acts').classList.toggle('view', !!view);
-  $('acts').innerHTML = ACTS.map((a) => { const i = SEL.indexOf(a.id); return `<button class="act${i >= 0 ? ' on' : ''}" type="button" data-id="${a.id}"><span class="pic" style="background-image:url('${a.pic}')"></span><span class="tag">${a.tag}</span>${i >= 0 && SEL.length > 1 ? `<span class="num">${ordinal(i)}</span>` : ''}<span class="tick">✓</span><span class="nm">${a.name}</span></button>`; }).join('');
+  $('acts').innerHTML = ACTS.map((a) => { const i = SEL.indexOf(a.id); return `<button class="act${i >= 0 ? ' on' : ''}" type="button" data-id="${a.id}"><span class="pic" style="background-image:url('${a.pic}')"></span><span class="tag">${a.tag}</span>${a.snow ? '<span class="new">NEW</span>' : ''}${i >= 0 && SEL.length > 1 ? `<span class="num">${ordinal(i)}</span>` : ''}<span class="tick">✓</span><span class="nm">${a.name}</span></button>`; }).join('');
   $('pickPlay').disabled = !SEL.length;
   $('pickPlay').hidden = !!view; $('pickBack').hidden = !!view;
   $('pickSub').textContent = view ? `${PT.friend ? PT.friend.name : 'Your friend'} is choosing the sports…` : SEL.length ? 'Tap to pick · tap again to drop · they are played one after another' : 'Pick at least one sport';
@@ -289,6 +297,7 @@ function srcFor(id, i) {
     return 'tennis/?list=1';
   }
   if (id === 'streetball') return 'streetball/?list=1';
+  if (isSnow(id)) return `snow/index.html?sport=${id}&list=1${inParty() ? `&party=1&fname=${encodeURIComponent(PT.friend.name)}` : ''}`;
   return 'about:blank';
 }
 function nextSport() {
@@ -305,6 +314,9 @@ addEventListener('message', (e) => {
   const i = RUN.i, id = RUN.list[i];
   if (m.fs === 'finished' && id === 'penalty') { const r = { goals: m.goals, of: m.of || 10, stars: m.stars }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   if (m.fb === 'finished' && id === 'streetball') { const r = { goals: m.score[0], vs: m.score[1], won: !!m.won }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
+  // the snow sports: the result, and the live state for the friend (relayed over the party link)
+  if (m.snow === 'state' && isSnow(id) && m.sport === id) { if (inParty()) send({ t: 'snow', i, sport: m.sport, st: m.st }); return; }
+  if (m.fsnow === 'finished' && isSnow(id)) { const r = { score: m.score, shown: m.shown, unit: m.unit, better: m.better, medal: m.medal, right: m.right, asked: m.asked }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2400); }
   if (m.ft === 'finished' && id === 'tennis') { const r = { won: !!m.won, games: m.games, friend: !!m.friend }; RUN.mine[i] = r; setTimeout(() => showResult(i), 2600); }
 });
 function showResult(i) {
@@ -323,6 +335,12 @@ function showResult(i) {
     else if (th) { const md = r.goals - r.vs, td = th.goals - th.vs, win = md > td, draw = md === td;
       body = `<p class="kick">STREETBALL · against Rob</p><h2>${draw ? "It's a draw!" : win ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${win ? ' win' : ''}"><b>${r.goals}–${r.vs}</b><span>YOU</span></div><b>·</b><div class="who${!win && !draw ? ' win' : ''}"><b>${th.goals}–${th.vs}</b><span>${esc(fname.toUpperCase())}</span></div></div>`; }
     else body = `<p class="kick">STREETBALL</p><h2>${r.won ? 'You beat Rob!' : 'Rob won this time'}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${r.vs}</b><span>ROB</span></div></div><p class="line">baskets</p>`;
+  } else if (isSnow(id)) {
+    const A = ACTS.find((a) => a.id === id), th = RUN.their[i], MED = ['', '🥉 ', '🥈 ', '🥇 '];
+    if (inParty() && !th) { RUN.waitTheirs = i; body = `<p class="kick">${esc(A.name.toUpperCase())}</p><h2>${esc(r.shown)} <small>${esc(r.unit)}</small></h2><p class="line">Waiting for ${esc(fname)} to finish…</p>`; }
+    else if (th) { const better = r.better === 'low' ? r.score < th.score : r.score > th.score, draw = r.score === th.score;
+      body = `<p class="kick">${esc(A.name.toUpperCase())}</p><h2>${draw ? "It's a draw!" : better ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${better ? ' win' : ''}"><b>${esc(r.shown)}</b><span>YOU</span></div><b>·</b><div class="who${!better && !draw ? ' win' : ''}"><b>${esc(th.shown)}</b><span>${esc(fname.toUpperCase())}</span></div></div><p class="line">${esc(r.unit)}</p>`; }
+    else body = `<p class="kick">${esc(A.name.toUpperCase())}</p><h2>${MED[r.medal || 0]}${esc(r.shown)} <small>${esc(r.unit)}</small></h2><p class="line">${r.right ?? 0} of ${r.asked ?? 0} right</p>`;
   } else {
     const g = r.games || [0, 0];
     body = `<p class="kick">TENNIS</p><h2>${r.won ? (r.friend ? 'You win!' : 'You beat Rob!') : r.friend ? `${esc(fname)} wins!` : 'Rob won this time'}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${g[0]}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${g[1]}</b><span>${esc((r.friend ? fname : 'ROB').toUpperCase())}</span></div></div><p class="line">games</p>`;
@@ -330,12 +348,12 @@ function showResult(i) {
   if (RUN.waitTheirs === i && !(inParty() && !RUN.their[i])) RUN.waitTheirs = -1;
   let btns;
   if (last) {
-    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
+    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : isSnow(sid) ? `${x.shown ?? '–'} ${x.unit || ''}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
     btns = `${RUN.list.length > 1 ? `<ul class="list">${sum}</ul>` : ''}<div class="btns"><button class="big" type="button" id="rDone">BACK TO THE STADIUM</button></div>`;
   } else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
   else btns = `<p class="line">Waiting for ${esc(fname)}…</p>`;
   $('rcard').innerHTML = body + btns; $('result').hidden = false;
-  if ((id === 'penalty' && (r.stars || 0) >= 2) || r.won) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
+  if ((id === 'penalty' && (r.stars || 0) >= 2) || r.won || (r.medal || 0) >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
   const n = $('rNext'); if (n) n.onclick = () => { sfx.click && sfx.click(); send({ t: 'next', i: RUN.i }); nextSport(); };
   const d = $('rDone'); if (d) d.onclick = () => { sfx.click && sfx.click(); stopList(); ME.cheerT = 0; };
 }

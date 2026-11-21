@@ -1,0 +1,526 @@
+// Foxino Snow Sports (2026-11-21, the user: "to Foxino Sports create 5 different high quality, nice lighting and camera winter
+// sport activities to learn languages from the content I have saved … also accessible for multiplayer with 1 friend").
+// One page, five sports (?sport=slalom|halfpipe|skijump|sled|biathlon). This file is the shared engine:
+//  · the look: a painted sky dome, soft sun shadows, the snow shader (sparkles, corduroy on the piste), falling snow, the post pass
+//  · Foxino from Penalty Star in winter gear (the kit painted as a ski suit; Blender goggles + scarf on his bones; skis, poles,
+//    a snowboard or a sled that follow his feet and hands)
+//  · the question moment: the world slows almost to a stop, the sentence card + three word bubbles; no clock on the answer
+//  · juice (PERFECT/GREAT/GOOD, combo, flash, shake, spray), a camera that damps towards each sport's shots, cinema bars
+//  · the result (medal by right answers, the best score per sport), and the friend: inside the Foxino Sports lobby the two
+//    phones swap their progress through the lobby's party link; the friend shows as an orange Foxino and in the HUD
+// The models are built in Blender from scripts (Foxino/Foxino Sports/Blender Snow/*.py) and exported to models/.
+import * as THREE from '/penalty/lib/three.module.min.js';
+import { GLTFLoader } from '/penalty/lib/GLTFLoader.js';
+import { makeFoxinoGLB } from '/penalty/foxino-glb.js?v=3';
+import { blankPose } from '/penalty/foxino.js';
+import { makeBubble } from '/penalty/props.js';
+import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
+import { paintedSky, makePost } from '../look.js?v=3';
+
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hints = (t) => esc(t).replace(/\(([^)]*)\)/g, '<i>($1)</i>');
+export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export const lerp = (a, b, t) => a + (b - a) * t;
+export const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
+export const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+const Q = new URLSearchParams(location.search);
+const SPORT = (Q.get('sport') || 'slalom').replace(/[^a-z]/g, '');
+const LIST = Q.get('list') === '1', PARTY = Q.get('party') === '1' && window.parent !== window;
+const SPEED = clamp(+Q.get('speed') || 1, 0.25, 8), BOT = Q.get('bot');   // (tests: ?speed=3 runs the game faster, ?bot=1 answers by itself)
+const TINTS = [0xff6fb5, 0xffcd1c, 0x48d8ff], CSS_TINTS = ['#ff8fc4', '#ffd84a', '#6fe2ff'];
+export const WINTER_KIT = { shirt: '#ffcd2e', trim: '#7b3fd1', shorts: '#4a2a8c', socks: '#4a2a8c', boots: '#36d6e0' };
+export const FRIEND_KIT = { shirt: '#ff7d22', trim: '#ffffff', shorts: '#2b3a7a', socks: '#2b3a7a', boots: '#ffffff' };
+const NAMES = { slalom: 'SLALOM', halfpipe: 'HALFPIPE', skijump: 'SKI JUMP', sled: 'SLED RUN', biathlon: 'SNOWBALL BIATHLON' };
+
+// ---------- renderer, scene, camera ----------
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, powerPreference: 'high-performance' });
+let pr = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(pr);
+renderer.info.autoReset = false;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xdfeaff, 80, 520);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 3000); scene.add(camera);
+const hemi = new THREE.HemisphereLight(0xdbe8ff, 0x9a8fc8, 1.0); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0dc, 2.2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 220 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.radius = 4;
+scene.add(sun, sun.target);
+const rim = new THREE.DirectionalLight(0xbfd6ff, 0.8); scene.add(rim);
+const SUN_DIR = new THREE.Vector3(-0.45, 0.7, -0.55).normalize();
+const POSTFX = makePost(renderer, { aoRange: 90, focusMul: 1.6, blur: 0.35, grade: { sat: 1.08, warm: 0.5 }, glow: 0.0 });
+
+// ---------- loading helpers ----------
+const loader = new GLTFLoader();
+const loadGLB = (url) => loader.loadAsync(url);
+const loadJSON = (url) => fetch(url).then((r) => r.json());
+
+// the snow: a soft white with sparkles that twinkle as the camera moves; the groomed piste gets a faint corduroy
+const TIME = { value: 0 };
+function snowMaterial(kind) {
+  const m = new THREE.MeshStandardMaterial({ color: kind === 'piste' ? 0xe4ebfb : kind === 'ice' ? 0xcfe6ff : 0xeef2fd, roughness: kind === 'ice' ? 0.18 : kind === 'piste' ? 0.8 : 0.88, metalness: 0, envMapIntensity: kind === 'ice' ? 1.0 : 0.12 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = TIME;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vWp; uniform float uTime;
+      float h31(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        ${kind === 'piste' ? 'diffuseColor.rgb *= 1.0 - 0.035 * smoothstep(0.35, 0.5, abs(fract(vWp.x * 1.3) - 0.5));' : ''}
+        diffuseColor.rgb *= 0.97 + 0.03 * h31(floor(vWp * 2.0));`)
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+        { vec3 cell = floor(vWp * 38.0); float h = h31(cell); vec3 V = normalize(cameraPosition - vWp);
+          float tw = step(0.9935, h) * pow(max(0.0, sin(dot(V, vec3(31.0, 17.0, 23.0)) * 4.0 + h * 60.0 + uTime * 0.6)), 6.0);
+          float dist = length(cameraPosition - vWp);
+          gl_FragColor.rgb += vec3(0.9, 0.95, 1.0) * tw * (1.0 - smoothstep(8.0, 45.0, dist)) * 1.6; }`);
+  };
+  return m;
+}
+const MATS = { snow: snowMaterial('snow'), piste: snowMaterial('piste'), ice: snowMaterial('ice') };
+// the course models: Blender material names -> the game's materials
+export function dressModel(root, { banner = null } = {}) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const name = (o.material && o.material.name) || '';
+    if (name === 'Snow') o.material = MATS.snow;
+    else if (name === 'Piste') o.material = MATS.piste;
+    else if (name === 'Ice') o.material = MATS.ice;
+    else if (name === 'WindowLit' || name === 'LampLit') { o.material = new THREE.MeshBasicMaterial({ color: name === 'LampLit' ? 0xfff6dc : 0xffd98a, toneMapped: false }); o.userData.noCast = true; }
+    else if ((name === 'Banner' || name === 'Banner2') && banner) o.material = banner(name);
+    else if (o.material && o.material.isMeshStandardMaterial) { o.material.envMapIntensity = 0.4; if (o.geometry.attributes.color && name === 'Mount') o.material.vertexColors = true; }
+    if (o.geometry.boundingSphere == null) o.geometry.computeBoundingSphere();
+    const r = o.geometry.boundingSphere.radius;
+    o.receiveShadow = true; o.castShadow = r < 25 && name !== 'Snow' && name !== 'Piste';
+    if (!o.castShadow) o.userData.noCast = true;
+    if (r > 25) FAR.push(o);
+  });
+  return root;
+}
+// a banner texture with big text (start / finish arches)
+export function bannerMaterial(text, bg = '#7b3fd1', fg = '#ffffff') {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, 1024, 128);
+  g.fillStyle = 'rgba(255,255,255,.12)'; for (let x = -128; x < 1024; x += 64) { g.beginPath(); g.moveTo(x, 128); g.lineTo(x + 64, 0); g.lineTo(x + 96, 0); g.lineTo(x + 32, 128); g.fill(); }
+  g.font = '400 92px "Lilita One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 14; g.strokeStyle = 'rgba(29,22,64,.8)'; g.strokeText(text, 512, 70); g.fillStyle = fg; g.fillText(text, 512, 70);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 });
+}
+
+// ---------- the props (trees, rocks, gates, gear) and instancing in cells, so far-away cells are not drawn ----------
+let PROPS = null;
+const FAR = [];   // meshes hidden when far from the camera (tree cells, ground pieces): fewer triangles on phones
+const _fc = new THREE.Vector3();
+async function loadProps() {
+  if (PROPS) return PROPS;
+  const g = await loadGLB('models/snow-props.glb?v=1');
+  PROPS = {};
+  g.scene.children.forEach((o) => { PROPS[o.name.replace(/\.\d+$/, '')] = o; });
+  for (const k in PROPS) dressModel(PROPS[k]);
+  return PROPS;
+}
+export function prop(name) { const p = PROPS[name]; if (!p) throw new Error('no prop ' + name); const c = p.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); return c; }
+// list: [[type, x, y, z, rot, scale], …]; names(type) -> prop name. One InstancedMesh per (cell, prop part).
+export function instanceField(list, names, cell = 36) {
+  const cells = new Map();
+  for (const it of list) { const key = `${Math.floor(it[1] / cell)},${Math.floor(it[3] / cell)}|${names(it[0])}`; if (!cells.has(key)) cells.set(key, []); cells.get(key).push(it); }
+  const group = new THREE.Group(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+  let tris = 0;
+  for (const [key, items] of cells) {
+    const proto = PROPS[key.split('|')[1]]; if (!proto) continue;
+    proto.updateMatrixWorld(true);
+    proto.traverse((part) => {
+      if (!part.isMesh) return;
+      const im = new THREE.InstancedMesh(part.geometry, part.material, items.length);
+      const local = part.matrixWorld.clone().premultiply(new THREE.Matrix4().copy(proto.matrixWorld).invert());
+      items.forEach((it, i) => { p.set(it[1], it[2], it[3]); q.setFromAxisAngle(Y, it[4]); s.setScalar(it[5]); m4.compose(p, q, s).multiply(local); im.setMatrixAt(i, m4); });
+      im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.castShadow = true; im.receiveShadow = true;
+      tris += (part.geometry.index ? part.geometry.index.count : part.geometry.attributes.position.count) / 3 * items.length;
+      group.add(im);
+    });
+  }
+  group.userData.tris = tris;
+  group.children.forEach((im) => FAR.push(im));
+  return group;
+}
+// the far mountains: two rings that stay centred on the camera (always far away), sunk to the course's height
+let MOUNT = null;
+export async function addMountains(yBase = -200, tint = 0xffffff) {
+  const g = await loadGLB('models/mountains.glb?v=1'); MOUNT = g.scene;
+  MOUNT.traverse((o) => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ vertexColors: true, color: tint, roughness: 0.95, envMapIntensity: 0.2 }); o.userData.noCast = true; o.receiveShadow = false; o.frustumCulled = false; } });
+  MOUNT.userData.y = yBase; scene.add(MOUNT); return MOUNT;
+}
+
+// ---------- Foxino in winter gear ----------
+const FOX_URL = '/penalty/models/foxino-football.glb?v=1';
+let GEAR = null;
+const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4();
+export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
+  const [fg, gg] = await Promise.all([loadGLB(FOX_URL), GEAR || (GEAR = loadGLB('models/fox-gear.glb?v=1'))]);
+  const raw = fg.scene; raw.updateMatrixWorld(true);
+  const bonesRaw = {}; raw.traverse((o) => { if (o.isBone) bonesRaw[o.name.replace(/^mixamorig:?/, '')] = o; });
+  const restInv = {}; for (const k of ['Head', 'Neck', 'Spine2']) restInv[k] = bonesRaw[k].matrixWorld.clone().invert();
+  const fox = makeFoxinoGLB(raw);
+  // the goggles on the forehead and the scarf, attached to the head / neck bones (exported in the model's rest space)
+  const gs = gg.scene.clone(true); gs.updateMatrixWorld(true);
+  const parts = []; gs.traverse((o) => { if (o.isMesh) parts.push(o); });
+  for (const o of parts) {
+    const bone = /^Scarf$/.test(o.name) ? 'Neck' : /^ScarfEnd/.test(o.name) ? 'Spine2' : 'Head';
+    const mesh = o.clone(); mesh.matrixAutoUpdate = true;
+    _m.copy(restInv[bone]).multiply(o.matrixWorld); _m.decompose(mesh.position, mesh.quaternion, mesh.scale);
+    const n = (o.material && o.material.name) || '';
+    if (n === 'GoggleLens') mesh.material = new THREE.MeshPhysicalMaterial({ color: 0xb98cff, roughness: 0.08, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.05, iridescence: 0.8, envMapIntensity: 1.6 });
+    else if (n === 'Scarf' || n === 'ScarfStripe') mesh.material = new THREE.MeshStandardMaterial({ color: kit === FRIEND_KIT ? 0x36d6e0 : 0xff4d6d, roughness: 0.95 });
+    else if (mesh.material) { mesh.material = mesh.material.clone(); mesh.material.roughness = Math.min(0.6, mesh.material.roughness); }
+    mesh.castShadow = true; mesh.frustumCulled = false;
+    fox.bones[bone].add(mesh);
+  }
+  fox.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  try { await fox.setKit(kit); } catch (e) { /* (the football kit stays) */ }
+  const g = new THREE.Group(); g.add(fox.root); scene.add(g);
+  const A = { g, fox, gear, kit, skis: [], poles: [], board: null, sled: null, ball: null,
+    skiYaw: [0, 0], skiPitch: 0, skiRoll: 0, skiFree: false, poleDir: [new THREE.Vector3(0.15, -1, -0.55), new THREE.Vector3(-0.15, -1, -0.55)], poleOn: true };
+  await loadProps();
+  if (gear === 'ski' || gear === 'xc' || gear === 'jump') {
+    for (let i = 0; i < 2; i++) { const s = prop('Ski'); if (gear === 'jump') s.scale.set(1, 1, 1.55); else if (gear === 'xc') s.scale.set(0.8, 1, 1.25); g.add(s); A.skis.push(s); }
+    if (gear !== 'jump') for (let i = 0; i < 2; i++) { const p = prop('Pole'); g.add(p); A.poles.push(p); }
+  }
+  if (gear === 'board') { A.board = prop('Snowboard'); g.add(A.board); fox.root.rotation.y = -Math.PI / 2; }
+  if (gear === 'sled') { A.sled = prop('Sled'); g.add(A.sled); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  A.pose = (P, k = 12, dt = 1 / 60) => fox.apply(P, k, dt);
+  // the gear follows the feet and the hands every frame
+  A.update = () => {
+    g.updateMatrixWorld(true);
+    const feet = [fox.bones.LeftFoot, fox.bones.RightFoot], hands = [fox.bones.LeftHand, fox.bones.RightHand];
+    if (A.skis.length) feet.forEach((b, i) => {
+      const s = A.skis[i]; b.getWorldPosition(_v); g.worldToLocal(_v);
+      if (A.skiFree) { s.position.copy(_v).add(_v2.set(0, -0.09, 0.05)); }
+      else { s.position.set(_v.x, Math.max(0, _v.y - 0.1), _v.z + 0.04); }
+      s.rotation.set(A.skiPitch, A.skiYaw[i], A.skiRoll, 'YXZ');
+    });
+    if (A.poles.length) hands.forEach((b, i) => {
+      const p = A.poles[i]; p.visible = A.poleOn; b.getWorldPosition(_v); g.worldToLocal(_v); p.position.copy(_v);
+      _v2.copy(A.poleDir[i]).normalize(); p.quaternion.setFromUnitVectors(_v.set(0, -1, 0), _v2);
+    });
+    if (A.board) { fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); _v.add(_v2).multiplyScalar(0.5); g.worldToLocal(_v); A.board.position.set(_v.x * 0.3, Math.max(0, _v.y - 0.1), _v.z * 0.3); }
+  };
+  return A;
+}
+// the ski poses (the old rig's joints: legs/arms negative x = forward, knees positive = bend, spine positive = lean forward)
+export const SP = {
+  tuck(t, k = 1) { const p = blankPose(), b = 0.01 * Math.sin(t * 7);
+    p.legL = [-1.0 * k - 0.1, 0, 0.05]; p.legR = [-1.0 * k - 0.1, 0, -0.05]; p.kneeL = [1.55 * k + 0.2, 0, 0]; p.kneeR = [1.55 * k + 0.2, 0, 0];
+    p.ankleL = [-0.6 * k - 0.1, 0, 0]; p.ankleR = [-0.6 * k - 0.1, 0, 0]; p.spine = [0.75 * k + 0.1, 0, 0]; p.neck = [-0.35 * k, 0, 0]; p.head = [-0.35 * k, 0, 0];
+    p.armL = [-0.9, 0, 0.25]; p.armR = [-0.9, 0, -0.25]; p.elbowL = [-1.4, 0, 0]; p.elbowR = [-1.4, 0, 0]; p.y = -0.13 * k - 0.02 + b; return p; },
+  // carving: lean (rad, + = into a left turn), knees bent, arms forward with the poles
+  carve(t, lean = 0, crouch = 0.5) { const p = blankPose(), b = 0.008 * Math.sin(t * 9);
+    const c = 0.35 + crouch * 0.5;
+    p.legL = [-c, 0, 0.06 + lean * 0.3]; p.legR = [-c, 0, -0.06 + lean * 0.3]; p.kneeL = [c * 1.6, 0, 0]; p.kneeR = [c * 1.6, 0, 0];
+    p.ankleL = [-c * 0.6, 0, 0]; p.ankleR = [-c * 0.6, 0, 0]; p.hips = [0, -lean * 0.4, lean * 0.5]; p.spine = [0.3 + crouch * 0.25, lean * 0.2, -lean * 0.45];
+    p.head = [-0.2, lean * 0.25, lean * 0.3]; p.armL = [-0.55, 0, 0.32 + lean * 0.2]; p.armR = [-0.55, 0, -0.32 + lean * 0.2]; p.elbowL = [-0.9, 0, 0]; p.elbowR = [-0.9, 0, 0];
+    p.y = -0.06 - crouch * 0.07 + b; return p; },
+  stand(t) { const p = blankPose(), br = Math.sin(t * 2.2);
+    p.legL = [-0.2, 0, 0.05]; p.legR = [-0.2, 0, -0.05]; p.kneeL = [0.35, 0, 0]; p.kneeR = [0.35, 0, 0]; p.ankleL = [-0.15, 0, 0]; p.ankleR = [-0.15, 0, 0];
+    p.spine = [0.12, 0, 0]; p.armL = [-0.3, 0, 0.3]; p.armR = [-0.3, 0, -0.3]; p.elbowL = [-0.8, 0, 0]; p.elbowR = [-0.8, 0, 0]; p.head = [0.02 * br, 0.1 * Math.sin(t * 0.6), 0]; p.y = -0.02 + 0.004 * br; return p; },
+  cheer(t) { const p = blankPose(), b = Math.abs(Math.sin(t * 6));
+    p.armL = [-0.6, 0, 2.5]; p.armR = [-0.6, 0, -2.5]; p.elbowL = [-0.4, 0, 0]; p.elbowR = [-0.4, 0, 0]; p.spine = [-0.1, 0, 0]; p.head = [-0.25, 0, 0];
+    p.legL = [-0.15, 0, 0.06]; p.legR = [-0.15, 0, -0.06]; p.kneeL = [0.25, 0, 0]; p.kneeR = [0.25, 0, 0]; p.y = 0.05 * b; return p; },
+  wobble(t) { const p = SP.carve(t, Math.sin(t * 14) * 0.5, 0.2); p.armL = [-0.8, 0, 1.4 + Math.sin(t * 11) * 0.4]; p.armR = [-0.8, 0, -1.4 + Math.sin(t * 13) * 0.4]; p.elbowL = [-0.2, 0, 0]; p.elbowR = [-0.2, 0, 0]; return p; },
+};
+
+// ---------- particles: falling snow round the camera, snow spray from the skis ----------
+function makeFlakes(n = 700) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), sp = new Float32Array(n);
+  for (let i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * 60; pos[i * 3 + 1] = Math.random() * 30; pos[i * 3 + 2] = (Math.random() - 0.5) * 60; sp[i] = 0.6 + Math.random(); }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('sp', new THREE.BufferAttribute(sp, 1));
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uT: { value: 0 }, uC: { value: new THREE.Vector3() }, uA: { value: 0.8 } },
+    vertexShader: `attribute float sp; uniform float uT; uniform vec3 uC; varying float vA;
+      void main() { vec3 p = position; p.y = mod(p.y - uT * sp * 1.6, 30.0); p.x += sin(uT * sp + p.y) * 0.6;
+        p.xz = mod(p.xz - uC.xz + 30.0, 60.0) - 30.0 + uC.xz; p.y += uC.y - 12.0;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = clamp(sp * 70.0 / -mv.z, 1.5, 9.0); vA = smoothstep(0.5, 4.0, -mv.z); }`,
+    fragmentShader: `uniform float uA; varying float vA; void main() { vec2 d = gl_PointCoord - .5; float a = smoothstep(.5, .15, length(d)); gl_FragColor = vec4(1.0, 1.0, 1.0, a * vA * uA); }` });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = 3; scene.add(pts); return pts;
+}
+const SPRAY = (() => {
+  const N = 260, g = new THREE.BufferGeometry(), pos = new Float32Array(N * 3), life = new Float32Array(N), size = new Float32Array(N);
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('life', new THREE.BufferAttribute(life, 1)); g.setAttribute('size', new THREE.BufferAttribute(size, 1));
+  const vel = new Float32Array(N * 3); let next = 0;
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
+    vertexShader: 'attribute float life; attribute float size; varying float vL; void main(){ vL = life; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; gl_PointSize = size * (1.0 + (1.0 - life) * 1.5) * 260.0 / -mv.z; }',
+    fragmentShader: 'varying float vL; void main(){ if (vL <= 0.0) discard; vec2 d = gl_PointCoord - .5; float a = smoothstep(.5, .1, length(d)) * vL * 0.85; gl_FragColor = vec4(0.96, 0.98, 1.0, a); }' });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = 2; scene.add(pts);
+  return {
+    emit(p, n, vx = 0, vy = 2, vz = 0, spread = 1.5, sz = 0.12) {
+      for (let k = 0; k < n; k++) { const i = next; next = (next + 1) % N;
+        pos[i * 3] = p.x + (Math.random() - 0.5) * 0.3; pos[i * 3 + 1] = p.y + Math.random() * 0.1; pos[i * 3 + 2] = p.z + (Math.random() - 0.5) * 0.3;
+        vel[i * 3] = vx + (Math.random() - 0.5) * spread; vel[i * 3 + 1] = vy * (0.5 + Math.random()); vel[i * 3 + 2] = vz + (Math.random() - 0.5) * spread; life[i] = 1; size[i] = sz * (0.6 + Math.random() * 0.8); }
+    },
+    update(dt) {
+      for (let i = 0; i < N; i++) { if (life[i] <= 0) continue; life[i] -= dt * 1.4; vel[i * 3 + 1] -= 6 * dt;
+        pos[i * 3] += vel[i * 3] * dt; pos[i * 3 + 1] += vel[i * 3 + 1] * dt; pos[i * 3 + 2] += vel[i * 3 + 2] * dt; }
+      g.attributes.position.needsUpdate = true; g.attributes.life.needsUpdate = true; g.attributes.size.needsUpdate = true;
+    },
+  };
+})();
+
+// ---------- game time: waits run on frames (slow phones never race) ----------
+const E = {
+  THREE, scene, camera, renderer, sun, hemi, rim, POSTFX, T: 0, dt: 0, timeScale: 1, slow: 1, sport: SPORT,
+  loadGLB, loadJSON, dressModel, bannerMaterial, instanceField, addMountains, makeActor, prop, SP, clamp, lerp, damp, smooth, spray: SPRAY,
+  drawDist: 230, sfx, waiters: [], camPos: new THREE.Vector3(0, 5, -10), camLook: new THREE.Vector3(), camFov: 60, camK: 5, shakeA: 0, groundAt: null, focus: 12,
+  combo: 0, right: 0, asked: 0, missed: [], running: false, FRIEND_KIT, WINTER_KIT,
+};
+E.wait = (s) => new Promise((res) => E.waiters.push({ t: E.T + s, res }));
+E.until = (fn) => new Promise((res) => E.waiters.push({ fn, res }));
+E.shake = (a) => { E.shakeA = Math.max(E.shakeA, a); };
+E.cine = (on) => document.body.classList.toggle('cine', !!on);
+// the camera: the sports set a target (position, look-at, fov); it damps there (k), never goes under the ground
+const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _sh = new THREE.Vector3();
+let camInit = false;
+E.cam = (pos, look, k = 5, fov = null) => { E.camTargetPos = pos; E.camTargetLook = look; E.camK = k; if (fov) E.camFov = fov; };
+E.snapCam = () => { camInit = false; };
+// three bubble positions round a point, spread across the screen (the camera's right) and a little up: left, top, right
+const _cr = new THREE.Vector3(), _cu = new THREE.Vector3();
+E.around = (P, out, spread = 2.2, up = 1.6) => {
+  _cr.setFromMatrixColumn(camera.matrixWorld, 0).normalize(); _cu.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+  out[0].copy(P).addScaledVector(_cr, -spread).addScaledVector(_cu, up * 0.7);
+  out[1].copy(P).addScaledVector(_cu, up * 1.35);
+  out[2].copy(P).addScaledVector(_cr, spread).addScaledVector(_cu, up * 0.7);
+};
+function updateCamera(rdt) {
+  if (E.camOverride) { E.camTargetPos = E.camOverride.pos; E.camTargetLook = E.camOverride.look; E.camK = 50; }   // (tests)
+  if (!E.camTargetPos) return;
+  if (!camInit) { _cp.copy(E.camTargetPos); _cl.copy(E.camTargetLook); camInit = true; }
+  const k = 1 - Math.exp(-E.camK * rdt);
+  _cp.lerp(E.camTargetPos, k); _cl.lerp(E.camTargetLook, Math.min(1, k * 1.6));
+  if (E.groundAt) { const gy = E.groundAt(_cp.x, _cp.z); if (gy != null && _cp.y < gy + 0.8) _cp.y = gy + 0.8; }
+  camera.position.copy(_cp);
+  E.shakeA = Math.max(0, E.shakeA - rdt * 2.5);
+  if (E.shakeA > 0) { const s = E.shakeA * E.shakeA * 0.35; _sh.set((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s); camera.position.add(_sh); }
+  camera.lookAt(_cl);
+  const asp = innerWidth / innerHeight, base = asp < 1 ? E.camFov : E.camFov * 0.78;
+  if (Math.abs(camera.fov - base) > 0.05) { camera.fov = damp(camera.fov, base, 4, rdt); camera.updateProjectionMatrix(); }
+}
+
+// ---------- the question moment ----------
+const PACKS = window.FSQ ? FSQ.packs() : [];
+let packIds = (store.get('sports-packs', null) || store.get('tennis-packs', []) || []).filter((id) => PACKS.some((p) => p.id === id));
+if (!packIds.length && PACKS.length) packIds = [PACKS[0].id];
+const bubbles = TINTS.map((c) => { const b = makeBubble(c); b.mesh.visible = false; b.mesh.renderOrder = 6; scene.add(b.mesh); return Object.assign(b, { at: new THREE.Vector3(), s: 0, target: 0 }); });
+const labelEls = CSS_TINTS.map((c, k) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'blabel'; b.style.setProperty('--c', c); b.innerHTML = '<span></span>';
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); unlock(); if (ASK && !ASK.done) answer(k); });
+  $('labels').appendChild(b); return b;
+});
+addEventListener('keydown', (e) => { if (ASK && !ASK.done && /^[1-3]$/.test(e.key)) answer(+e.key - 1); });
+let ASK = null;
+// (universal content) the word labels stay on screen, below the sentence card and apart from each other, whatever their length
+const LAY = [0, 1, 2].map(() => ({ x: 0, y: 0, on: false }));
+function layoutLabels() {
+  const W = innerWidth, H = innerHeight, cardEl = $('card'), top = (!cardEl.classList.contains('hidden') ? cardEl.getBoundingClientRect().bottom : 60) + 8, bot = H - 50, gap = 6;
+  const L = LAY.map((p, i) => ({ i, x: p.x, y: p.y, w: labelEls[i].offsetWidth || 80, h: labelEls[i].offsetHeight || 50, on: p.on && !labelEls[i].hidden })).filter((p) => p.on);
+  if (!L.length) return;
+  L.sort((a, b) => a.x - b.x);
+  const total = L.reduce((t, p) => t + p.w, 0) + gap * (L.length - 1);
+  if (total <= W - 12) {
+    for (let k = 1; k < L.length; k++) { const a = L[k - 1], b = L[k]; const min = a.x + a.w / 2 + gap + b.w / 2; if (b.x < min) b.x = min; }
+    const over = L[L.length - 1].x + L[L.length - 1].w / 2 - (W - 6); if (over > 0) L.forEach((p) => { p.x -= over; });
+    const under = 6 - (L[0].x - L[0].w / 2); if (under > 0) L.forEach((p) => { p.x += under; });
+  } else {
+    // too wide for one row: left and right on one row, the middle one under them
+    const row = [L[0], L[L.length - 1]], mid = L.length === 3 ? L[1] : null;
+    row[0].x = 6 + row[0].w / 2; row[1].x = W - 6 - row[1].w / 2;
+    if (mid) { mid.x = W / 2; mid.y = Math.max(mid.y, Math.max(row[0].y + row[0].h / 2, row[1].y + row[1].h / 2) + gap + mid.h / 2); }
+  }
+  for (const p of L) {
+    p.x = clamp(p.x, 6 + p.w / 2, W - 6 - p.w / 2); p.y = clamp(p.y, top + p.h / 2, bot - p.h / 2);
+    labelEls[p.i].style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`; LAY[p.i].fx = p.x; LAY[p.i].fy = p.y;
+  }
+  // rows that now overlap vertically after the clamp: push the lower one down
+  L.sort((a, b) => a.y - b.y);
+  for (let k = 1; k < L.length; k++) { const a = L[k - 1], b = L[k]; if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 + gap && b.y - a.y < (a.h + b.h) / 2 + gap) { b.y = a.y + (a.h + b.h) / 2 + gap; labelEls[b.i].style.transform = `translate(${b.x}px, ${b.y}px) translate(-50%, -50%)`; LAY[b.i].fy = b.y; } }
+  // the 3D bubble follows its label (same depth)
+  for (const p of L) { const q = LAY[p.i]; _pv.set(q.fx / W * 2 - 1, -(q.fy / H) * 2 + 1, q.z).unproject(camera); bubbles[p.i].mesh.position.copy(_pv); }
+}
+// opts.anchors(out[3]) fills three world positions for the bubbles (updated every frame); opts.size: bubble radius
+E.ask = (opts = {}) => new Promise((resolve) => {
+  const q = window.FSQ ? FSQ.make(PACKS, packIds, { n: 3, count: E.asked }) : null;
+  if (!q) { resolve({ ok: true, k: 0, skipped: true }); return; }
+  E.asked++;
+  ASK = { q, opts, t0: performance.now(), done: false, resolve, pos: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] };
+  $('sentence').innerHTML = `${hints(q.before)}<span class="gap">&nbsp;</span>${hints(q.after)}`;
+  $('note').className = ''; $('note').textContent = opts.note || 'Tap the right word';
+  $('cardWho').textContent = opts.who || 'TAP THE RIGHT WORD'; $('cardNum').textContent = opts.num || '';
+  $('card').classList.remove('hidden'); document.body.classList.add('asking');
+  q.words.forEach((w, i) => { const el = labelEls[i]; el.querySelector('span').textContent = w.text; el.classList.toggle('long', w.text.length > 12); el.className = el.className.replace(/\b(right|wrong|off)\b/g, '').trim(); el.classList.add('on'); el.hidden = false; });
+  for (let i = q.words.length; i < 3; i++) labelEls[i].hidden = true;
+  bubbles.forEach((b, i) => { b.target = i < q.words.length ? 1 : 0; b.u.uGlow.value = 0; b.u.uAlpha.value = 1; });
+  E.slow = opts.slow ?? 0.06;
+  sfx.bubble && sfx.bubble();
+  // (tests) the bot answers by itself: right, except every 4th question (?bot=1), or always wrong (?bot=wrong)
+  if (BOT) setTimeout(() => { if (ASK && ASK.q === q && !ASK.done) answer(BOT === 'wrong' ? (q.correct + 1) % q.words.length : (BOT === '1' && E.asked % 4 === 0) ? (q.correct + 1) % q.words.length : q.correct); }, 900 / SPEED);
+});
+function answer(k) {
+  const A = ASK; if (!A || A.done) return; A.done = true;
+  const q = A.q, ok = k === q.correct, secs = (performance.now() - A.t0) / 1000;
+  labelEls.forEach((el, i) => { el.classList.add('off'); if (i === q.correct) el.classList.add('right'); else if (i === k) el.classList.add('wrong'); else el.classList.add('wrong'); });
+  bubbles.forEach((b, i) => { if (i === q.correct) { b.u.uGlow.value = 1; } });
+  $('sentence').innerHTML = `${hints(q.before)}<span class="gap ok">${esc(q.right)}</span>${hints(q.after)}`;
+  $('note').className = ok ? 'good' : 'bad'; $('note').innerHTML = ok ? 'Yes!' : `The right word: <b>${esc(q.right)}</b>`;
+  if (ok) { E.right++; E.combo++; sfx.pop && sfx.pop(true); vib(25); } else { E.combo = 0; E.missed.push(q); sfx.pop && sfx.pop(false); vib([40, 50, 40]); }
+  renderCombo();
+  setTimeout(() => {
+    if (ASK !== A) return;   // (a newer question is up already)
+    labelEls.forEach((el) => el.classList.remove('on')); bubbles.forEach((b) => { b.target = 0; });
+    $('card').classList.add('hidden'); document.body.classList.remove('asking'); E.slow = 1; ASK = null;
+  }, ok ? 650 : 1500);
+  A.resolve({ ok, k, secs, q, grade: !ok ? 'bad' : secs < 4 ? 'perfect' : secs < 8 ? 'great' : 'good' });
+}
+function renderCombo() {
+  const el = $('combo');
+  if (E.combo >= 2) { el.hidden = false; el.innerHTML = `🔥 <b>${E.combo}</b> in a row`; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } else el.hidden = true;
+}
+// a floating word over a point in the world (PERFECT! / OOPS!) and a coloured edge flash
+const _pv = new THREE.Vector3();
+E.pop = (text, at, cls = 'perfect', small = '') => {
+  _pv.copy(at).project(camera); const x = (_pv.x * 0.5 + 0.5) * innerWidth, y = (-_pv.y * 0.5 + 0.5) * innerHeight;
+  const d = document.createElement('div'); d.className = `ptext ${cls}`; d.style.left = `${clamp(x, 80, innerWidth - 80)}px`; d.style.top = `${clamp(y, 140, innerHeight - 80)}px`;
+  d.innerHTML = `${esc(text)}${small ? `<small>${esc(small)}</small>` : ''}`; $('fxText').appendChild(d); setTimeout(() => d.remove(), 1300);
+};
+E.flash = (col) => { const f = $('flash'); f.style.transition = 'none'; f.style.boxShadow = `inset 0 0 120px 30px ${col}`; f.style.opacity = '1'; void f.offsetWidth; f.style.transition = 'opacity .6s'; f.style.opacity = '0'; };
+E.juice = (r, at, extra = '') => {
+  if (r.ok) { const w = { perfect: 'PERFECT!', great: 'GREAT!', good: 'GOOD!' }[r.grade] || 'GOOD!'; E.pop(w, at, r.grade === 'perfect' ? 'perfect' : 'good', extra); E.flash('rgba(120,255,170,.55)'); E.shake(0.35); sfx.star && sfx.star(Math.min(3, E.combo)); }
+  else { E.pop('OOPS!', at, 'bad', extra); E.flash('rgba(255,80,100,.6)'); E.shake(0.6); sfx.thud && sfx.thud(); }
+};
+E.banner = (txt, small = '', ms = 1400) => { const b = $('banner'); b.innerHTML = `${esc(txt)}${small ? `<small>${esc(small)}</small>` : ''}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); b.hidden = false; clearTimeout(b._t); b._t = setTimeout(() => { b.hidden = true; }, ms); };
+E.hud = (big, small = '') => { $('hudBig').textContent = big; $('hudSmall').textContent = small; };
+E.progress = (u) => { $('progMe').style.left = `${clamp(u, 0, 1) * 100}%`; };
+E.fmtTime = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(1).padStart(4, '0')}` : r.toFixed(1); };
+
+// ---------- the friend (inside the lobby: the parent page relays our state to the friend's phone and theirs to us) ----------
+E.friend = null;   // {name, p (progress 0..1), v (display value), x, y, z, yaw, extra, done, score}
+let lastSend = 0;
+E.send = (st) => { if (!PARTY) return; const now = performance.now(); if (now - lastSend < 160 && !st.done) return; lastSend = now; window.parent.postMessage({ snow: 'state', sport: SPORT, st }, '*'); };
+addEventListener('message', (e) => {
+  const m = e.data; if (!m || typeof m !== 'object' || e.source !== window.parent) return;
+  if (m.snowFriend && m.sport === SPORT) { E.friend = Object.assign(E.friend || {}, m.snowFriend); if (m.name) E.friend.name = m.name; }
+});
+if (PARTY) { $('friendChip').classList.remove('hidden'); $('progFr').classList.remove('hidden'); $('friendName').textContent = (Q.get('fname') || 'FRIEND').toUpperCase().slice(0, 12); }
+function updateFriendHud() {
+  if (!PARTY || !E.friend) return;
+  $('friendVal').textContent = E.friend.v ?? '–';
+  $('progFr').style.left = `${clamp(E.friend.p || 0, 0, 1) * 100}%`;
+}
+
+// ---------- the result ----------
+const MEDALS = ['', '🥉', '🥈', '🥇'];
+E.medalFor = () => { const f = E.asked ? E.right / E.asked : 1; return f >= 0.9 ? 3 : f >= 0.7 ? 2 : f >= 0.4 ? 1 : 0; };
+E.finish = async ({ score, shown, unit, better = 'high', line = '' }) => {
+  E.running = false;
+  const medal = E.medalFor(), key = `snow-best-${SPORT}`, best = store.get(key, null);
+  const isBest = best == null || (better === 'high' ? score > best : score < best);
+  if (isBest) store.set(key, score);
+  E.send({ done: true, score, v: shown, medal });
+  if (LIST && window.parent !== window) window.parent.postMessage({ fsnow: 'finished', sport: SPORT, score, shown, unit, better, medal, right: E.right, asked: E.asked }, '*');
+  await E.wait(LIST ? 2.2 : 1.6);
+  if (LIST) return;
+  $('endKick').textContent = NAMES[SPORT]; $('endMedal').textContent = MEDALS[medal] || '';
+  $('endTitle').textContent = medal === 3 ? 'Gold medal!' : medal === 2 ? 'Silver medal!' : medal === 1 ? 'Bronze medal!' : 'Keep practising!';
+  $('endScore').textContent = shown; $('endUnit').textContent = unit;
+  $('endLine').innerHTML = `${E.right} of ${E.asked} right${isBest ? ' · <b>new best!</b>' : best != null ? ` · best ${esc(E.bestShown ? E.bestShown(best) : best)}` : ''}${line ? `<br>${esc(line)}` : ''}`;
+  const ml = $('missedList'); ml.innerHTML = E.missed.slice(-6).map((q) => `<li>${hints(q.before)}<b>${esc(q.right)}</b>${hints(q.after)}</li>`).join('');
+  $('missed').classList.toggle('hidden', !E.missed.length);
+  $('end').classList.remove('hidden'); $('hud').classList.add('hidden');
+  if (medal >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
+};
+
+// ---------- the loop ----------
+let last = performance.now(), MOD = null, flakes = null;
+function resize() { renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+const _sun = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = Math.min(0.05, (now - last) / 1000) * SPEED; last = now;
+  renderer.info.reset();
+  if (POSTFX.governor(rdt) && pr > 1) { pr = Math.max(1, pr - 0.25); resize(); }
+  // the question slow-motion eases in and out
+  E.timeScale = damp(E.timeScale, E.slow, E.slow < 1 ? 9 : 4, rdt);
+  const dt = E.freeze ? 0 : rdt * E.timeScale; E.dt = dt; E.rdt = rdt; E.T += dt; TIME.value += rdt;   // (E.freeze: tests and card pictures)
+  for (let i = E.waiters.length - 1; i >= 0; i--) { const w = E.waiters[i]; if ((w.fn && w.fn()) || (!w.fn && E.T >= w.t)) { E.waiters.splice(i, 1); w.res(); } }
+  if (MOD && MOD.update) MOD.update(E, dt, rdt);
+  // the bubbles follow their anchors
+  if (ASK && ASK.opts.anchors) ASK.opts.anchors(ASK.pos);
+  bubbles.forEach((b, i) => {
+    b.s = damp(b.s, b.target, b.target ? 10 : 14, rdt); b.mesh.visible = b.s > 0.02; b.u.uTime.value += rdt;
+    if (ASK) b.at.copy(ASK.pos[i]);
+    const r = (ASK && ASK.opts.size) || 0.75;
+    b.mesh.position.copy(b.at); b.mesh.scale.setScalar(r * b.s * (1 + 0.04 * Math.sin(E.T * 3 + i)));
+    if (b.mesh.visible) { _pv.copy(b.at).project(camera); LAY[i].x = (_pv.x * 0.5 + 0.5) * innerWidth; LAY[i].y = (-_pv.y * 0.5 + 0.5) * innerHeight; LAY[i].z = _pv.z; LAY[i].on = true; } else LAY[i].on = false;
+  });
+  layoutLabels();
+  updateCamera(rdt);
+  // the sun's shadow box follows the camera's focus
+  if (E.focusAt) { _sun.copy(SUN_DIR).multiplyScalar(90); sun.position.copy(E.focusAt).add(_sun); sun.target.position.copy(E.focusAt); rim.position.copy(E.focusAt).add(_sun.set(0.5, 0.4, 0.8).multiplyScalar(60)); rim.target = sun.target; }
+  for (const o of FAR) { const bs = o.isInstancedMesh ? o.boundingSphere : o.geometry.boundingSphere; if (!bs) continue; _fc.copy(bs.center).applyMatrix4(o.matrixWorld); o.visible = _fc.distanceTo(camera.position) - bs.radius * (o.isInstancedMesh ? 1 : o.matrixWorld.getMaxScaleOnAxis()) < E.drawDist; }
+  if (E.fogColor != null) scene.fog.color.setHex(E.fogColor);
+  if (MOUNT) MOUNT.position.set(camera.position.x, camera.position.y + MOUNT.userData.y, camera.position.z);
+  if (flakes) { flakes.material.uniforms.uT.value += rdt; flakes.material.uniforms.uC.value.copy(camera.position); }
+  SPRAY.update(dt);
+  updateFriendHud();
+  POSTFX.draw(scene, camera, E.focus);
+  E.tris = renderer.info.render.triangles; E.calls = renderer.info.render.calls; E.maxTris = Math.max(E.maxTris || 0, E.tris);
+}
+
+// ---------- start ----------
+function renderStart() {
+  $('startTitle').textContent = NAMES[SPORT]; $('startSub').textContent = (MOD && MOD.blurb) || '';
+  const best = store.get(`snow-best-${SPORT}`, null); $('bestLine').textContent = best != null ? `Your best: ${MOD && MOD.bestShown ? MOD.bestShown(best) : best}` : '';
+  const ps = packIds.map((id) => PACKS.find((p) => p.id === id)).filter(Boolean);
+  const label = (p) => (window.FugioPacks && FugioPacks.label ? FugioPacks.label(p) : p.level);
+  $('packBtn').innerHTML = ps.length ? `${esc(ps.length > 1 ? `${ps.length} packages` : ps[0].title)}<small>${esc(ps.map(label).join(' · '))} · change the words ›</small>` : 'Choose the words ›';
+}
+$('packBtn').onclick = async () => { if (!window.FugioPacks) return; const ids = await FugioPacks.open(PACKS, packIds, { theme: 'gummy' }); if (ids && ids.length) { packIds = ids; store.set('sports-packs', ids); renderStart(); } };
+async function play() {
+  $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
+  E.right = 0; E.asked = 0; E.combo = 0; E.missed = []; renderCombo(); E.running = true;
+  await MOD.run(E);
+}
+$('playBtn').onclick = () => { unlock(); sfx.click && sfx.click(); play(); };
+$('againBtn').onclick = () => { unlock(); sfx.click && sfx.click(); MOD.reset && MOD.reset(E); play(); };
+$('menuBtn').onclick = () => { sfx.click && sfx.click(); $('end').classList.add('hidden'); MOD.reset && MOD.reset(E); MOD.menu && MOD.menu(E); $('start').classList.remove('hidden'); renderStart(); };
+$('leaveBtn').onclick = () => { sfx.click && sfx.click(); if (window.parent !== window) window.parent.postMessage({ fugio: 'leave' }, '*'); else location.href = '/sports/'; };
+$('muteBtn').onclick = () => { setMuted(!isMuted()); $('muteBtn').classList.toggle('muted', isMuted()); };
+$('muteBtn').classList.toggle('muted', isMuted());
+
+(async () => {
+  resize();
+  const bar = (p, t) => { $('loadBar').style.width = `${p}%`; if (t) $('loadTxt').textContent = t; };
+  $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
+  try {
+    bar(10, 'Grooming the snow…');
+    MOD = (await import(`./${SPORT}.js?v=1`)).default;
+    await loadProps();
+    bar(35, 'Building the course…');
+    const L = MOD.light || {};
+    paintedSky(scene, `sky/${L.sky || 'day'}.webp?v=1`, { yaw: L.skyYaw ?? 0.3, envRenderer: renderer, onFog: () => { if (L.fogColor != null) scene.fog.color.set(L.fogColor); }, base: L.skyBase ?? 0.2, span: L.skySpan ?? 0.85 });
+    hemi.color.set(L.hemiSky ?? 0xdbe8ff); hemi.groundColor.set(L.hemiGround ?? 0x9a8fc8); hemi.intensity = L.hemi ?? 1.0;
+    sun.color.set(L.sun ?? 0xfff0dc); sun.intensity = L.sunI ?? 2.2; if (L.sunDir) SUN_DIR.set(...L.sunDir).normalize();
+    rim.color.set(L.rim ?? 0xbfd6ff); rim.intensity = L.rimI ?? 0.8;
+    renderer.toneMappingExposure = L.exposure ?? 1.0;
+    if (L.fog) { scene.fog.near = L.fog[0]; scene.fog.far = L.fog[1]; }
+    if (L.fogColor != null) E.fogColor = L.fogColor;
+    if (L.env != null) scene.environmentIntensity = L.env;
+    flakes = makeFlakes(L.flakes ?? 500); flakes.material.uniforms.uA.value = L.flakeA ?? 0.7;
+    await MOD.build(E, (p, t) => bar(35 + p * 0.6, t));
+    bar(100, 'Ready!');
+  } catch (e) { console.error(e); $('loadTxt').textContent = 'Could not load: ' + e.message; return; }
+  requestAnimationFrame((t) => { last = t; frame(t); });
+  setTimeout(() => $('loading').classList.add('gone'), 250);
+  renderStart();
+  window.SNOW = E;
+  if (LIST) play(); else { $('start').classList.remove('hidden'); MOD.menu && MOD.menu(E); }
+})();
+export default E;
