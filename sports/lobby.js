@@ -27,11 +27,11 @@ const ACTS = [
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
   { id: 'streetball', name: 'Streetball', tag: 'BASKETBALL', pic: 'art/card-streetball.webp?v=1' },
   // (2026-11-21) the five snow sports (snow/index.html?sport=…): solo for the best score, with a friend side by side
-  { id: 'slalom', name: 'Slalom', tag: 'SKI', pic: 'art/card-slalom.webp?v=1', snow: true },
-  { id: 'halfpipe', name: 'Halfpipe', tag: 'SNOWBOARD', pic: 'art/card-halfpipe.webp?v=1', snow: true },
-  { id: 'skijump', name: 'Ski Jump', tag: 'SKI JUMP', pic: 'art/card-skijump.webp?v=1', snow: true },
-  { id: 'sled', name: 'Sled Run', tag: 'SLED', pic: 'art/card-sled.webp?v=1', snow: true },
-  { id: 'biathlon', name: 'Biathlon', tag: 'SNOWBALLS', pic: 'art/card-biathlon.webp?v=1', snow: true },
+  { id: 'slalom', name: 'Slalom', tag: 'SKI', pic: 'art/card-slalom.webp?v=2', snow: true },
+  { id: 'halfpipe', name: 'Halfpipe', tag: 'SNOWBOARD', pic: 'art/card-halfpipe.webp?v=2', snow: true },
+  { id: 'skijump', name: 'Ski Jump', tag: 'SKI JUMP', pic: 'art/card-skijump.webp?v=2', snow: true },
+  { id: 'sled', name: 'Sled Run', tag: 'SLED', pic: 'art/card-sled.webp?v=2', snow: true },
+  { id: 'biathlon', name: 'Biathlon', tag: 'SNOWBALLS', pic: 'art/card-biathlon.webp?v=2', snow: true },
 ];
 const isSnow = (id) => !!(ACTS.find((a) => a.id === id) || {}).snow;
 const FRIEND_KIT = { shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ff7d22' };

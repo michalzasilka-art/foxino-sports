@@ -11,7 +11,7 @@ function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, 
 export const _S = S;
 export default {
   id: 'halfpipe', blurb: 'Answer at the top of every air. Right words make big tricks!',
-  light: { sky: 'night', skyYaw: 0.1, skyBase: 0.3, skySpan: 1.0, sunDir: [0.3, 0.85, -0.35], sun: 0xf2f4ff, sunI: 2.3, hemiSky: 0x7f96ff, hemiGround: 0x34307a, hemi: 0.65, rim: 0x8fd6ff, rimI: 1.4, exposure: 1.05, fog: [60, 330], fogColor: 0x2a2f72, env: 0.25, flakes: 500, flakeA: 0.8 },
+  light: { sky: 'alpine-night', skyYaw: 0.1, skyBase: 0.3, skySpan: 1.0, sunDir: [0.3, 0.85, -0.35], sun: 0xf2f4ff, sunI: 2.3, hemiSky: 0x7f96ff, hemiGround: 0x34307a, hemi: 0.65, rim: 0x8fd6ff, rimI: 1.4, exposure: 1.05, fog: [60, 330], fogColor: 0x3a3f9a, env: 0.25, flakes: 500, flakeA: 0.8 },
   bestShown: (s) => `${s} points`,
   async build(E, prog) {
     const { THREE } = E;

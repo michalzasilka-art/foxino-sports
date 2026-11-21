@@ -501,11 +501,11 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=1`)).default;
+    MOD = (await import(`./${SPORT}.js?v=2`)).default;
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
-    paintedSky(scene, `sky/${L.sky || 'day'}.webp?v=1`, { yaw: L.skyYaw ?? 0.3, envRenderer: renderer, onFog: () => { if (L.fogColor != null) scene.fog.color.set(L.fogColor); }, base: L.skyBase ?? 0.2, span: L.skySpan ?? 0.85 });
+    paintedSky(scene, `sky/${L.sky || 'day'}.webp?v=2`, { yaw: L.skyYaw ?? 0.3, envRenderer: renderer, onFog: () => { if (L.fogColor != null) scene.fog.color.set(L.fogColor); }, base: L.skyBase ?? 0.2, span: L.skySpan ?? 0.85 });
     hemi.color.set(L.hemiSky ?? 0xdbe8ff); hemi.groundColor.set(L.hemiGround ?? 0x9a8fc8); hemi.intensity = L.hemi ?? 1.0;
     sun.color.set(L.sun ?? 0xfff0dc); sun.intensity = L.sunI ?? 2.2; if (L.sunDir) SUN_DIR.set(...L.sunDir).normalize();
     rim.color.set(L.rim ?? 0xbfd6ff); rim.intensity = L.rimI ?? 0.8;

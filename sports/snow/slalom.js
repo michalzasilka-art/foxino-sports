@@ -8,7 +8,7 @@ const S = { a: null, path: null, s: 0, d: 0, dT: 0, v: 0, time: 0, pen: 0, gates
 export const _S = S;
 export default {
   id: 'slalom', blurb: 'Ski through the gate with the right word. Fast and clean wins!',
-  light: { sky: 'day', skyYaw: 0.2, sunDir: [-0.55, 0.5, 0.45], sun: 0xfff3e0, sunI: 2.4, hemiSky: 0xd6e6ff, hemiGround: 0xa79bd6, hemi: 1.05, exposure: 0.95, fog: [170, 640], fogColor: 0xe4ecfb, env: 0.5, flakes: 260, flakeA: 0.45 },
+  light: { sky: 'alpine-day', skyYaw: 0.2, sunDir: [-0.55, 0.5, 0.45], sun: 0xfff3e0, sunI: 2.4, hemiSky: 0xd6e6ff, hemiGround: 0xa79bd6, hemi: 1.05, exposure: 0.95, fog: [170, 640], fogColor: 0xd8eafc, env: 0.5, flakes: 260, flakeA: 0.45 },
   bestShown: (s) => `${s.toFixed(1)} s`,
   async build(E, prog) {
     const { THREE } = E;

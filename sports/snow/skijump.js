@@ -24,7 +24,7 @@ function blank() { const p = { y: 0, tail: 0 }; for (const j of ['hips', 'spine'
 export const _S = S;
 export default {
   id: 'skijump', blurb: 'Right words give speed, a perfect take-off and a longer flight. Two jumps!',
-  light: { sky: 'gold', skyYaw: 0.55, skyBase: 0.22, sunDir: [0.75, 0.4, 0.45], sun: 0xffe4c4, sunI: 2.5, hemiSky: 0xdde6ff, hemiGround: 0x9a86c8, hemi: 0.9, rim: 0xffb27a, rimI: 1.0, exposure: 0.96, fog: [180, 760], fogColor: 0xf0dcd8, flakes: 120, flakeA: 0.35 },
+  light: { sky: 'alpine-gold', skyYaw: 0.55, skyBase: 0.22, sunDir: [0.75, 0.4, 0.45], sun: 0xffe4c4, sunI: 2.5, hemiSky: 0xdde6ff, hemiGround: 0x9a86c8, hemi: 0.9, rim: 0xffb27a, rimI: 1.0, exposure: 0.96, fog: [180, 760], fogColor: 0xf8d6bc, flakes: 120, flakeA: 0.35 },
   bestShown: (s) => `${s.toFixed(1)} m`,
   async build(E, prog) {
     const { THREE } = E; THREEp.T = THREE;
