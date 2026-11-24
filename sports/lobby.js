@@ -22,6 +22,9 @@ const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t, damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+// (2026-11-24, the user: "I want to remove Sledge, biathlon, Slalom sport activities from this game") they are out for players; their code and
+// art stay (snow/slalom.js, sled.js, biathlon.js): take an id out of HIDDEN_ACTS to bring it back
+const HIDDEN_ACTS = new Set(['slalom', 'sled', 'biathlon']);
 const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
@@ -32,7 +35,7 @@ const ACTS = [
   { id: 'skijump', name: 'Ski Jump', tag: 'SKI JUMP', pic: 'art/card-skijump.webp?v=2', snow: true },
   { id: 'sled', name: 'Sled Run', tag: 'SLED', pic: 'art/card-sled.webp?v=2', snow: true },
   { id: 'biathlon', name: 'Biathlon', tag: 'SNOWBALLS', pic: 'art/card-biathlon.webp?v=2', snow: true },
-];
+].filter((a) => !HIDDEN_ACTS.has(a.id));
 const isSnow = (id) => !!(ACTS.find((a) => a.id === id) || {}).snow;
 const FRIEND_KIT = { shirt: '#ffffff', trim: '#ff7d22', shorts: '#ff7d22', socks: '#ff7d22' };
 let myName = store.get('tennis-name', '') || '';
@@ -257,7 +260,7 @@ function renderMode() {
 }
 
 // ---------- choose the sports ----------
-let SEL = (store.get('sports-sel', null) || ['slalom', 'halfpipe', 'skijump', 'sled', 'biathlon']).filter((id) => ACTS.some((a) => a.id === id));
+let SEL = (store.get('sports-sel', null) || ['halfpipe', 'skijump']).filter((id) => ACTS.some((a) => a.id === id));
 if (!SEL.length) SEL = ACTS.map((a) => a.id);
 function renderPicker(view) {
   $('acts').classList.toggle('view', !!view);
@@ -267,7 +270,7 @@ function renderPicker(view) {
   $('pickSub').textContent = view ? `${PT.friend ? PT.friend.name : 'Your friend'} is choosing the sports…` : SEL.length ? 'Tap to pick · tap again to drop · they are played one after another' : 'Pick at least one sport';
 }
 const ordinal = (i) => ['1ST', '2ND', '3RD'][i] || `${i + 1}TH`;
-function openPicker(sel, view) { if (sel) SEL = sel.slice(); renderPicker(view); $('picker').hidden = false; }
+function openPicker(sel, view) { if (sel) SEL = sel.filter((id) => ACTS.some((x) => x.id === id)); renderPicker(view); $('picker').hidden = false; }
 function closePicker() { $('picker').hidden = true; }
 $('playBtn').onclick = () => { unlock(); if (!leader()) return; sfx.click && sfx.click(); vib(20); openPicker(null, false); send({ t: 'pick', open: true, sel: SEL }); };
 $('acts').addEventListener('click', (e) => {

@@ -28,7 +28,7 @@ export const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
 const Q = new URLSearchParams(location.search);
-const SPORT = (Q.get('sport') || 'slalom').replace(/[^a-z]/g, '');
+const SPORT = (() => { const s = (Q.get('sport') || 'halfpipe').replace(/[^a-z]/g, ''); return ['slalom', 'sled', 'biathlon'].includes(s) && !Q.has('dev') ? 'halfpipe' : s; })();   // (2026-11-24: Slalom, Sled and Biathlon are out for players: ?dev still opens them)
 const LIST = Q.get('list') === '1', PARTY = Q.get('party') === '1' && window.parent !== window;
 const SPEED = clamp(+Q.get('speed') || 1, 0.25, 8), BOT = Q.get('bot');   // (tests: ?speed=3 runs the game faster, ?bot=1 answers by itself)
 const TINTS = [0xff6fb5, 0xffcd1c, 0x48d8ff], CSS_TINTS = ['#ff8fc4', '#ffd84a', '#6fe2ff'];
