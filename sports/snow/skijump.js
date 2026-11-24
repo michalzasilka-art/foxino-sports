@@ -3,6 +3,7 @@
 // your best distance show as lines on the hill. Longest total wins.
 const S = { a: null, ghost: null, inrun: [], acc: [], LIN: 100, hill: [], phase: 'menu', s: 0, v: 0, z: 0, fl: null, jump: 0, dist: [], bonus: 0, takeoff: false, glide: 0, lines: {}, asking: '', stopT: 0, shotT: 0 };
 const THREEp = {};
+const FR_X = -6.5;   // (the friend's ramp, in a party game)
 const RAMP_T = 15, RAMP_END = 0.93, PER_RIGHT = 5.5;   // (the ramp: ~15 s at a steady speed; the questions stop at 93 %; metres per right answer)
 // (2026-11-24, the user: "make there a motion animation of your jump lenght adding up at the top of the screen when you land make it more
 // satysfiing") the metres tick up at the top while he flies; on landing they roll on to the final distance and pop
@@ -51,6 +52,9 @@ export default {
     const { THREE } = E; THREEp.T = THREE;
     const [g, J] = await Promise.all([E.loadGLB('models/skijump.glb?v=1'), E.loadJSON('models/skijump.json?v=1')]);
     E.dressModel(g.scene); E.scene.add(g.scene); prog(30, 'Planting the trees…');
+    // (2026-11-25, multiplayer: "exactly 2 ramps side by side, you see your friend right next to you") the friend's in-run, a copy of ours
+    // 6.5 m to the left (the cameras look from the right, so it never comes between them and Foxino)
+    if (E.MP.on) { for (const o of g.scene.children.slice()) if (/^(Inrun|Brace|Pillar|Start)/.test(o.name)) { const c = o.clone(); c.position.x += FR_X; c.traverse((m) => { m.castShadow = false; m.userData.noCast = true; }); g.scene.add(c); } }
     S.J = J; S.inrun = J.inrun; S.hill = J.hill; S.acc = [0]; for (let i = 1; i < S.inrun.length; i++) { const A = S.inrun[i - 1], B = S.inrun[i]; S.acc.push(S.acc[i - 1] + Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])); } S.LIN = S.acc[S.acc.length - 1];
     E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
     // distance boards along the hill sides, the K line (red) and lines for your best and the friend's distance
@@ -67,9 +71,9 @@ export default {
     await E.addMountains(-300, 0xffe8d8);
     prog(60, 'Waxing the long skis…');
     S.a = await E.makeActor({ gear: 'jump' });
-    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; }
+    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => (z > 0 ? hillY(z) : null);
-    E.drawDist = 235;   /* (2026-11-24: 320 → 235 m, the slower ramp keeps the long view on screen: under 100k a frame) */
+    E.drawDist = E.MP.on ? 195 : 235;   /* (a party game draws a second ramp and the friend: a bit less far away) */   /* (2026-11-24: 320 → 235 m, the slower ramp keeps the long view on screen: under 100k a frame) */
     this.reset(E);
   },
   // Christmas (2026-11-24): lights up the in-run and down both sides of the hill, decorated trees and gifts beside the landing, a big tree and a sleigh in the outrun
@@ -90,7 +94,8 @@ export default {
     this.reset(E);
     for (let j = 0; j < 2; j++) {
       S.jump = j; S.phase = 'bar'; S.s = 0; S.v = 0; S.bonus = 0; S.takeoff = false; S.glide = 0; S.fl = null; E.snapCam();
-      E.banner(`JUMP ${j + 1}`, 'OF 2', 1200); await E.wait(1.5);
+      const duo = E.MP.on && E.MP.alive; E.banner(`JUMP ${j + 1}`, duo ? `OF 2 · with ${E.MP.fname}` : 'OF 2', 1200); await E.wait(1.5);
+      if (duo) await E.sync('jump' + j, 20000);   /* (2026-11-25: both jumpers start at the same moment) */
       // (2026-11-24, the user: "only answer questions on the ramp ... a bit slower speed around 15 seconds to jump and you need to answer as many
       // questions possible") a steady run down the in-run, about 15 s; question after question at full speed (no slow motion); every right answer
       // is more distance. Nothing to answer at the take-off or in the air.
@@ -107,7 +112,12 @@ export default {
       E.cine(true); await E.until(() => S.phase === 'flight'); jumpMeter(true);
       await E.until(() => S.phase === 'outrun'); E.cine(false);
       const d = Math.round(S.fl.D * 2) / 2; S.dist.push(d); S.lines.last.set(d);
+      if (E.MP.on && E.MP.alive) E.MP.send({ t: 'land', j, d });
       await countUp(E, d, d >= S.J.K ? 'OVER THE K LINE!' : `JUMP ${j + 1}`); E.shake(0.45);
+      if (E.MP.on && E.MP.alive) {   // (2026-11-25: once both have jumped, who jumped further)
+        const got = () => E.mpMsgs.find((m) => m.t === 'land' && m.j === j);
+        for (let w = 0; w < 30 && !got() && E.MP.alive; w++) { if (w === 2) E.banner(`WAITING FOR ${E.MP.fname.toUpperCase()}…`, '', 1400); await E.wait(0.5); }
+        const fm = got(); if (fm) { const fd = fm.d, win = d > fd, draw = d === fd; E.banner(draw ? 'A DRAW!' : win ? 'YOU WIN!' : `${E.MP.fname.toUpperCase()} WINS!`, `jump ${j + 1}: you ${d.toFixed(1)} m · ${E.MP.fname} ${fd.toFixed(1)} m`, 2600); if (win) { E.sfx.cheer && E.sfx.cheer(); } await E.wait(2.8); } }
       E.send({ p: (j + 1) / 2, v: `${S.dist.reduce((a, b) => a + b, 0).toFixed(1)} m`, best: Math.max(...S.dist) });
       try { const b = JSON.parse(localStorage.getItem('snow-jump-best1') || '0'); if (d > b) { localStorage.setItem('snow-jump-best1', JSON.stringify(d)); S.lines.best.set(d); } } catch (e) {}
       await E.until(() => S.phase === 'stop'); await E.wait(1.6);
@@ -115,6 +125,19 @@ export default {
     const total = Math.round(S.dist.reduce((a, b) => a + b, 0) * 2) / 2;
     E.cine(true); E.banner(`${total.toFixed(1)} m`, 'TWO JUMPS', 1800); await E.wait(2.2); E.cine(false);
     E.finish({ score: total, shown: total.toFixed(1), unit: 'metres', better: 'high', line: `${S.dist[0].toFixed(1)} m + ${S.dist[1].toFixed(1)} m` });
+  },
+  // the friend's jumper on the friend's ramp: their phase and position, eased so it glides between updates
+  friendGhost(E, t, rdt) {
+    const G = S.ghost, F = E.mpFriend, { THREE } = E; if (!F || !E.MP.alive) { G.g.visible = false; return; }
+    const c = { p: new THREE.Vector3(), ang: 0 }; let pos, pitch = 0, P;
+    if (F.ph === 'menu' || F.ph === 'bar') { inrunAt(0.5, c); pos = c.p.clone(); pitch = c.ang; P = P0.sit(t); }
+    else if (F.ph === 'inrun') { inrunAt(F.s || 0, c); pos = c.p.clone(); pitch = c.ang; P = (F.s || 0) > S.LIN - 4 ? P0.pop(t) : P0.tuck(t); }
+    else if (F.ph === 'flight') { pos = new THREE.Vector3(0, F.y || 0, F.z || 0); P = P0.fly(t + 1); pitch = 0.42; G.skiFree = true; G.skiYaw = [0.3, -0.3]; G.skiPitch = -0.55; }
+    else { const z = F.z || 0; pos = new THREE.Vector3(0, hillY(z), z); pitch = Math.atan(hillY(z) - hillY(z + 1)) * 0.9; P = F.ph === 'stop' ? E.SP.cheer(t) : P0.telemark(t); }
+    if (F.ph !== 'flight') { G.skiFree = false; G.skiYaw = [0, 0]; G.skiPitch = 0; }
+    pos.x += FR_X; const jump = !G.g.visible || G.g.position.distanceTo(pos) > 25;
+    if (jump) G.g.position.copy(pos); else G.g.position.lerp(pos, 1 - Math.exp(-rdt * 12));
+    G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateX(pitch); G.pose(P, 8, rdt); G.update();
   },
   // the flight: a parabola from where he is now (z0, y0, slope b) that lands exactly at the target distance D
   retarget(dD) { const f = S.fl; if (!f) return; f.D = Math.max(55, Math.min(128, f.D + dD)); const z0 = f.z, y0 = f.y, b = f.slope, L = f.D - z0; f.z0 = z0; f.y0 = y0; f.b = b; f.a = (hillY(f.D) - y0 - b * L) / (L * L); },
@@ -158,9 +181,10 @@ export default {
     }
     a.g.rotation.set(0, 0, 0); a.g.rotateX(pitch);
     a.pose(P, S.phase === 'flight' ? 6 : 12, rdt); a.update();
+    E.mpSend({ ph: S.phase, s: S.s, z: S.phase === 'flight' && S.fl ? S.fl.z : S.z, y: S.fl ? S.fl.y : 0, j: S.jump });
     // the friend: their longest jump as an orange line; their Foxino flies beside you
     if (E.friend && E.friend.best) S.lines.friend.set(E.friend.best);
-    if (S.ghost && E.friend && S.phase === 'flight') { S.ghost.g.visible = true; S.ghost.g.position.copy(a.g.position).add(new THREE.Vector3(-3.5, 0.3, -2)); S.ghost.g.rotation.copy(a.g.rotation); S.ghost.pose(P0.fly(t + 1), 6, rdt); S.ghost.skiFree = true; S.ghost.skiYaw = [0.3, -0.3]; S.ghost.skiPitch = -0.55; S.ghost.update(); } else if (S.ghost) S.ghost.g.visible = false;
+    if (S.ghost && E.MP.on) { this.friendGhost(E, t, rdt); } else if (S.ghost && E.friend && S.phase === 'flight') { S.ghost.g.visible = true; S.ghost.g.position.copy(a.g.position).add(new THREE.Vector3(-3.5, 0.3, -2)); S.ghost.g.rotation.copy(a.g.rotation); S.ghost.pose(P0.fly(t + 1), 6, rdt); S.ghost.skiFree = true; S.ghost.skiYaw = [0.3, -0.3]; S.ghost.skiPitch = -0.55; S.ghost.update(); } else if (S.ghost) S.ghost.g.visible = false;
     const tot = S.dist.reduce((x, y) => x + y, 0);
     E.hud(tot ? `${tot.toFixed(1)} m` : 'SKI JUMP',   /* (the jump itself is counted big by the meter) */ `JUMP ${S.jump + 1} OF 2${S.phase === 'inrun' ? ` · ${Math.round(S.v * 3.6)} km/h` : ''}`);
     E.progress((S.jump + (S.phase === 'flight' || S.phase === 'land' || S.phase === 'outrun' || S.phase === 'stop' ? 0.5 + 0.5 * (S.phase === 'flight' ? S.fl.z / S.fl.D : 1) : (S.s / S.LIN) * 0.5)) / 2);

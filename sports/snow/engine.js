@@ -15,6 +15,7 @@ import { makeFoxinoGLB } from '/penalty/foxino-glb.js?v=3';
 import { blankPose } from '/penalty/foxino.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
+import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: the two players start together and see each other live)
 import { paintedSky, makePost } from '../look.js?v=3';
 import { loadXmasKit, placeKit, stringLights, bulbGlows } from '../xmas.js?v=5';   // (2026-11-24, the user: a Christmas atmosphere in every sport)
 
@@ -371,6 +372,7 @@ E.ask = (opts = {}) => new Promise((resolve) => {
   if (BOT) setTimeout(() => { if (ASK && ASK.q === q && !ASK.done) answer(BOT === 'wrong' ? (q.correct + 1) % q.words.length : (BOT === '1' && E.asked % 4 === 0) ? (q.correct + 1) % q.words.length : q.correct); }, 900 / SPEED);
 });
 // (2026-11-24) a question can be closed unanswered (Ski Jump: the ramp ends while it is up): it counts neither way
+window.MPBOT = { q: () => (ASK && !ASK.done ? { id: 's' + E.asked, correct: ASK.q.correct, n: ASK.q.words.length } : null), answer: (k) => answer(k) };   // (tests: the two-player bot)
 E.cancelAsk = () => { const A = ASK; if (!A) return; A.done = true; labelEls.forEach((el) => el.classList.remove('on')); bubbles.forEach((b) => { b.target = 0; });
   $('card').classList.add('hidden'); document.body.classList.remove('asking'); E.slow = 1; ASK = null; A.resolve({ ok: false, cancelled: true, skipped: true }); };
 E.sfx = sfx;
@@ -411,6 +413,21 @@ E.hud = (big, small = '') => { $('hudBig').textContent = big; $('hudSmall').text
 E.progress = (u) => { $('progMe').style.left = `${clamp(u, 0, 1) * 100}%`; };
 E.fmtTime = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(1).padStart(4, '0')}` : r.toFixed(1); };
 
+// ---------- (2026-11-25) the match channel: a start together (E.sync), our live state 10 times a second (E.mpSend), theirs (E.mpFriend) ----------
+E.MP = MP; E.mpFriend = null; E.mpMsgs = [];
+const SEEN = new Set(), SYNCW = [];
+let mpLast = 0;
+E.mpSend = (st) => { if (!MP.on || !MP.alive) return; const now = performance.now(); if (now - mpLast < 95) return; mpLast = now; MP.send({ t: 'st', st }); };
+E.sync = (tag, ms = 15000) => { if (!MP.on || !MP.alive) return Promise.resolve(false); MP.send({ t: 'sync', tag }); if (SEEN.has(tag)) return Promise.resolve(true);
+  return new Promise((res) => { const w = { tag, res }; SYNCW.push(w); w.t = setTimeout(() => { SYNCW.splice(SYNCW.indexOf(w), 1); res(false); }, ms); }); };
+if (MP.on) {
+  MP.listen((m) => {
+    if (m.t === 'st') { E.mpFriend = Object.assign(E.mpFriend || {}, m.st, { at: performance.now() }); return; }
+    if (m.t === 'sync') { SEEN.add(m.tag); for (const w of SYNCW.slice()) if (w.tag === m.tag) { clearTimeout(w.t); SYNCW.splice(SYNCW.indexOf(w), 1); w.res(true); } return; }
+    E.mpMsgs.push(m); if (E.onMp) E.onMp(m);
+  });
+  MP.onLost(() => { E.mpFriend = null; for (const w of SYNCW.splice(0)) { clearTimeout(w.t); w.res(false); } E.banner(`${MP.fname.toUpperCase()} LEFT`, 'you go on alone', 1800); });
+}
 // ---------- the friend (inside the lobby: the parent page relays our state to the friend's phone and theirs to us) ----------
 E.friend = null;   // {name, p (progress 0..1), v (display value), x, y, z, yaw, extra, done, score}
 let lastSend = 0;
@@ -499,6 +516,7 @@ $('packBtn').onclick = async () => { if (!window.FugioPacks) return; const ids =
 async function play() {
   $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
   E.right = 0; E.asked = 0; E.combo = 0; E.missed = []; renderCombo(); E.running = true;
+  if (MP.on && !E.mpStarted) { E.mpStarted = true; E.banner('GET READY', `with ${MP.fname}`, 1500); const ok = await MP.ready(25000); if (ok) await E.sync('start'); }
   await MOD.run(E);
 }
 $('playBtn').onclick = () => { unlock(); sfx.click && sfx.click(); play(); };
@@ -514,7 +532,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 4, skijump: 4, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 5, skijump: 5, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

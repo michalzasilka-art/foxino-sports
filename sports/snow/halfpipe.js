@@ -55,9 +55,9 @@ export default {
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
     S.a = await E.makeActor({ gear: 'board' });
-    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; }
+    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => -z * S.SL + pipeY(Math.abs(x)) - 0.2;
-    E.drawDist = 170;   /* (2026-11-24: 260 → 170 m: the bigger airs look further down the pipe; under 100k a frame) */
+    E.drawDist = E.MP.on ? 140 : 170;   /* (2026-11-24: 260 → 170 m: the bigger airs look further down the pipe; under 100k a frame) */
     this.reset(E);
   },
   // Christmas (2026-11-24): lights along both lips, decorated trees, gifts and snowmen on the decks, a big tree past the finish
@@ -143,7 +143,9 @@ export default {
     if (S.phase === 'air') { a.g.rotateY(S.spin); a.g.rotateZ(S.cork || 0); a.g.rotateX(S.flip); }
     void face;
     a.pose(P, 12, rdt); a.update();
-    if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(-S.d * 0.8, -gs * S.SL + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
+    E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: S.trick ? S.trick[0] : '', gk: S.trick && S.trick !== OOPS ? S.trick[4] : '', gkk: S.phase === 'air' && S.trick ? Math.min(1, Math.sin(Math.PI * smoothStep((S.air - 0.42 * S.airT) / (0.5 * S.airT))) * 1.6) : 0, pts: S.pts, n: S.airN || 0 });
+    if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt);
+    else if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(-S.d * 0.8, -gs * S.SL + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
     E.hud(`${Math.round(S.shown ?? S.pts)}`, `AIR ${Math.min(HITS, S.hit + (S.phase === 'air' ? 1 : 0))} OF ${HITS}`); E.progress(S.hit / HITS);
     this.camera(E, rdt);
   },
@@ -152,6 +154,19 @@ export default {
     p.legL = [-c * 0.6, 0, 0.32]; p.legR = [-c * 0.6, 0, -0.32]; p.kneeL = [c * 1.3, 0, 0]; p.kneeR = [c * 1.3, 0, 0]; p.ankleL = [-c * 0.7, 0, -0.25]; p.ankleR = [-c * 0.7, 0, 0.25];
     p.spine = [0.25 + crouch * 0.2, 0, 0]; p.head = [-0.2, 0.55, 0]; p.armL = [-0.3, 0, 0.95]; p.armR = [-0.3, 0, -0.95]; p.elbowL = [-0.5, 0, 0]; p.elbowR = [-0.5, 0, 0];
     p.y = -0.08 - crouch * 0.07 + b; return p; },
+  // (2026-11-25, multiplayer: "you and your friend ride right behind each other and can see each other's tricks") the friend rides just
+  // behind us (their own rhythm from wall to wall, their own spins, flips and grabs), and their trick's name pops up over them
+  friendGhost(E, t, rdt) {
+    const G = S.ghost, F = E.mpFriend, { THREE } = E; if (!F || !E.MP.alive || F.ph === 'menu' || F.ph === 'drop' && S.phase === 'menu') { G.g.visible = false; return; }
+    const gs = S.s - 4.2 + Math.max(-2.5, Math.min(2.5, ((F.s ?? S.s) - S.s) * 0.4));   // (just behind, wherever they really are)
+    const want = new THREE.Vector3(F.d ?? 0, -gs * S.SL + (F.y ?? 0), gs);
+    if (!G.g.visible || G.g.position.distanceTo(want) > 12) G.g.position.copy(want); else G.g.position.lerp(want, 1 - Math.exp(-rdt * 14));
+    G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateZ(F.roll || 0); G.g.rotateY(F.head || 0);
+    if (F.ph === 'air') { G.g.rotateY(F.spin || 0); G.g.rotateZ(F.cork || 0); G.g.rotateX(F.flip || 0); }
+    const P = F.ph === 'air' && F.gk && F.gkk > 0.05 ? this.grabPose(t + 0.5, F.gk, F.gkk) : F.ph === 'stop' ? E.SP.cheer(t) : this.ridePose(t + 0.7, F.ph === 'air' ? 0.6 : 0);
+    G.pose(P, 12, rdt); G.update();
+    if (F.ph === 'air' && F.tr && (F.n !== S.fTrickN) && !document.body.classList.contains('asking')) { S.fTrickN = F.n; E.pop(F.tr === 'OOPS' ? `${E.MP.fname}: OOPS!` : `${E.MP.fname}: ${F.tr}`, G.g.position.clone().setY(G.g.position.y + 1.6), F.tr === 'OOPS' ? 'bad' : 'good'); }
+  },
   // the grabs: one hand on the board, the body tucked; k blends from the riding stance into the grab and back
   grabPose(t, kind = 'indy', k = 1) { const r = this.ridePose(t, 1), p = this.ridePose(t, 1);
     p.legL = [-1.2, 0, 0.3]; p.legR = [-1.2, 0, -0.3]; p.kneeL = [1.9, 0, 0]; p.kneeR = [1.9, 0, 0]; p.spine = [0.5, 0, 0]; p.y = 0.05;

@@ -12,6 +12,7 @@
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { GLTFLoader } from '/penalty/lib/GLTFLoader.js';
 import { MeshoptDecoder } from '/adventures/lib/meshopt_decoder.module.js';
+import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: 1 on 1 against the party friend)
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
@@ -529,8 +530,8 @@ if (!packIds.length && PACKS.length) packIds = [(PACKS.find((p) => p.level === '
 const G = { on: false, score: [0, 0], asked: 0, right: 0, missed: [], slow: 1, ask: null };
 let timerT = null;
 // ask(): the question card, the bubbles at `spots`, slow motion; resolves {k, ok, ms} on a tap or when the time is up
-function ask(title, sub, spots, secs = 10, fixRight = -1) {
-  const q = FSQ.make(PACKS, packIds, { n: 3, count: G.asked }); if (!q) return Promise.resolve({ k: -1, ok: false, ms: 0, q: null });
+function ask(title, sub, spots, secs = 10, fixRight = -1, given = null) {
+  const q = given || FSQ.make(PACKS, packIds, { n: 3, count: G.asked }); if (!q) return Promise.resolve({ k: -1, ok: false, ms: 0, q: null });
   // (defence: the right word goes into the lane Rob drives into)
   if (fixRight >= 0 && fixRight !== q.correct) { const w = q.words.slice(); [w[fixRight], w[q.correct]] = [w[q.correct], w[fixRight]]; q.words = w; q.correct = fixRight; }
   $('hud').classList.remove('hidden');
@@ -561,7 +562,37 @@ const waits = [];
 const wait = (s) => new Promise((res) => waits.push({ t: s, res }));
 function tickWaits(ts) { for (let i = waits.length - 1; i >= 0; i--) { waits[i].t -= ts; if (waits[i].t <= 0) { const w = waits.splice(i, 1)[0]; w.res(); } } }
 function banner(text, sub) { const b = $('banner'); b.innerHTML = `${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); clearTimeout(b._t); b._t = setTimeout(() => { b.innerHTML = ''; }, 1600); }
-function score() { $('score').innerHTML = `FOXINO <b>${G.score[0]}</b> : <b>${G.score[1]}</b> ROB · first to ${WIN}`; }
+function score() { $('score').innerHTML = `${MPS.on ? 'YOU' : 'FOXINO'} <b>${G.score[0]}</b> : <b>${G.score[1]}</b> ${esc(RN().toUpperCase())} · first to ${WIN}`; }
+// ---------- (2026-11-25, "Multiplayer patch") 1 on 1 against the party friend ----------
+// The friend plays the other player on the court (shown as the baller in blue with the friend's name). At every step BOTH answer the same
+// question (the party's host is the referee: it sends the question, collects both answers and says what they were):
+//  · the drive:  the attacker gets past unless the defender is right and the attacker is wrong (a steal)
+//  · the shot:   the attacker scores if right, unless the defender is right AND quicker (a block); both wrong = it rims out
+// Every possession the answer time gets a little shorter.
+const MPS = { on: MP.on && LIST, n: 0, inbox: [], waits: [] };
+const RN = () => (MPS.on ? MP.fname : 'Rob');
+const mpSecs = (base) => Math.max(4.5, base - MPS.n * 0.45);
+function mpWait(t, id, ms) { const f = MPS.inbox.find((m) => m.t === t && m.id === id); if (f) return Promise.resolve(f); if (!MP.alive) return Promise.resolve(null);
+  return new Promise((res) => { const w = { t, id, res }; MPS.waits.push(w); w.tm = setTimeout(() => { MPS.waits.splice(MPS.waits.indexOf(w), 1); res(null); }, ms); }); }
+if (MPS.on) {
+  MP.listen((m) => { MPS.inbox.push(m); if (MPS.inbox.length > 60) MPS.inbox.shift(); for (const w of MPS.waits.slice()) if (w.t === m.t && w.id === m.id) { clearTimeout(w.tm); MPS.waits.splice(MPS.waits.indexOf(w), 1); w.res(m); } });
+  MP.onLost(() => { for (const w of MPS.waits.splice(0)) { clearTimeout(w.tm); w.res(null); } banner(`${MP.fname.toUpperCase()} LEFT`, 'Rob takes over'); });
+}
+const botAns = (q) => { const ok = Math.random() < 0.6; return { k: ok ? q.correct : (q.correct + 1) % q.words.length, ms: 1500 + Math.random() * 4000 }; };
+// one step: the same question on both phones; resolves my answer plus theirs ({them: {k, ok, ms}})
+async function duel(id, title, sub, spots, secs, fixRight = -1) {
+  let q = null;
+  if (MP.alive && !MP.host) { const m = await mpWait('q', id, 25000); if (m) q = m.q; }
+  if (!q) { q = FSQ.make(PACKS, packIds, { n: 3, count: G.asked }); if (q && fixRight >= 0 && fixRight !== q.correct) { const w = q.words.slice(); [w[fixRight], w[q.correct]] = [w[q.correct], w[fixRight]]; q.words = w; q.correct = fixRight; } if (q && MP.alive && MP.host) MP.send({ t: 'q', id, q }); }
+  const mine = await ask(title, sub, spots, secs, -1, q); if (!q) return { ...mine, them: { k: -1, ok: false, ms: 99999 } };
+  let them = null;
+  if (MP.alive) { $('note').innerHTML += ` <span class="wait">· waiting for ${esc(MP.fname)}…</span>`;
+    if (MP.host) { const a = await mpWait('ans', id, secs * 1000 + 6000); them = a ? { k: a.k, ms: a.ms } : { k: -1, ms: 99999 }; if (MP.alive) MP.send({ t: 'res', id, h: { k: mine.k, ms: mine.ms }, g: them }); }
+    else { MP.send({ t: 'ans', id, k: mine.k, ms: Math.round(mine.ms) }); const res = await mpWait('res', id, secs * 1000 + 15000); if (res) them = res.h; } }
+  if (!them) them = botAns(q);
+  const sp = document.querySelector('#note .wait'); if (sp) sp.remove();
+  return { ...mine, them: { k: them.k, ms: them.ms, ok: them.k === q.correct } };
+}
 const ME = { t: 'YOUR BALL', c: '#ff7d22' }, DEF = { t: 'DEFENCE', c: '#2a9cd8' };
 
 // ---------- the plays ----------
@@ -574,11 +605,12 @@ async function attack() {
   const side = Math.random() < 0.5 ? -1 : 1;
   shot('low', { who: 'me', s: -side, cut: true });
   await wait(1.1); if (!G.on) return;
-  const r1 = await ask(ME, 'beat Rob: tap the right word!', [[-1.45, 2.4, 5.5], [0, 2.95, 5.2], [1.45, 2.4, 5.5]]);
+  const A1 = [[-1.45, 2.4, 5.5], [0, 2.95, 5.2], [1.45, 2.4, 5.5]];
+  const r1 = MPS.on ? await duel(`${MPS.n}a1`, ME, `beat ${RN()}: tap the right word!`, A1, mpSecs(10)) : await ask(ME, 'beat Rob: tap the right word!', A1);
   if (!G.on) return;
-  if (!r1.ok) {   // Rob pokes the ball away
+  if (MPS.on ? (r1.them.ok && !r1.ok) : !r1.ok) {   // Rob pokes the ball away
     shot('side', { who: 'rob', s: side, cut: true }); SLOWMO = 0.5;
-    setPlay(null, 'steal'); P.rob.tz = P.me.z - 0.6; await wait(0.3); knock(new THREE.Vector3(rand(-1.2, 1.2), 1.6, -2.2), { ignore: 'me' }); setPlay('stumble'); banner('STOLEN!', 'Rob has the ball'); sfx.aww && sfx.aww(); shot('face', { who: 'rob', a0: 0.4, speed: 0.25, r: 2.8, y: 1.3 });
+    setPlay(null, 'steal'); P.rob.tz = P.me.z - 0.6; await wait(0.3); knock(new THREE.Vector3(rand(-1.2, 1.2), 1.6, -2.2), { ignore: 'me' }); setPlay('stumble'); banner('STOLEN!', `${RN()} has the ball`); sfx.aww && sfx.aww(); shot('face', { who: 'rob', a0: 0.4, speed: 0.25, r: 2.8, y: 1.3 });
     await fetchBall('rob', 1.6); setPlay(null, 'dribble'); await wait(0.6); return 'rob';
   }
   // the crossover and the drive past him
@@ -586,8 +618,14 @@ async function attack() {
   setPlay('cross', 'stumble'); P.me.dur = 0.55; await wait(0.55);
   shot('chase', { who: 'me', k: 2.6 });
   Object.assign(P.me, { tx: side * 1.3, tz: 2.6, fast: true }); setPlay('dribble'); P.rob.tx = -side * 0.8; P.rob.tz = DEF_Z + 0.4; await wait(1.0); if (!G.on) return;
-  const r2 = await ask(ME, 'shoot! tap the right word', [[-1.6, 3.0, 2.6], [0, 3.55, 2.3], [1.6, 3.0, 2.6]]);
+  const A2 = [[-1.6, 3.0, 2.6], [0, 3.55, 2.3], [1.6, 3.0, 2.6]];
+  const r2 = MPS.on ? await duel(`${MPS.n}a2`, ME, 'shoot! tap the right word', A2, mpSecs(9)) : await ask(ME, 'shoot! tap the right word', A2);
   if (!G.on) return;
+  if (MPS.on && r2.them.ok && (!r2.ok || r2.them.ms < r2.ms)) {   // the friend blocks the shot
+    shot('block', { who: 'rob', s: side, cut: true }); SLOWMO = 0.8; BL.mode = 'hold'; setPlay('shoot', 'block'); P.rob.dur = 0.9; P.rob.tx = P.me.x * 0.7; P.rob.tz = P.me.z + 0.75; await wait(0.5);
+    SHAKE = Math.max(SHAKE, 0.7); sfx.kick && sfx.kick(); vib(40); knock(new THREE.Vector3(rand(-2.2, 2.2), 2.4, -3.6), { ignore: 'rob' });
+    banner('BLOCKED!', `${RN()} was quicker`); sfx.aww && sfx.aww(); setPlay('stumble'); await wait(0.8); await fetchBall('rob', 3); setPlay(null, 'dribble'); await wait(0.5); return 'rob';
+  }
   shot('ball', { s: -side, cut: true });
   BL.mode = 'hold'; setPlay('shoot'); P.me.dur = 0.9; await wait(relMe()); setTimeout(() => dust(P.me.x, P.me.z), 450);
   const from = ball.position.clone();
@@ -600,7 +638,7 @@ async function attack() {
   }
   // off the front of the rim and out: Rob takes the rebound
   launch(from, RIM.clone().add(_v4.set(rand(-0.07, 0.07), 0.04, RIM_R + 0.03)), 0.8, { noIn: true, ignore: 'me' });   // (onto the front of the rim: it bounces out)
-  await wait(0.9); shot('low', { who: 'rob', s: side, k: 2.6 }); banner('NO GOOD!', 'Rob gets the rebound'); setPlay('sad');
+  await wait(0.9); shot('low', { who: 'rob', s: side, k: 2.6 }); banner('NO GOOD!', `${RN()} gets the rebound`); setPlay('sad');
   await fetchBall('rob', 3); setPlay(null, 'dribble'); await wait(0.9);
   return 'rob';
 }
@@ -611,11 +649,12 @@ async function defence() {
   shot('face', { who: 'rob', a0: -0.5, speed: 0.22, y: 0.7, ly: 1.1, roll: 0.1, cut: true });
   await wait(1.1); if (!G.on) return;
   const lane = Math.floor(Math.random() * 3);
-  const r1 = await ask(DEF, 'where will Rob go? the right word is his lane', LANES.map((x) => [x * 1.38, 2.35, DEF_Z - 0.6]), 10, lane);
+  const D1 = LANES.map((x) => [x * 1.38, 2.35, DEF_Z - 0.6]);
+  const r1 = MPS.on ? await duel(`${MPS.n}a1`, DEF, `stop ${RN()}: tap the right word!`, D1, mpSecs(10), lane) : await ask(DEF, 'where will Rob go? the right word is his lane', D1, 10, lane);
   if (!G.on) return;
   const pick = r1.k >= 0 ? r1.k : 1;
   Object.assign(P.me, { tx: LANES[pick], fast: true });
-  if (r1.ok) {   // Foxino is in his lane: the steal
+  if (MPS.on ? (r1.ok && !r1.them.ok) : r1.ok) {   // Foxino is in his lane: the steal
     shot('side', { who: 'me', s: LANES[lane] >= 0 ? 1 : -1, cut: true }); SLOWMO = 0.5;
     P.rob.tx = LANES[lane]; P.rob.tz = DEF_Z + 0.7; await wait(0.45); setPlay('steal'); P.me.dur = 0.6; await wait(0.27); SHAKE = Math.max(SHAKE, 0.5);
     knock(new THREE.Vector3(rand(-0.8, 0.8), 1.5, -1.6), { ignore: 'rob' }); setPlay(null, 'stumble'); banner('STEAL!', 'your ball'); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); shot('face', { who: 'me', a0: 0.4, speed: 0.25, r: 2.8, y: 1.3 });
@@ -626,46 +665,47 @@ async function defence() {
   Object.assign(P.rob, { tx: LANES[lane] * 0.9, tz: 2.3 }); setPlay('stumble', 'dribble'); await wait(1.0); if (!G.on) return;
   P.me.tx = LANES[lane] * 0.6; P.me.tz = 3.0;
   const QUICK = 4.5;   // (seconds: right AND this fast = the block)
-  const r2 = await ask({ t: 'BLOCK IT!', c: '#e8403a' }, 'right AND fast!', [[-1.6, 3.0, 2.8], [0, 3.55, 2.5], [1.6, 3.0, 2.8]], 7);
+  const D2 = [[-1.6, 3.0, 2.8], [0, 3.55, 2.5], [1.6, 3.0, 2.8]];
+  const r2 = MPS.on ? await duel(`${MPS.n}a2`, { t: 'BLOCK IT!', c: '#e8403a' }, 'right AND quicker!', D2, mpSecs(9)) : await ask({ t: 'BLOCK IT!', c: '#e8403a' }, 'right AND fast!', D2, 7);
   if (!G.on) return;
   P.rob.yaw = Math.PI; BL.mode = 'hold'; setPlay(null, 'shoot'); P.rob.dur = 0.9;
-  const blocked = r2.ok && r2.ms < QUICK * 1000;
+  const blocked = MPS.on ? (r2.ok && (!r2.them.ok || r2.ms < r2.them.ms)) : (r2.ok && r2.ms < QUICK * 1000);
   if (blocked) { shot('block', { who: 'me', s: P.me.x >= 0 ? 1 : -1, cut: true }); SLOWMO = 0.8; setPlay('block'); P.me.dur = 0.9; P.me.tx = P.rob.x * 0.7; P.me.tz = P.rob.z - 0.75; }
   await wait(blocked ? 0.5 : relRob());
   if (!blocked) shot('ball', { s: P.rob.x >= 0 ? 1 : -1, cut: true });
   const from = ball.position.clone();
-  if (r2.ok && r2.ms < QUICK * 1000) {   // the block
+  if (blocked) {   // the block
     SHAKE = Math.max(SHAKE, 0.7); setTimeout(() => dust(P.me.x, P.me.z), 650); sfx.kick && sfx.kick(); vib(40);
     knock(new THREE.Vector3(rand(-2.2, 2.2), 2.4, 3.6), { ignore: 'me' });   // (swatted away, out toward the camera)
     banner('BLOCKED!', 'your ball'); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); BURST.emit(from, 40, '#6fe2ff', 6, 0.18); setPlay(null, 'stumble');
     await wait(0.8); await fetchBall('me', 3); setPlay('dribble'); await wait(0.5); return 'me';
   }
-  if (r2.ok) banner('TOO LATE!', 'jump faster next time');
-  const make = Math.random() > 0.33;
+  if (r2.ok) banner('TOO LATE!', MPS.on ? `${RN()} was quicker` : 'jump faster next time');
+  const make = MPS.on ? r2.them.ok : Math.random() > 0.33;
   if (make) {
     launch(from, RIM.clone().add(_v4.set(0, 0, -0.03)), 0.85, { ignore: 'rob' });
     await wait(0.62); shot('net', { s: -1, cut: true }); swishSlow();
-    await wait(0.6); G.score[1]++; score(); banner('ROB SCORES', `${G.score[0]} : ${G.score[1]}`); sfx.aww && sfx.aww(); setPlay('sad', 'cheer');
+    await wait(0.6); G.score[1]++; score(); banner(`${RN().toUpperCase()} SCORES`, `${G.score[0]} : ${G.score[1]}`); sfx.aww && sfx.aww(); setPlay('sad', 'cheer');
     shot('face', { who: 'rob', a0: 0.4, speed: 0.4, cut: true }); await wait(1.8); return 'me';
   }
   launch(from, RIM.clone().add(_v4.set(rand(-0.07, 0.07), 0.04, RIM_R + 0.03)), 0.8, { noIn: true, ignore: 'rob' });
-  await wait(0.9); banner('ROB MISSED!', 'your ball'); shot('low', { who: 'me', s: 1, k: 2.6 });
+  await wait(0.9); banner(`${RN().toUpperCase()} MISSED!`, 'your ball'); shot('low', { who: 'me', s: 1, k: 2.6 });
   await fetchBall('me', 3); setPlay('dribble'); await wait(0.6); return 'me';
 }
 async function match() {
   Object.assign(G, { on: true, score: [0, 0], asked: 0, right: 0, missed: [] }); combo = 0; renderCombo(); score(); $('score').classList.remove('hidden');
   $('start').classList.add('hidden'); $('end').classList.add('hidden');
-  sfx.whistle && sfx.whistle(); banner('1 ON 1', `first to ${WIN} baskets`);
+  sfx.whistle && sfx.whistle(); banner('1 ON 1', MPS.on ? `you vs ${MP.fname} · first to ${WIN}` : `first to ${WIN} baskets`);
   shot('face', { who: 'me', a0: -0.9, speed: 0.7, r: 2.6, cut: true }); BL.mode = 'dribble'; BL.who = 'me'; setPlay('dribble', 'stance'); await wait(1.6); if (!G.on) return;
-  let poss = 'me';
-  while (G.on && G.score[0] < WIN && G.score[1] < WIN) poss = (await (poss === 'me' ? attack() : defence())) || (poss === 'me' ? 'rob' : 'me');
+  let poss = MPS.on && !MP.host ? 'rob' : 'me'; MPS.n = 0;
+  while (G.on && G.score[0] < WIN && G.score[1] < WIN) { poss = (await (poss === 'me' ? attack() : defence())) || (poss === 'me' ? 'rob' : 'me'); MPS.n++; }
   if (!G.on) return;
   G.on = false; finish(G.score[0] >= WIN);
 }
 function finish(won) {
   $('hud').classList.add('hidden'); bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; });
   const [a, b] = G.score, stars = won ? (b === 0 ? 3 : 2) : a > 0 ? 1 : 0;
-  $('endTitle').textContent = won ? 'You beat Rob!' : 'Rob won this time!';
+  $('endTitle').textContent = MPS.on ? (won ? 'You win!' : `${MP.fname} wins!`) : won ? 'You beat Rob!' : 'Rob won this time!';
   $('endGames').textContent = `${a} – ${b}`; document.querySelector('.endscore span').textContent = 'baskets';
   $('endLine').textContent = `${G.right} of ${G.asked} answers right`;
   const st = [...document.querySelectorAll('#stars i')]; st.forEach((e) => e.classList.remove('on')); st.forEach((e, i) => { if (i < stars) setTimeout(() => { e.classList.add('on'); sfx.star && sfx.star(i); }, 500 + i * 300); });
@@ -807,6 +847,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   setTimeout(() => $('loading').classList.add('gone'), 150);
   renderStart();
-  if (LIST) { unlock(); match(); } else $('start').classList.remove('hidden');
+  window.MPBOT = { q: () => (G.ask && !G.ask.done ? { id: 'b' + G.asked, correct: G.ask.q.correct, n: G.ask.q.words.length } : null), answer: (k) => answer(k) };
+  if (LIST) { unlock(); if (MPS.on) { banner('GET READY', `1 on 1 with ${MP.fname}`); const ok = await MP.ready(25000); if (!ok) MPS.on = false; score(); } match(); } else $('start').classList.remove('hidden');
   window.SB = { G, P, BL, answer, get ask() { return G.ask; }, renderer, scene, camera, POSTFX, models: () => Object.keys(SB) };
 })();

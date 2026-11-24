@@ -13,6 +13,7 @@ import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=1';
+import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: a party game goes through the lobby's link, no second connection)
 import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
@@ -729,13 +730,21 @@ const FR = {
     conn.on('data', (m) => { if (m && typeof m === 'object') FR.msg(m, true); });
     conn.on('close', () => { if (FR.conn !== conn) return; const was = FR.on || !$('friend').classList.contains('hidden'); FR.close(); if (was) { banner('YOUR FRIEND LEFT', ''); setTimeout(() => FR.back(), 1800); } });
   },
-  send(m) { try { if (FR.conn && FR.conn.open) FR.conn.send(m); } catch (e) {} },
+  // (2026-11-25) a party game from the lobby: the referee is the party's host; the friend says hello once both frames are up
+  async viaMP_start() {
+    FR.viaMP = true; FR.host = MP.host; FR.names = { h: MP.host ? MP.name : MP.fname, g: MP.host ? MP.fname : MP.name };
+    MP.listen((m) => FR.msg(m, true));
+    MP.onLost(() => { if (!FR.on) { if (!FR.started) { FR.viaMP = false; SOLO.start(); } return; } clearTimeout(FR.tmo); clearTimeout(FR.selfT); banner('YOUR FRIEND LEFT', 'the match ends here'); const g = FR.gms.slice(), mine = FR.host ? g[0] : g[1], theirs = FR.host ? g[1] : g[0]; setTimeout(() => FR.finish(mine >= theirs, g), 1800); });
+    const ok = await MP.ready(25000); if (!ok) { FR.viaMP = false; SOLO.start(); return; }
+    FR.started = true; if (!FR.host) FR.send({ t: 'hello', name: MP.name }); else $('loading').classList.add('gone');
+  },
+  send(m) { if (FR.viaMP) { MP.send(m); return; } try { if (FR.conn && FR.conn.open) FR.conn.send(m); } catch (e) {} },
   // the referee: to the friend and to this phone
   cast(m) { FR.send(m); FR.apply(m); },
   msg(m, remote) {
     if (m.t === 'full') { FR.err('That game already has two players.'); return; }
     if (FR.host && remote) {
-      if (m.t === 'hello') { FR.names.g = String(m.name || 'Friend').slice(0, 12); $('fWait').textContent = `${FR.names.g} joined!`; setTimeout(() => FR.startMatch(), 700); return; }
+      if (m.t === 'hello') { FR.names.g = String(m.name || 'Friend').slice(0, 12); $('fWait').textContent = `${FR.names.g} joined!`; if (FR.viaMP && FR.on) return; setTimeout(() => FR.startMatch(), FR.viaMP ? 300 : 700); return; }
       if (m.t === 'ans') { FR.resolve('g', m.id, +m.k, +m.ms); return; }
       if (m.t === 'again') { FR.startMatch(); return; }
       return;
@@ -751,16 +760,16 @@ const FR = {
   askTurn(who, serve) {
     if (!FR.on) return;
     const q = FSQ.make(PACKS, packIds, { n: 3, count: FR.n++ }); if (!q) return;
-    const secs = Math.max(6, 12 - FR.rally * 0.8), id = (FR.turn ? FR.turn.id : 0) + 1;
+    const secs = Math.max(5.5, 12 - FR.n * 0.2 - FR.rally * 0.25), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time slowly gets shorter over the match) */
     FR.turn = { who, q, id, done: false };
     FR.cast({ t: 'ask', who, q, secs, serve, id });
-    clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + 900);
+    clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + (who === 'h' ? 900 : 4000));   /* (the friend's own clock decides; this is only the safety net) */
   },
   resolve(who, id, k, ms) {
     const T = FR.turn; if (!T || T.id !== id || T.done || T.who !== who) return;
     T.done = true; clearTimeout(FR.tmo);
     const ok = k === T.q.correct;
-    FR.cast({ t: 'hit', who, k: k >= 0 && k < 3 ? k : -1, ok, right: T.q.right, ms: Math.round(Math.min(ms, 99999)) });
+    FR.cast({ t: 'hit', who, id, k: k >= 0 && k < 3 ? k : -1, ok, right: T.q.right, ms: Math.round(Math.min(ms, 99999)) });
     if (ok) { FR.rally++; setTimeout(() => FR.askTurn(who === 'h' ? 'g' : 'h', false), 1300); }
     else setTimeout(() => FR.point(who === 'h' ? 'g' : 'h'), k < 0 ? 2300 : 1700);
   },
@@ -793,9 +802,11 @@ const FR = {
       COURT.ask(FR.loc(m.who), m.q, m.secs, m.serve);
       $('labels').classList.toggle('theirs', !mine);
       FR.my = mine ? { id: m.id, q: m.q, t0: performance.now(), done: false } : null; if (mine) FR.lastQ = m.q;
+      clearTimeout(FR.selfT); if (mine && !FR.host) { const M = FR.my; FR.selfT = setTimeout(() => { if (FR.my === M && !M.done) FR.tap(-1); }, m.secs * 1000 + 300); }
       if (!mine) $('cardWho').innerHTML = `${esc(FR.names[them].toUpperCase())}'S SHOT · watch!`;
     }
     if (m.t === 'hit') {
+      if (m.who === me && !FR.host && FR.shown === m.id) return;   /* (already shown the moment it was tapped) */
       COURT.hit(FR.loc(m.who), m.k, m.ok, m.right);
       if (m.who === me) { FR.asked++; if (m.ok) FR.right++; else if (FR.lastQ) FR.missed.push(FR.lastQ); juice(m.ok, m.ms, m.k); }
       else if (m.ok && bubbles[m.k] && bubbles[m.k].mesh.visible) BURST.emit(bubbles[m.k].mesh.position.clone(), 20, CSS_TINTS[m.k], 5);
@@ -815,8 +826,10 @@ const FR = {
   },
   tap(k) {
     const M = FR.my; if (!M || M.done) return; M.done = true; FR.lastQ = M.q;
-    const ms = performance.now() - M.t0; sfx.pick && sfx.pick();
-    if (FR.host) FR.resolve('h', M.id, k, ms); else FR.send({ t: 'ans', id: M.id, k, ms: Math.round(ms) });
+    const ms = performance.now() - M.t0; if (k >= 0) sfx.pick && sfx.pick(); clearTimeout(FR.selfT);
+    if (FR.host) FR.resolve('h', M.id, k, ms);
+    else { FR.send({ t: 'ans', id: M.id, k, ms: Math.round(ms) });   /* (2026-11-25, the lag: the friend sees their own shot at once, not after the round trip) */
+      const ok = k >= 0 && k === M.q.correct; FR.shown = M.id; COURT.hit(FR.loc(FR.me()), k >= 0 && k < 3 ? k : -1, ok, M.q.right); FR.asked++; if (ok) FR.right++; else if (FR.lastQ) FR.missed.push(FR.lastQ); juice(ok, ms, k); }
   },
   finish(won, gms) {
     FR.on = false; FR.my = null;
@@ -943,7 +956,8 @@ function frame(now) {
   setTimeout(() => $('loading').classList.add('gone'), 150);
   if (REMOTE) post({ ft: 'ready' }); else { renderStart(); const jc = (new URLSearchParams(location.search).get('join') || '').replace(/\D/g, '');
     if (LIST) { const fm = LP.get('friend'), room = LP.get('room'); FR.fixedName = (LP.get('name') || 'Player').slice(0, 12);
-      if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
+      if (MP.on) FR.viaMP_start();
+      else if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
     else if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
   window.TN = { COURT, SOLO, FR, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();

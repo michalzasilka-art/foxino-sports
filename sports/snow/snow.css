@@ -109,3 +109,4 @@ body.cine #hud, body.cine .topbtn { opacity: 0; }
 #loading .bar i { display: block; height: 100%; width: 5%; background: #fff; border-radius: 99px; transition: width .3s; }
 #loading span { display: block; margin-top: 10px; font-weight: 800; }
 @media (min-aspect-ratio: 1/1) { #card { top: calc(56px + var(--safe-t)); } .blabel { max-width: 24vw; } }
+#banner small { white-space: normal; max-width: 90vw; margin-inline: auto; line-height: 1.15; }   /* (2026-11-25: long two-player lines wrap) */

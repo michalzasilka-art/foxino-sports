@@ -200,7 +200,13 @@ async function makeParty() {
   };
   go();
 }
-async function joinParty() {
+// the joiner lost the link (not a "leave"): try the same code again quietly, every 3 s for a minute
+function rejoin(code, n) { if (PT.friend || PT.byed || n > 20) { if (n > 20) toast('Could not reconnect. Join the party again.'); return; }
+  if (n === 0) toast('Connection lost… reconnecting');
+  libs().then(() => { if (PT.friend) return; closePeer(); PT.host = false; PT.code = code; const peer = new Peer(); PT.peer = peer;
+    peer.on('error', () => { if (PT.peer === peer) { try { peer.destroy(); } catch (e) {} setTimeout(() => rejoin(code, n + 1), 3000); } });
+    peer.on('open', () => { const conn = peer.connect('fugio-party-' + code, { reliable: true }); PT.conn = conn; wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: myName, kit: myKit() })); setTimeout(() => { if (!PT.friend && PT.peer === peer) { try { peer.destroy(); } catch (e) {} rejoin(code, n + 1); } }, 6000); }); }).catch(() => setTimeout(() => rejoin(code, n + 1), 3000)); }
+async function joinParty() { PT.byed = false;
   if (!readName()) { pErr('Type your name first.'); $('pName').focus(); return; }
   const code = $('pCode').value.replace(/\D/g, ''); if (code.length !== 6) { pErr("Type your friend's 6-number code."); return; }
   pErr('Joining…'); try { await libs(); } catch (e) { pErr('No internet connection.'); return; }
@@ -210,10 +216,20 @@ async function joinParty() {
   peer.on('open', () => { const conn = peer.connect('fugio-party-' + code, { reliable: true }); PT.conn = conn; wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: myName, kit: myKit() })); });
 }
 function wire(conn) {
-  conn.on('data', (m) => { if (m && typeof m === 'object') onParty(m); });
-  conn.on('close', () => { if (PT.conn !== conn) return; const nm = PT.friend && PT.friend.name; PT.conn = null; friendGone(nm ? `${esc(nm)} left the party` : ''); });
+  conn.on('data', (m) => { PT.seen = performance.now(); if (m && typeof m === 'object') { if (LAG) setTimeout(() => onParty(m), LAG * (0.7 + Math.random() * 0.6)); else onParty(m); } });
+  conn.on('open', () => { PT.seen = performance.now(); });
+  conn.on('close', () => { if (PT.conn !== conn) return; const nm = PT.friend && PT.friend.name, was = !!PT.friend, joiner = !PT.host, code = PT.code; PT.conn = null; friendGone(nm ? `${esc(nm)} left the party` : '');
+    if (was && joiner && !PT.byed && code) rejoin(code, 0); });
 }
-const send = (m) => { try { if (PT.conn && PT.conn.open) PT.conn.send(m); } catch (e) {} };
+const LAG = +(new URLSearchParams(location.search).get('mplag') || 0);   // (tests: a slow link, both ways)
+const send = (m) => { const go = () => { try { if (PT.conn && PT.conn.open) PT.conn.send(m); } catch (e) {} }; if (LAG) setTimeout(go, LAG * (0.7 + Math.random() * 0.6)); else go(); };
+// (2026-11-25, multiplayer patch) a heartbeat: a link that stops carrying anything for 9 s is treated as gone (WebRTC can take a long time to
+// notice a phone that walked away); the joiner then quietly reconnects to the same party code for a minute
+PT.seen = 0; setInterval(() => { if (!PT.conn || !PT.conn.open || !PT.friend) return; send({ t: 'ping' }); if (PT.seen && performance.now() - PT.seen > 9000) { try { PT.conn.close(); } catch (e) {} } }, 2000);
+// the sport frames' match channel: frame → friend's frame; what comes before the friend's frame is up waits here
+const MPB = { q: [], ready: -1 };
+function mpToFrame(d) { try { $('frame').contentWindow.postMessage({ mpIn: d }, '*'); } catch (e) {} }
+function mpLostToFrame() { try { $('frame').contentWindow && $('frame').contentWindow.postMessage({ mpLost: true }, '*'); } catch (e) {} }
 async function friendArrived(f) {
   PT.friend = f; $('party').hidden = true; FRD.on = true; FRD.waveT = 0; ME.cheerT = 0; vib([30, 40, 60]); sfx.whistle && sfx.whistle();
   $('frTag').hidden = false; $('slot').hidden = true; $('frName').textContent = f.name.toUpperCase();
@@ -224,7 +240,7 @@ async function friendArrived(f) {
   renderMode();
 }
 function friendGone(msg) {
-  PT.friend = null; FRD.on = false; $('frTag').hidden = true; $('slot').hidden = false; $('partyCode').hidden = !(PT.host && PT.peer);
+  PT.friend = null; mpLostToFrame(); MPB.q = []; FRD.on = false; $('frTag').hidden = true; $('slot').hidden = false; $('partyCode').hidden = !(PT.host && PT.peer);
   if (msg) toast(msg);
   if (!$('picker').hidden && $('acts').classList.contains('view')) closePicker();
   if (!$('game').hidden && RUN && RUN.list[RUN.i] === 'penalty') { /* (the sport goes on alone) */ }
@@ -235,7 +251,9 @@ function onParty(m) {
   if (m.t === 'full') { pErr('That party already has two players.'); return; }
   if (m.t === 'hello' && PT.host) { const f = { name: String(m.name || 'Friend').slice(0, 12), kit: m.kit || {} }; send({ t: 'welcome', name: myName, kit: myKit() }); friendArrived(f); return; }
   if (m.t === 'welcome' && !PT.host) { friendArrived({ name: String(m.name || 'Friend').slice(0, 12), kit: m.kit || {} }); return; }
-  if (m.t === 'bye') { const nm = PT.friend && PT.friend.name; friendGone(nm ? `${esc(nm)} left the party` : ''); return; }
+  if (m.t === 'ping') return;
+  if (m.t === 'mp') { if (RUN && RUN.round === m.r && RUN.i === m.i && MPB.ready === m.i) mpToFrame(m.d); else if (!RUN || m.r >= RUN.round) MPB.q.push(m); return; }
+  if (m.t === 'bye') { PT.byed = true; const nm = PT.friend && PT.friend.name; friendGone(nm ? `${esc(nm)} left the party` : ''); return; }
   if (m.t === 'pick' && !PT.host) { if (m.open) openPicker(m.sel, true); else closePicker(); return; }
   if (m.t === 'start' && !PT.host) { closePicker(); runList(m.list, m.round); return; }
   if (m.t === 'score') { if (RUN) { RUN.their[m.i] = m.r; if (RUN.waitTheirs === m.i) showResult(m.i); } return; }
@@ -248,7 +266,7 @@ $('pCreate').onclick = makeParty;
 $('pJoin').onclick = joinParty;
 $('pClose').onclick = () => { sfx.click && sfx.click(); $('party').hidden = true; };
 $('pCode').addEventListener('input', (e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = d.length > 3 ? d.slice(0, 3) + ' ' + d.slice(3) : d; });
-$('frLeave').onclick = () => { sfx.click && sfx.click(); send({ t: 'bye' }); const h = PT.host; friendGone('You left the party'); if (h) { closePeer(); PT.host = false; $('partyCode').hidden = true; } };
+$('frLeave').onclick = () => { sfx.click && sfx.click(); PT.byed = true; send({ t: 'bye' }); const h = PT.host; friendGone('You left the party'); if (h) { closePeer(); PT.host = false; $('partyCode').hidden = true; } };
 $('meTag').onclick = () => { openParty(); setTimeout(() => $('pName').focus(), 50); };
 function renderMode() {
   const b = $('playBtn');
@@ -290,24 +308,22 @@ $('pickPlay').onclick = () => {
 // ---------- playing the chosen sports one after another ----------
 let RUN = null;
 function runList(list, round) {
-  RUN = { list, round, i: -1, mine: [], their: [], waitTheirs: -1 };
+  MPB.q = MPB.q.filter((m) => m.r === round); RUN = { list, round, i: -1, mine: [], their: [], waitTheirs: -1 };
   $('game').hidden = false; nextSport();
 }
 function srcFor(id, i) {
-  if (id === 'penalty') return '/penalty/?list=1';
-  if (id === 'tennis') {
-    if (inParty()) return `tennis/?list=1&friend=${PT.host ? 'host' : 'join'}&room=${PT.code}r${RUN.round}s${i}&name=${encodeURIComponent(myName || 'Player')}`;
-    return 'tennis/?list=1';
-  }
-  if (id === 'streetball') return 'streetball/?list=1';
-  if (isSnow(id)) return `snow/index.html?sport=${id}&list=1${inParty() ? `&party=1&fname=${encodeURIComponent(PT.friend.name)}` : ''}`;
+  const mp = inParty() ? `&mp=${PT.host ? 'host' : 'join'}&name=${encodeURIComponent(myName || 'Player')}&fname=${encodeURIComponent(PT.friend.name)}&mpr=${RUN.round}&mpi=${i}` : '';
+  if (id === 'penalty') return '/penalty/?list=1' + mp;
+  if (id === 'tennis') return 'tennis/?list=1' + mp;
+  if (id === 'streetball') return 'streetball/?list=1' + mp;
+  if (isSnow(id)) return `snow/index.html?sport=${id}&list=1${inParty() ? '&party=1' : ''}${mp}`;
   return 'about:blank';
 }
 function nextSport() {
   if (!RUN) return;
   RUN.i++; $('result').hidden = true;
   if (RUN.i >= RUN.list.length) { stopList(); return; }
-  const id = RUN.list[RUN.i];
+  const id = RUN.list[RUN.i]; MPB.ready = -1; MPB.q = MPB.q.filter((m) => m.r === RUN.round && m.i >= RUN.i);
   $('game').hidden = false; $('frame').src = srcFor(id, RUN.i);
 }
 function stopList() { RUN = null; $('frame').src = 'about:blank'; $('game').hidden = true; $('result').hidden = true; renderMode(); }
@@ -315,6 +331,8 @@ addEventListener('message', (e) => {
   const m = e.data; if (!m || typeof m !== 'object' || !RUN || e.source !== $('frame').contentWindow) return;
   if (m.fugio === 'leave') { send({ t: 'abort' }); stopList(); return; }
   const i = RUN.i, id = RUN.list[i];
+  if (m.mpHello) { MPB.ready = i; const keep = []; for (const q of MPB.q) { if (q.r === RUN.round && q.i === i) mpToFrame(q.d); else keep.push(q); } MPB.q = keep; if (!inParty()) mpLostToFrame(); return; }
+  if ('mp' in m) { if (inParty()) send({ t: 'mp', r: RUN.round, i, d: m.mp }); return; }
   if (m.fs === 'finished' && id === 'penalty') { const r = { goals: m.goals, of: m.of || 10, stars: m.stars }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   if (m.fb === 'finished' && id === 'streetball') { const r = { goals: m.score[0], vs: m.score[1], won: !!m.won }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   // the snow sports: the result, and the live state for the friend (relayed over the party link)
@@ -335,6 +353,8 @@ function showResult(i) {
   } else if (id === 'streetball') {
     const th = RUN.their[i];
     if (inParty() && !th) { RUN.waitTheirs = i; body = `<p class="kick">STREETBALL</p><h2>${r.goals} – ${r.vs}</h2><p class="line">Waiting for ${esc(fname)} to finish…</p>`; }
+    else if (th && inParty()) { const win = r.goals > r.vs, draw = r.goals === r.vs;   /* (2026-11-25: 1 on 1 against each other: one score) */
+      body = `<p class="kick">STREETBALL · 1 ON 1</p><h2>${draw ? "It's a draw!" : win ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${win ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!win && !draw ? ' win' : ''}"><b>${r.vs}</b><span>${esc(fname.toUpperCase())}</span></div></div><p class="line">baskets</p>`; }
     else if (th) { const md = r.goals - r.vs, td = th.goals - th.vs, win = md > td, draw = md === td;
       body = `<p class="kick">STREETBALL · against Rob</p><h2>${draw ? "It's a draw!" : win ? 'You win!' : `${esc(fname)} wins!`}</h2><div class="vs"><div class="who${win ? ' win' : ''}"><b>${r.goals}–${r.vs}</b><span>YOU</span></div><b>·</b><div class="who${!win && !draw ? ' win' : ''}"><b>${th.goals}–${th.vs}</b><span>${esc(fname.toUpperCase())}</span></div></div>`; }
     else body = `<p class="kick">STREETBALL</p><h2>${r.won ? 'You beat Rob!' : 'Rob won this time'}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${r.vs}</b><span>ROB</span></div></div><p class="line">baskets</p>`;
