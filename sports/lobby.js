@@ -10,7 +10,7 @@
 //    (tennis/?list=1&friend=host|join&room=…) and in Penalties both play and the points are compared
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { RoomEnvironment } from '/penalty/lib/RoomEnvironment.js';
-import { makeWinterPlaza } from './winter.js?v=4';
+import { makeWinterPlaza } from './winter.js?v=5';
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { POSES } from '/penalty/foxino.js';
 import { makeBall } from '/penalty/props.js';

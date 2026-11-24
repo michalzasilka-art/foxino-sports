@@ -9,6 +9,7 @@
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { GLTFLoader } from '/penalty/lib/GLTFLoader.js';
 import { MeshoptDecoder } from '/adventures/lib/meshopt_decoder.module.js';
+import { loadXmasKit, placeKit, stringLights, bulbGlows } from './xmas.js?v=5';   // (2026-11-24: a Christmas touch on the plaza)
 
 export const WS = { stadium: new THREE.Vector3(0, 0, -78), entrance: new THREE.Vector3(0, 0, -40), cauldron: new THREE.Vector3(13, 0, -14), rings: new THREE.Vector3(-11, 0, -8) };
 const FILES = ['ws-stadium', 'ws-plaza', 'ws-props', 'ws-far', 'ws-podium', 'ws-front', 'ws-people'];   // (v2: the podium, the foreground, the visitors)
@@ -106,6 +107,18 @@ function makeScreen(o) {
     if (fade < 1 || last !== i) { draw(slides[(i + slides.length - 1) % slides.length], 1); draw(slides[i], fade); g.fillStyle = 'rgba(0,0,0,.08)'; for (let y = 0; y < 576; y += 4) g.fillRect(0, y, 1024, 1); tex.needsUpdate = true; if (fade >= 1) last = i; } } };
 }
 
+// ---------- (2026-11-24) Christmas on the plaza: lights between the walkway lamps, decorated trees by the entrance, a snowman, gifts ----------
+async function xmasPlaza(scene, L) {
+  const out = []; try { if (!(await loadXmasKit(L))) return out; } catch (e) { return out; }
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  for (const sx of [-1, 1]) { const posts = []; for (let z = 10; z >= -34; z -= 8) posts.push(V(sx * 4.5, 3.55, z)); out.push(stringLights(scene, posts, { sag: 0.45, per: 9, size: 0.09, glow: 0.7 })); }
+  for (const sx of [-1, 1]) { const t = placeKit(scene, 'XmasTree_Big', sx * 8.6, -26.5, { rot: sx, s: 2.0 }); const g = t && bulbGlows(t, { glow: 1.0 }); if (g) out.push(g);
+    placeKit(scene, 'Gift_A', sx * 7.3, -24.6, { rot: sx }); placeKit(scene, 'Gift_C', sx * 9.9, -24.2, { rot: -sx }); placeKit(scene, 'Gift_B', sx * 8.4, -23.6, { rot: 0.5 }); }
+  placeKit(scene, 'Snowman', -7.4, 5.2, { rot: 0.6, s: 1.2 }); placeKit(scene, 'XmasTree_Small', -11.5, 3.5, { rot: 1, s: 1.8 }); placeKit(scene, 'CandyCane', -6.6, 7.4, { rot: 0.3 });
+  scene.traverse((o) => { if (o.isMesh && o.parent && /Xmas|Gift|Snowman|Candy/.test(o.parent.name || o.name)) o.castShadow = true; });
+  return out;
+}
+
 // ---------- the scene ----------
 export async function makeWinterPlaza(scene) {
   const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder); const MODELS = {};
@@ -130,6 +143,7 @@ export async function makeWinterPlaza(scene) {
   const fp = anchor ? anchor.getWorldPosition(new THREE.Vector3()) : WS.cauldron.clone().setY(16.3);
   const flame = makeFlame(fp, anchor ? 3.4 : 3.2); scene.add(flame);
   const snow = makeSnow(); scene.add(snow);
+  const xmas = /[?&]noxmas=1/.test(location.search) ? [] : await xmasPlaza(scene, L);
   // (v2) the LED screen over the entrance: the Foxino Sports logo and the three sports, changing every few seconds
   let screen = null; for (const g of Object.values(MODELS)) { const o = g.getObjectByName('Screen'); if (o) screen = o; }
   if (screen) screen = makeScreen(screen);
@@ -158,6 +172,7 @@ export async function makeWinterPlaza(scene) {
       snow.material.uniforms.uT.value = T; snow.material.uniforms.uC.value.copy(camera.position); snow.material.uniforms.uPx.value = pr;
       flame.userData.m.uniforms.uT.value = T; FLAGU.uT.value = T; flame.userData.light.intensity = 36 + Math.sin(T * 17) * 4 + Math.sin(T * 7.3) * 5;
       if (screen) screen.update(dt, T);
+      for (const x of xmas) x.update(T);
       for (const w of walkers) {
         if (w.dir === 0) { w.v.rotation.z = Math.sin(T * .9 + w.ph) * .03; w.v.position.y = 0; continue; }   // (standing: a little sway)
         if (w.turn > 0) { w.turn -= dt; w.v.rotation.y += dt * Math.PI / .8; continue; }
