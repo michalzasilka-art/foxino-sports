@@ -13,6 +13,7 @@ import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=1';
+import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=1';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -39,15 +40,15 @@ renderer.setPixelRatio(pr);
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.98;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xcbeaf5, 60, 190);
+scene.fog = new THREE.Fog(0x7f88c2, 55, 180);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 600);
 // (2026-11-17, the user: "increase the graphics of the environment based on how you've worked with Adventures") the
 // Foxino Adventures look: the hand-painted sky, the fog in its haze, a warm sun with soft shadows, the post pass (../look.js)
-const sky = paintedSky(scene, '/adventures/sky/sky-jungle-day.webp?v=1', { envRenderer: renderer, yaw: 0.35 });
+const sky = paintedSky(scene, '/sports/snow/sky/alpine-night.webp?v=1', { envRenderer: renderer, yaw: 0.35, onFog: (c) => scene.fog.color.set(0x7f88c2) });   // (Christmas: a deep blue winter evening with a soft aurora; a cool blue haze, not the picture's pink base)
 { const pm = new THREE.PMREMGenerator(renderer); const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 16, 8), new THREE.MeshBasicMaterial({ color: 0xa8d8ea, side: THREE.BackSide }))); scene.environment = pm.fromScene(es, 0.02).texture; pm.dispose(); }
-scene.add(new THREE.HemisphereLight(0xfff1dc, 0x4d6a36, 1.0));
-const sun = new THREE.DirectionalLight(0xffdba6, 1.8);
-sun.position.set(-14, 26, -12); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+scene.add(new THREE.HemisphereLight(0xe9ecff, 0xb4bde0, 1.15));   // (a cool winter sky, the snow bouncing light back up)
+const sun = new THREE.DirectionalLight(0xffc68e, 1.55);   // (a low, warm evening sun)
+sun.position.set(-16, 18, -12); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 24, bottom: -24, near: 1, far: 90 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 4;
 scene.add(sun);
 const POSTFX = makePost(renderer, { aoRange: 80, focusMul: 1.3, blur: 0.5, grade: { sat: 1.07 } });
@@ -56,7 +57,8 @@ const POSTFX = makePost(renderer, { aoRange: 80, focusMul: 1.3, blur: 0.5, grade
 function courtTexture() {
   const W = 1024, H = 2048, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
   const sx = W / 20, sz = H / 38;   // the texture covers 20 m × 38 m
-  g.fillStyle = '#3e9a5b'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#e8eefa'; g.fillRect(0, 0, W, H);   // (Christmas: snow round the court; the court itself is swept clean)
+  for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '170,185,225' : '255,255,255'},${Math.random() * 0.25})`; g.beginPath(); g.arc(Math.random() * W, Math.random() * H, 2 + Math.random() * 7, 0, 6.3); g.fill(); }
   g.fillStyle = '#2f6fc4'; g.fillRect(W / 2 - 8.5 * sx, H / 2 - 17 * sz, 17 * sx, 34 * sz);
   // (2026-11-17) worn patches where the players run, a lighter sheen along the middle
   const wear = (x, z, rx, rz, a) => { const gr = g.createRadialGradient(W / 2 + x * sx, H / 2 + z * sz, 0, W / 2 + x * sx, H / 2 + z * sz, rx * sx); gr.addColorStop(0, `rgba(170,205,240,${a})`); gr.addColorStop(1, 'rgba(170,205,240,0)'); g.save(); g.translate(W / 2 + x * sx, H / 2 + z * sz); g.scale(1, rz / rx); g.translate(-(W / 2 + x * sx), -(H / 2 + z * sz)); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.restore(); };
@@ -80,13 +82,13 @@ function courtTexture() {
 const world = new THREE.Group(); scene.add(world);
 function buildCourt() {
   const gc = document.createElement('canvas'); gc.width = 64; gc.height = 64; const gg = gc.getContext('2d');
-  gg.fillStyle = '#62ad4c'; gg.fillRect(0, 0, 64, 64); gg.fillStyle = '#57a043'; gg.fillRect(0, 0, 64, 32);
-  for (let i = 0; i < 400; i++) { gg.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,200' : '20,60,10'},${Math.random() * 0.06})`; gg.fillRect(Math.random() * 64, Math.random() * 64, 1, 2); }
+  gg.fillStyle = '#eef2fb'; gg.fillRect(0, 0, 64, 64); gg.fillStyle = '#e2e8f7'; gg.fillRect(0, 0, 64, 32);   // (Christmas: snow, with soft blue shading and a little sparkle)
+  for (let i = 0; i < 400; i++) { gg.fillStyle = `rgba(${Math.random() < 0.6 ? '160,175,220' : '255,255,255'},${Math.random() * 0.16})`; gg.fillRect(Math.random() * 64, Math.random() * 64, 2, 2); }
   const gtx = new THREE.CanvasTexture(gc); gtx.colorSpace = THREE.SRGBColorSpace; gtx.wrapS = gtx.wrapT = THREE.RepeatWrapping; gtx.repeat.set(1, 55); gtx.anisotropy = 8;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), new THREE.MeshStandardMaterial({ map: gtx, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true; world.add(ground);
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true; ground.userData.noSnow = true; world.add(ground);
   const court = new THREE.Mesh(new THREE.PlaneGeometry(20, 38), new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.6, envMapIntensity: 0.6 }));
-  court.rotation.x = -Math.PI / 2; court.receiveShadow = true; world.add(court);
+  court.rotation.x = -Math.PI / 2; court.receiveShadow = true; court.userData.noSnow = true; world.add(court);
   // the net: posts, a mesh with a white tape, a little sag in the middle
   const post = new THREE.MeshStandardMaterial({ color: 0x1f2a44, roughness: 0.5, metalness: 0.4 });
   for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 10), post); p.position.set(s * 6.4, 0.55, 0); p.castShadow = true; world.add(p); }
@@ -100,8 +102,8 @@ function buildCourt() {
   // the fences and the boards around the court
   const bc = document.createElement('canvas'); bc.width = 1024; bc.height = 64; const bg = bc.getContext('2d');
   const words = ['FOXINO SPORTS', 'fugio.co', 'GUMMY', 'FOXINO SPORTS', 'ROB'];
-  bg.fillStyle = '#5b2bb0'; bg.fillRect(0, 0, 1024, 64); bg.font = '400 40px "Lilita One", sans-serif'; bg.textAlign = 'center'; bg.textBaseline = 'middle';
-  words.forEach((w, i) => { bg.fillStyle = i % 2 ? '#ffcd1c' : '#ffffff'; bg.fillText(w, 102 + i * 205, 34); });
+  bg.fillStyle = '#b3202e'; bg.fillRect(0, 0, 1024, 64); bg.fillStyle = 'rgba(255,255,255,.18)'; for (let i = 0; i < 40; i++) { bg.beginPath(); bg.arc(Math.random() * 1024, Math.random() * 64, 1.5 + Math.random() * 2.5, 0, 6.3); bg.fill(); } bg.font = '400 40px "Lilita One", sans-serif'; bg.textAlign = 'center'; bg.textBaseline = 'middle';
+  words.forEach((w, i) => { bg.fillStyle = i % 2 ? '#ffe08a' : '#ffffff'; bg.fillText(w, 102 + i * 205, 34); });
   const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace; bt.wrapS = THREE.RepeatWrapping;
   const boardM = new THREE.MeshStandardMaterial({ map: bt, roughness: 0.6 });
   const fc = document.createElement('canvas'); fc.width = 128; fc.height = 128; const fg = fc.getContext('2d'); fg.strokeStyle = 'rgba(30,60,40,0.9)'; fg.lineWidth = 3;
@@ -131,7 +133,9 @@ function buildCourt() {
   CROWD.head = new THREE.InstancedMesh(headG, new THREE.MeshStandardMaterial({ roughness: 0.7 }), seats.length);
   const cols = ['#ff5d8f', '#ffb703', '#3ab0ff', '#2fbf6a', '#8f52d9', '#ff7d22', '#ffffff', '#e8403a', '#5a6bff'], skin = ['#f2c9a0', '#d9a074', '#9c6a44', '#ffd9b8', '#c68642'];
   seats.forEach((q, i) => { CROWD.body.setColorAt(i, new THREE.Color(cols[i % cols.length])); CROWD.head.setColorAt(i, new THREE.Color(skin[(i * 7) % skin.length])); });
-  world.add(CROWD.body, CROWD.head);
+  CROWD.hat = new THREE.InstancedMesh(new THREE.ConeGeometry(0.15, 0.32, 6).translate(0, 0.16, 0), new THREE.MeshStandardMaterial({ color: 0xd42a35, roughness: 0.7 }), seats.length);   // (Christmas: Santa hats on a third of the fans)
+  CROWD.body.userData.noSnow = CROWD.head.userData.noSnow = CROWD.hat.userData.noSnow = true;
+  world.add(CROWD.body, CROWD.head, CROWD.hat);
   // roofs over the stands (purple with a white edge, on posts) and a row of flags along each roof
   const roofM = new THREE.MeshStandardMaterial({ color: 0x6a34c4, roughness: 0.6 }), trimM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), poleM = new THREE.MeshStandardMaterial({ color: 0x3a3f55, roughness: 0.5, metalness: 0.4 });
   for (const s of [-1, 1]) {
@@ -186,7 +190,7 @@ function drawScreen() {
   g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '400 26px "Lilita One", sans-serif'; g.fillText('POINTS', 700, 22); g.fillText('GAMES', 900, 22);
   SCREEN.t.needsUpdate = true;
 }
-const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = new THREE.Vector3(1, 1, 1), _v4 = new THREE.Vector3();
+const _m4 = new THREE.Matrix4(), _q4 = new THREE.Quaternion(), _s4 = new THREE.Vector3(1, 1, 1), _s0 = new THREE.Vector3(0, 0, 0), _v4 = new THREE.Vector3();
 function updateCrowd(t, dt) {
   for (const f of FLAGS) { const a = f.geometry.attributes.position, b = f.userData.base; for (let k = 0; k < a.count; k++) { const x = b[k * 3]; a.array[k * 3 + 2] = Math.sin(x * 5 - t * 6 + f.position.z) * 0.1 * x; } a.needsUpdate = true; }
   if (!CROWD.body) return;
@@ -195,35 +199,33 @@ function updateCrowd(t, dt) {
     const hop = Math.max(0, Math.sin(t * 9 + q.ph)) * 0.25 * CROWD.cheer + Math.sin(t * 2 + q.ph) * 0.02;
     _v4.set(q.x, q.y + 0.38 + hop, q.z); _m4.compose(_v4, _q4, _s4); CROWD.body.setMatrixAt(i, _m4);
     _v4.y += 0.42; _m4.compose(_v4, _q4, _s4); CROWD.head.setMatrixAt(i, _m4);
+    if (CROWD.hat) { _v4.y += 0.13; _m4.compose(_v4, _q4, i % 3 ? _s0 : _s4); CROWD.hat.setMatrixAt(i, _m4); }
   });
-  CROWD.body.instanceMatrix.needsUpdate = true; CROWD.head.instanceMatrix.needsUpdate = true;
+  CROWD.body.instanceMatrix.needsUpdate = true; CROWD.head.instanceMatrix.needsUpdate = true; if (CROWD.hat) CROWD.hat.instanceMatrix.needsUpdate = true;
 }
 // trees around (the Adventures jungle models)
-async function loadTrees() {
+async function loadTrees() {   // (Christmas 2026-11-24: snowy firs from the snow sports' props and hedges round the court; no palms, grass or flowers in the snow)
   const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
-  const files = ['nature-tall', 'nature-tall-2', 'nature-pine', 'nature-palm', 'nature-palm-2', 'nature-bush', 'detail-grass', 'detail-flowers', 'nature-fern'];
-  const protos = (await Promise.all(files.map((f) => L.loadAsync(`/adventures/models/${f}.glb?v=1`).catch(() => null)))).filter(Boolean).map((g) => {
-    g.scene.updateMatrixWorld(true); let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
-    const box = new THREE.Box3().setFromObject(g.scene), h = box.max.y - box.min.y || 1;
-    const base = new THREE.Matrix4().makeTranslation(0, -box.min.y / h, 0).multiply(new THREE.Matrix4().makeScale(1 / h, 1 / h, 1 / h)).multiply(mesh.matrixWorld);
-    if (mesh.material.map) mesh.material.map.colorSpace = THREE.SRGBColorSpace;
-    return { mesh, base, places: [] };
-  });
-  if (!protos.length) return;
-  const trees = protos.slice(0, 5), [bush, grass, flower, fern] = protos.slice(5);
-  for (let i = 0; i < 60; i++) { const a = (i / 60) * Math.PI * 2 + rand(-0.04, 0.04), r = rand(27, 46); const x = Math.cos(a) * r * 1.0, z = Math.sin(a) * r * 1.25; if (Math.abs(x) < 21 && Math.abs(z) < 25) continue; trees[i % trees.length].places.push([x, z, rand(6, 12), rand(0, 6)]); }
+  const [bushG, sp] = await Promise.all([L.loadAsync('/adventures/models/nature-bush.glb?v=1').catch(() => null), L.loadAsync('/sports/snow/models/snow-props.glb?v=1').catch(() => null)]);
+  // every prototype is a list of parts (a fir is bark + two greens + snow): one InstancedMesh per part, scaled to 1 m tall, feet at 0
+  const proto = (root) => { const r = root.clone(true); r.position.set(0, 0, 0); r.rotation.set(0, 0, 0); r.scale.set(1, 1, 1); r.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(r), h = box.max.y - box.min.y || 1, norm = new THREE.Matrix4().makeTranslation(0, -box.min.y / h, 0).multiply(new THREE.Matrix4().makeScale(1 / h, 1 / h, 1 / h)), parts = [];
+    r.traverse((o) => { if (o.isMesh) { if (o.material.map) o.material.map.colorSpace = THREE.SRGBColorSpace; parts.push({ g: o.geometry, m: o.material, base: norm.clone().multiply(o.matrixWorld) }); } });
+    return { parts, places: [] }; };
+  const firs = sp ? ['Pine1', 'Pine2', 'Pine3'].map((n) => sp.scene.getObjectByName(n)).filter(Boolean).map(proto) : [];
+  const bush = bushG ? proto(bushG.scene) : null;
+  if (firs.length) for (let i = 0; i < 70; i++) { const a = (i / 70) * Math.PI * 2 + rand(-0.04, 0.04), r = rand(27, 46); const x = Math.cos(a) * r, z = Math.sin(a) * r * 1.25; if (Math.abs(x) < 21 && Math.abs(z) < 25) continue; firs[i % firs.length].places.push([x, z, rand(6, 11), rand(0, 6)]); }
   // a hedge behind the back fences and behind the stands
   if (bush) { for (let x = -10.5; x <= 10.5; x += 1.5) for (const s of [-1, 1]) bush.places.push([x + rand(-0.2, 0.2), s * (20.6 + rand(0, 0.5)), rand(1.4, 2.0), rand(0, 6)]);
     for (let z = -19; z <= 19; z += 2.2) for (const s of [-1, 1]) bush.places.push([s * (20.2 + rand(0, 0.6)), z + rand(-0.3, 0.3), rand(1.6, 2.3), rand(0, 6)]); }
-  // grass tufts, ferns and flowers on the lawn around everything
-  const lawn = (n, p, h0, h1) => { if (!p) return; for (let i = 0; i < n; i++) { const x = rand(-34, 34), z = rand(-38, 38); if (Math.abs(x) < 21 && Math.abs(z) < 21.5) continue; p.places.push([x, z, rand(h0, h1), rand(0, 6)]); } };
-  lawn(260, grass, 0.4, 0.8); lawn(70, flower, 0.35, 0.6); lawn(40, fern, 0.8, 1.4);
-  for (const p of protos) {
-    const im = new THREE.InstancedMesh(p.mesh.geometry, p.mesh.material, Math.max(1, p.places.length)); im.castShadow = false; im.userData.noCast = true;
-    p.places.forEach(([x, z, h, r], i) => { _q4.setFromEuler(new THREE.Euler(0, r, 0)); _m4.compose(new THREE.Vector3(x, 0, z), _q4, new THREE.Vector3(h, h, h)).multiply(p.base); im.setMatrixAt(i, _m4); });
-    world.add(im);
-  }
+  for (const p of [...firs, bush].filter(Boolean)) for (const part of p.parts) {
+    const im = new THREE.InstancedMesh(part.g, part.m, Math.max(1, p.places.length)); im.castShadow = false; im.userData.noCast = true;
+    p.places.forEach(([x, z, h, r], i) => { _q4.setFromEuler(new THREE.Euler(0, r, 0)); _m4.compose(new THREE.Vector3(x, 0, z), _q4, new THREE.Vector3(h, h, h)).multiply(part.base); im.setMatrixAt(i, _m4); });
+    world.add(im); }
+  // two snowmen in the far corners (until the PC's Christmas kit brings its own)
+  const sm = sp && sp.scene.getObjectByName('Snowman'); if (sm) for (const s of [-1, 1]) { const o = sm.clone(true); o.position.set(s * 9.3, 0, -15.8); o.rotation.set(0, -s * 0.5, 0); o.traverse((q) => { if (q.isMesh) q.castShadow = true; }); o.name = 'Snowman-fallback'; world.add(o); }
 }
+
 
 // ---------- the ball, the rackets, the bubbles ----------
 const ballTex = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#d9f23c'; g.fillRect(0, 0, 128, 64);
@@ -898,6 +900,24 @@ function placeCamera(dt) {
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); BURST.scale(h * pr); }
 addEventListener('resize', resize);
 
+// ---------- Christmas (2026-11-24): falling snow, lights on the fences and roofs, snow on the tops of things, the shared props ----------
+const XM = { snow: null, lights: [] };
+window.FT = { scene, camera, renderer, world };   // (test hook: the frame's triangles, measured by the test page)
+async function xmasDress() {
+  XM.snow = makeSnowfall({ n: innerWidth * innerHeight < 500000 ? 750 : 1150, box: [24, 14, 30], ahead: 0.5 }); scene.add(XM.snow);
+  for (const s of [-1, 1]) XM.lights.push(stringLights(world, [-10, -5, 0, 5, 10].map((x) => new THREE.Vector3(x, 4.15, s * 19.05)), { sag: 0.35, per: 9 }));
+  for (const s of [-1, 1]) XM.lights.push(stringLights(world, [-18, -9, 0, 9, 18].map((z) => new THREE.Vector3(s * 11.2, 5.72, z)), { sag: 0.45, per: 10, warm: true }));
+  XM.lights.push(stringLights(world, [-4.2, -1.4, 1.4, 4.2].map((x) => new THREE.Vector3(x, 8.6, -27.25)), { sag: 0.15, per: 6 }));   // (along the top of the score screen)
+  snowCover(world);
+  const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+  if (await loadXmasKit(L)) {   // (the PC's prop kit: until it is in, the court is dressed with snow and lights only)
+    for (const s of [-1, 1]) { placeKit(world, 'XmasTree_Big', s * 14.2, -24.6, { rot: s * 0.4 }); placeKit(world, 'XmasTree_Small', s * 10.9, -21.1, { rot: s }); if (placeKit(world, 'Snowman', s * 9.2, -15.5, { rot: -s * 0.5 })) world.children.filter((c) => c.name === 'Snowman-fallback').forEach((c) => world.remove(c));
+      placeKit(world, 'Lantern', s * 10.7, -9, { rot: s * Math.PI / 2 }); placeKit(world, 'Lantern', s * 10.7, 9, { rot: s * Math.PI / 2 }); placeKit(world, 'Wreath', s * 4.5, 0, { y: 7.2, rot: 0 })?.position.set(s * 4.55, 7.2, -27.0); }
+    placeKit(world, 'Gift_A', 8.5, 0.9, { rot: 0.3 }); placeKit(world, 'Gift_B', 8.9, 0.2, { rot: -0.4 }); placeKit(world, 'Gift_C', 8.4, -0.7, { rot: 0.9 });
+    placeKit(world, 'Sleigh', -15.5, -21.5, { rot: 0.6 }); placeKit(world, 'SnowDrift_A', 13.5, -19.6); placeKit(world, 'SnowDrift_B', -12.8, 19.8, { rot: 2 });
+    snowCover(world); }
+}
+
 // ---------- the loop ----------
 let last = performance.now(), T = 0, slow = 0, frames = 0;
 function frame(now) {
@@ -905,6 +925,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
   const bdt = FREEZE > 0 ? 0 : dt; FREEZE = Math.max(0, FREEZE - dt);
   updatePlayers(dt, T); updateBall(bdt, T); updateBubbles(dt, T); updateCrowd(T, dt); BURST.update(dt); placeCamera(dt);
+  if (XM.snow) XM.snow.update(T, camera, pr); for (const l of XM.lights) l.update(T);
   POSTFX.draw(scene, camera, 30);
   updateLabels();
   if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
@@ -915,7 +936,7 @@ function frame(now) {
   $('loadFill').style.width = '30%';
   buildCourt();
   $('loadText').textContent = 'Calling the players…'; $('loadFill').style.width = '60%';
-  await Promise.all([makePlayers(), loadTrees().catch(() => {})]);
+  await Promise.all([makePlayers(), loadTrees().catch(() => {})]); await xmasDress().catch((e) => console.warn('xmas', e));
   COURT.resetForServe('a');
   $('loadFill').style.width = '100%';
   requestAnimationFrame(frame);
