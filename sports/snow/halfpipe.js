@@ -31,6 +31,17 @@ export default {
     E.drawDist = 260;
     this.reset(E);
   },
+  // Christmas (2026-11-24): lights along both lips, decorated trees, gifts and snowmen on the decks, a big tree past the finish
+  xmas(E, X) {
+    if (!X.ok) return; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z);
+    for (const sd of [1, -1]) for (let z0 = -6; z0 < S.L + 6; z0 += 30) { const posts = []; for (let z = z0; z <= z0 + 30; z += 6) posts.push(P(sd * (W0 + 0.45), z, 1.15)); X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
+    for (let z = 28, i = 0; z < S.L; z += 36, i++) { const sd = i % 2 ? 1 : -1;
+      X.put('XmasTree_Big', P(sd * (W0 + 4.2), z), i, 1.3); X.put('XmasTree_Small', P(-sd * (W0 + 3.4), z + 12), -i, 1.8);
+      X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], P(sd * (W0 + 2.4), z - 1.5), i); X.put('Gift_B', P(sd * (W0 + 2.7), z + 1.4), -i);
+      if (i % 2 === 0) X.put('Snowman', P(-sd * (W0 + 2.2), z - 6), sd * 1.2); }
+    for (const sd of [1, -1]) { X.put('Lantern', P(sd * (W0 + 1.2), -4), sd); X.put('CandyCane', P(sd * (W0 + 0.9), 4), sd); X.put('XmasTree_Small', P(sd * (W0 + 3), -8), sd, 1.6); }
+    X.put('XmasTree_Big', new THREE.Vector3(0, -(S.L + 14) * S.SL - 0.3, S.L + 14), 0.4, 2.2); X.put('Sleigh', P(W0 + 3.5, S.L - 4), 2.4);
+  },
   reset(E) { Object.assign(S, { airN: 0, s: -3, d: -W(), side: 1, phase: 'menu', u: 0, air: 0, trick: null, spin: 0, flip: 0, pts: 0, hit: 0, v: 6.5, wob: 0, landT: 0, shotT: 0, asking: false }); E.snapCam(); },
   menu() { S.phase = 'menu'; },
   async run(E) {
