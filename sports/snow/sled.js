@@ -9,13 +9,15 @@ const groundY = (c, d) => c.p.y + S.curve * d * d;
 export const _S = S;
 export default {
   id: 'sled', blurb: 'Pick the lane with the right word: the star path is the fast one!',
-  light: { sky: 'sunny', skyYaw: 0.75, sunDir: [-0.4, 0.62, 0.55], sun: 0xfff0d8, sunI: 2.5, hemiSky: 0xd8e8ff, hemiGround: 0x8f9ad0, hemi: 0.95, exposure: 0.95, fog: [120, 460], fogColor: 0xe4ecfb, env: 0.5, flakes: 300, flakeA: 0.5 },
+  // (Christmas 2026-11-24: a snowy Christmas night under the moon; it was a sunny day: ?noxmas=1 shows the day again)
+  light: /[?&]noxmas=1/.test(location.search) ? { sky: 'sunny', skyYaw: 0.75, sunDir: [-0.4, 0.62, 0.55], sun: 0xfff0d8, sunI: 2.5, hemiSky: 0xd8e8ff, hemiGround: 0x8f9ad0, hemi: 0.95, exposure: 0.95, fog: [120, 460], fogColor: 0xe4ecfb, env: 0.5, flakes: 300, flakeA: 0.5 }
+    : { sky: 'night', skyYaw: 0.75, skyBase: 0.26, sunDir: [-0.35, 0.8, 0.45], sun: 0xeef0ff, sunI: 2.3, hemiSky: 0x8fa2ff, hemiGround: 0x3e3a86, hemi: 0.75, rim: 0x9fd8ff, rimI: 1.3, exposure: 1.05, fog: [70, 330], fogColor: 0x464d9e, env: 0.3, flakes: 480, flakeA: 0.8 },
   bestShown: (s) => `${s.toFixed(1)} s`,
   async build(E, prog) {
     const { THREE } = E;
     const [g, J] = await Promise.all([E.loadGLB('models/sled.glb?v=1'), E.loadJSON('models/sled.json?v=1')]);
     E.dressModel(g.scene); E.scene.add(g.scene); prog(30, 'Planting the forest…');
-    S.path = makePath(J.center, J.step); S.L = J.length; S.forks = J.forks.map(([a, b]) => ({ a, b })); S.curve = J.curve;
+    S.J = J; S.path = makePath(J.center, J.step); S.L = J.length; S.forks = J.forks.map(([a, b]) => ({ a, b })); S.curve = J.curve;
     E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
     // the finish arch
     const fin = E.prop('Gate'), c = S.path.at(S.L); fin.scale.set(7.6, 3, 3); fin.position.copy(c.p); fin.rotation.y = c.yaw;
@@ -31,6 +33,16 @@ export default {
     E.groundAt = (x, z) => { const s = S.path.nearest(x, z, S.s, 50); return S.path.at(s).p.y + 0.4; };
     E.drawDist = 200;
     this.reset(E);
+  },
+  // Christmas (2026-11-24): fairy lights along both edges of the run, decorated trees, gifts and snowmen beside it, a big tree at every fork
+  xmas(E, X) {
+    if (!X.ok) return; const { THREE } = E, hw = S.J.trackHalf, up = new THREE.Vector3(0, 1.1, 0), at = (s, side, w, dy = 0) => { const c = S.path.at(s); return c.p.clone().addScaledVector(c.nrm, side * w).setY(c.p.y + dy); };
+    for (const sd of [1, -1]) for (let s0 = 6; s0 < S.L; s0 += 32) { const posts = []; for (let s = s0; s <= Math.min(S.L, s0 + 32); s += 8) posts.push(at(s, sd, hw + 0.7).add(up)); X.lights(posts, { sag: 0.3, per: 5, size: 0.13, glow: 1.1 }); }
+    S.forks.forEach((F, i) => { const sd = i % 2 ? 1 : -1, c = S.path.at(F.a - 6);
+      X.put('XmasTree_Big', at(F.a - 6, sd, hw + 4), c.yaw + i, 1.3); X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], at(F.a - 8, sd, hw + 2.2), i); X.put('Gift_B', at(F.a - 4.5, sd, hw + 2.4), -i);
+      X.put('XmasTree_Small', at(F.b + 8, -sd, hw + 3.2), c.yaw - i, 1.8); if (i % 2 === 0) X.put('Snowman', at(F.b + 2, -sd, hw + 2.3), c.yaw + Math.PI - sd * 0.6); });
+    for (const sd of [1, -1]) { X.put('Lantern', at(5, sd, hw + 1.3), S.path.at(5).yaw); X.put('CandyCane', at(12, sd, hw + 0.8), S.path.at(12).yaw); X.put('XmasTree_Small', at(S.L - 6, sd, hw + 2.6), sd, 1.8); }
+    X.put('XmasTree_Big', at(S.L + 14, 1, 2), 0.5, 2.0); X.put('Sleigh', at(S.L + 6, -1, hw + 2), S.path.at(S.L).yaw + 2);
   },
   reset(E) { Object.assign(S, { s: 4, d: 0, v: 0, time: 0, lane: -1, got: 0, bumpT: 0, phase: 'menu', asking: -1, shot: 'chase', shotT: 0 }); S.stars.forEach((s) => (s.visible = false)); E.snapCam(); },
   menu() { S.phase = 'menu'; },
