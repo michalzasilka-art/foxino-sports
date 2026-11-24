@@ -16,6 +16,7 @@ import { blankPose } from '/penalty/foxino.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=3';
+import { loadXmasKit, placeKit, stringLights, bulbGlows } from '../xmas.js?v=5';   // (2026-11-24, the user: a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -110,6 +111,13 @@ export function bannerMaterial(text, bg = '#7b3fd1', fg = '#ffffff') {
 
 // ---------- the props (trees, rocks, gates, gear) and instancing in cells, so far-away cells are not drawn ----------
 let PROPS = null;
+// Christmas (2026-11-24): a sport's xmas(E, X) hook places the shared kit beside its course; X.put / X.lights also join FAR
+const XMAS = { lights: [] };
+const XK = {
+  put(name, p, yaw = 0, s = 1) { const o = placeKit(scene, name, p.x, p.z, { y: p.y, rot: yaw, s }); if (o) { o.traverse((m) => { if (m.isMesh) { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); FAR.push(m); } }); const gl = /^(XmasTree_Big|Garland)$/.test(name) && bulbGlows(o); if (gl) XMAS.lights.push(gl); } return o; },
+  far(obj) { obj.traverse((m) => { if (m.isMesh && !m.isInstancedMesh) { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); if (!FAR.includes(m)) FAR.push(m); } }); },   // (hide it when it is past the draw distance)
+  lights(posts, opt) { const g = stringLights(scene, posts, opt); XMAS.lights.push(g); g.traverse((m) => { if (m.isInstancedMesh) { m.computeBoundingSphere(); FAR.push(m); } }); return g; },
+};
 const FAR = [];   // meshes hidden when far from the camera (tree cells, ground pieces): fewer triangles on phones
 const _fc = new THREE.Vector3();
 async function loadProps() {
@@ -468,6 +476,7 @@ function frame(now) {
   if (E.fogColor != null) scene.fog.color.setHex(E.fogColor);
   if (MOUNT) MOUNT.position.set(camera.position.x, camera.position.y + MOUNT.userData.y, camera.position.z);
   if (flakes) { flakes.material.uniforms.uT.value += rdt; flakes.material.uniforms.uC.value.copy(camera.position); }
+  for (const l of XMAS.lights) l.update(TIME.value);
   SPRAY.update(dt);
   updateFriendHud();
   POSTFX.draw(scene, camera, E.focus);
@@ -501,7 +510,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=2`)).default;
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
@@ -515,6 +524,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
     if (L.env != null) scene.environmentIntensity = L.env;
     flakes = makeFlakes(L.flakes ?? 500); flakes.material.uniforms.uA.value = L.flakeA ?? 0.7;
     await MOD.build(E, (p, t) => bar(35 + p * 0.6, t));
+    if (MOD.xmas && !/[?&]noxmas=1/.test(location.search)) { try { XK.ok = !!(await loadXmasKit(loader)); await MOD.xmas(E, XK); } catch (e) { console.warn('xmas', e); } }
     bar(100, 'Ready!');
   } catch (e) { console.error(e); $('loadTxt').textContent = 'Could not load: ' + e.message; return; }
   requestAnimationFrame((t) => { last = t; frame(t); });

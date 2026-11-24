@@ -8,14 +8,14 @@ const S = { a: null, path: null, s: 0, d: 0, dT: 0, v: 0, time: 0, pen: 0, gates
 export const _S = S;
 export default {
   id: 'slalom', blurb: 'Ski through the gate with the right word. Fast and clean wins!',
-  light: { sky: 'alpine-day', skyYaw: 0.2, sunDir: [-0.55, 0.5, 0.45], sun: 0xfff3e0, sunI: 2.4, hemiSky: 0xd6e6ff, hemiGround: 0xa79bd6, hemi: 1.05, exposure: 0.95, fog: [170, 640], fogColor: 0xd8eafc, env: 0.5, flakes: 260, flakeA: 0.45 },
+  light: { sky: 'alpine-gold', skyYaw: 0.2, sunDir: [-0.55, 0.5, 0.45], sun: 0xffd9b0, sunI: 2.4, hemiSky: 0xd6e6ff, hemiGround: 0xa79bd6, hemi: 1.05, exposure: 0.95, fog: [170, 640], fogColor: 0xeedad6, env: 0.5, flakes: 260, flakeA: 0.45 },
   bestShown: (s) => `${s.toFixed(1)} s`,
   async build(E, prog) {
     const { THREE } = E;
     const [g, J] = await Promise.all([E.loadGLB('models/slalom.glb?v=1'), E.loadJSON('models/slalom.json?v=1')]);
     E.dressModel(g.scene, { banner: (n) => (n === 'Banner' ? E.bannerMaterial('START', '#7b3fd1') : E.bannerMaterial('FINISH', '#ff4d6d')) });
     E.scene.add(g.scene); prog(25, 'Planting the trees…');
-    S.path = makePath(J.center, J.step); S.finishS = J.finish;
+    S.path = makePath(J.center, J.step); S.finishS = J.finish; S.J = J;
     E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
     // orange A-nets along both edges of the piste, a few snowmen at the finish
     const nets = [];
@@ -51,6 +51,24 @@ export default {
     E.groundAt = (x, z) => { const s = S.path.nearest(x, z, S.s, 60); return S.path.at(s).p.y; };
     E.drawDist = 175;
     this.reset(E); this.place(E, 0);
+  },
+  // (2026-11-24) Christmas: a big decorated tree and gifts beside every gate set, lights along the nets before each set, lanterns and candy canes at the start, small trees and a sleigh at the finish
+  xmas(E, X) {
+    for (const st of S.gates) for (const gt of st) X.far(gt); E.scene.children.forEach((o) => { if (o.name === 'Gate') X.far(o); });   // (the gates far down the slope, inside the fog, are skipped too)
+    if (!X.ok) return; const { THREE } = E, J = S.J, hw = J.halfWidth, up = new THREE.Vector3(0, 1.2, 0), at = (s, side, w) => { const c = S.path.at(s); return c.p.clone().addScaledVector(c.nrm, side * w); };
+    // decorated trees just outside the nets (a big one every 60 m, small ones between), gifts under the big ones
+    for (let s = 18, i = 0; s < J.finish; s += 30, i++) { const side = i % 2 ? 1 : -1, big = i % 2 === 0, y = S.path.at(s).yaw + i;
+      X.put('XmasTree_Small', at(s, side, hw + (big ? 3.6 : 2.8)), y, big ? 2.6 : 1.7);   // (the small tree, bigger: a third of the big one's triangles)
+      if (big) { X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], at(s - 2, side, hw + 2.2), y); X.put('Gift_C', at(s + 1.5, side, hw + 2.4), -y); } }
+    // flanking every gate set, in clear view (free snow between the outer lane at 6.2 m and the nets): a big decorated tree, a small one, gifts, a snowman every other set
+    S.gates.forEach((st, i) => { const sd = i % 2 ? 1 : -1, c = S.path.at(st.s + 3);
+      X.put('XmasTree_Big', at(st.s + 3, sd, 13.2), c.yaw + i, 1.25); X.put('XmasTree_Small', at(st.s + 5, -sd, 12.4), c.yaw - i, 1.6);
+      X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], at(st.s + 1, sd, 11.2), c.yaw + i); X.put('Gift_B', at(st.s + 4.5, -sd, 10.9), -i);
+      if (i % 2 === 0) X.put('Snowman', at(st.s - 6, -sd, 11.6), c.yaw + Math.PI + sd * 0.5); });
+    // lights along both nets, the whole way down (in short strings, so far ones are skipped)
+    for (const sd of [1, -1]) for (let s0 = 6; s0 < J.finish + 20; s0 += 28) { const posts = []; for (let s = s0; s <= s0 + 28; s += 7) posts.push(at(s, sd, hw + 1.5).add(up)); X.lights(posts, { sag: 0.3, per: 6, size: 0.13, glow: 1.0 }); }
+    for (const sd of [1, -1]) { X.put('Lantern', at(2, sd, hw + 1.2), S.path.at(2).yaw); X.put('CandyCane', at(10, sd, hw + 0.6), S.path.at(10).yaw); X.put('XmasTree_Big', at(30, sd, hw + 3.5), sd, 1.4); X.put('XmasTree_Small', at(J.finish + 4, sd, hw + 2.5), S.path.at(J.finish).yaw, 1.5); }
+    X.put('Sleigh', at(J.finish + 8, 1, 10), S.path.at(J.finish).yaw + 2);
   },
   reset(E) { Object.assign(S, { s: -2, d: 0, dT: 0, v: 0, time: 0, pen: 0, set: -1, lane: 1, wob: 0, done: false, shot: 'chase', shotT: 0 }); S.gates.forEach((st) => st.banner && st.banner.forEach((b) => b.material.emissive.set(0))); E.snapCam(); },
   menu(E) { S.menu = true; },

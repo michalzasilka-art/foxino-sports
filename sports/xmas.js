@@ -73,7 +73,7 @@ export function stringLights(parent, posts, { sag = 0.4, per = 10, size = 0.07, 
     for (let i = 0; i < 16; i++) wire.push(at(a, b, i / 16), at(a, b, (i + 1) / 16));
     for (let i = 0; i < per; i++) { const p = at(a, b, (i + 0.5) / per); p.y -= 0.06; bulbs.push(p); } }
   grp.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(wire), new THREE.LineBasicMaterial({ color: 0x1d2a1e })));
-  const bg = new THREE.IcosahedronGeometry(size, 0), bm = new THREE.MeshBasicMaterial({ toneMapped: false });
+  const bg = new THREE.OctahedronGeometry(size * 1.15, 0),   /* (8 triangles a bulb: a long course has hundreds) */ bm = new THREE.MeshBasicMaterial({ toneMapped: false });
   const im = new THREE.InstancedMesh(bg, bm, bulbs.length); im.userData.noCast = true; im.userData.noSnow = true; const M4 = new THREE.Matrix4(), C = new THREE.Color();
   const cols = bulbs.map((_, i) => new THREE.Color(warm ? (i % 2 ? '#ffd27a' : '#ffe9b0') : colors[i % colors.length]));
   bulbs.forEach((p, i) => { M4.makeTranslation(p.x, p.y, p.z); im.setMatrixAt(i, M4); im.setColorAt(i, cols[i]); }); grp.add(im);
@@ -95,3 +95,14 @@ export async function loadXmasKit(loader, url = '/sports/models/xmas/xmas-kit.gl
 }
 export function kitPart(name) { if (!KIT) return null; const src = KIT.getObjectByName(name); if (!src) return null; const c = src.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1); return c; }
 export function placeKit(parent, name, x, z, { y = 0, rot = 0, s = 1 } = {}) { const o = kitPart(name); if (!o) return null; o.position.set(x, y, z); o.rotation.y = rot; o.scale.setScalar(s); parent.add(o); return o; }
+// coloured, twinkling glows at a placed prop's Bulb_### empties (the big tree, the garland): the tree sparkles from far away
+export function bulbGlows(obj, { glow = 1.2, colors = BULB_COLS } = {}) {
+  obj.updateMatrixWorld(true); const pos = [], cols = [];
+  obj.traverse((o) => { if (/^Bulb_/i.test(o.name)) { const w = o.getWorldPosition(new THREE.Vector3()); obj.parent.worldToLocal(w); pos.push(w.x, w.y, w.z); const c = new THREE.Color(colors[cols.length / 3 % colors.length]); cols.push(c.r, c.g, c.b); } });
+  if (!pos.length) return null; const base = cols.slice(), g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: glowTexture(), size: glow * Math.max(1, obj.scale.x), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  pts.userData.noCast = true; obj.parent.add(pts); const ph = base.map(() => Math.random() * 6.28), n = pos.length / 3;
+  pts.update = (t) => { const a = g.attributes.color.array; for (let i = 0; i < n; i++) { const k = 0.45 + 0.55 * Math.max(0, Math.sin(t * 1.7 + ph[i])); a[i * 3] = base[i * 3] * k; a[i * 3 + 1] = base[i * 3 + 1] * k; a[i * 3 + 2] = base[i * 3 + 2] * k; } g.attributes.color.needsUpdate = true; };
+  return pts;
+}
+
