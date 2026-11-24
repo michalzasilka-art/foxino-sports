@@ -109,3 +109,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #loading .bar i { display: block; height: 100%; width: 8%; border-radius: 99px; background: var(--yellow); transition: width .3s; }
 #loading.gone { opacity: 0; pointer-events: none; }
 @media (max-width: 520px) { .toplogo { height: 44px; } .play span { font-size: 34px; padding: 14px 36px; } .hint { display: none; } }
+/* (2026-11-24) on phones the names fit in full ("Streetball", "Ski Jump"): the general .nm rule above came after the phone one and won */
+@media (max-width: 600px) { .act .nm { font-size: clamp(11px, 3.4vw, 14px); letter-spacing: 0; padding: 22px 2px 8px; white-space: nowrap; overflow: visible; text-overflow: clip; } }

@@ -18,7 +18,7 @@ import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=2';
 import { BPOSES } from './poses.js?v=1';
-import { makeAnimChar } from './charanim.js?v=2';
+import { makeAnimChar } from './charanim.js?v=3';
 import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);

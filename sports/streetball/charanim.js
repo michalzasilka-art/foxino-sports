@@ -15,6 +15,10 @@ export function makeAnimChar(gltf, { height = null, kind = 'fox' } = {}) {
   const scene = gltf.scene, root = new THREE.Group(); root.add(scene);
   scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; if (o.material && o.material.map) o.material.map.colorSpace = THREE.SRGBColorSpace; } });
   if (height) { scene.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(scene, true), h = b.max.y - b.min.y; if (h > 0.01) scene.scale.setScalar(height / h); }
+  // (2026-11-24, the user: "On every foxino character's tail from now on in FoxSports dont do or remove it") Foxino has no tail: its two tail
+  // bones are folded to nothing (the tail closes into its root on his back, no hole), and no clip moves them any more
+  const TAILS = []; if (kind === 'fox') { scene.traverse((o) => { if (o.isBone && /tail/i.test(o.name)) { o.scale.setScalar(1e-4); TAILS.push(o); } });
+    for (const c of gltf.animations) c.tracks = c.tracks.filter((t) => !/tail/i.test(t.name.split('.')[0])); }
   const mixer = new THREE.AnimationMixer(scene), clips = {}, actions = {};
   for (const c of gltf.animations) { clips[c.name] = c; const a = mixer.clipAction(c); if (ONCE.has(c.name)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } actions[c.name] = a; }
   const find = (n) => { let r = null; scene.traverse((o) => { if (!r && o.name && o.name.replace(/[:.]/g, '').toLowerCase().endsWith(n.toLowerCase())) r = o; }); return r; };
