@@ -3,6 +3,7 @@
 // your best distance show as lines on the hill. Longest total wins.
 const S = { a: null, ghost: null, inrun: [], acc: [], LIN: 100, hill: [], phase: 'menu', s: 0, v: 0, z: 0, fl: null, jump: 0, dist: [], bonus: 0, takeoff: false, glide: 0, lines: {}, asking: '', stopT: 0, shotT: 0 };
 const THREEp = {};
+const IRW = 2.4;   // (half the in-run's width, for its Christmas lights)
 function hillY(z) { const H = S.hill; if (z <= 0) return H[0][1]; const i = Math.min(H.length - 2, Math.floor(z)), f = Math.min(1, z - i); return H[i][1] * (1 - f) + H[i + 1][1] * f; }
 function inrunAt(s, out) {
   s = Math.max(0, Math.min(S.LIN, s)); let i = 1; while (i < S.acc.length - 1 && S.acc[i] < s) i++;
@@ -30,7 +31,7 @@ export default {
     const { THREE } = E; THREEp.T = THREE;
     const [g, J] = await Promise.all([E.loadGLB('models/skijump.glb?v=1'), E.loadJSON('models/skijump.json?v=1')]);
     E.dressModel(g.scene); E.scene.add(g.scene); prog(30, 'Planting the trees…');
-    S.inrun = J.inrun; S.hill = J.hill; S.acc = [0]; for (let i = 1; i < S.inrun.length; i++) { const A = S.inrun[i - 1], B = S.inrun[i]; S.acc.push(S.acc[i - 1] + Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])); } S.LIN = S.acc[S.acc.length - 1];
+    S.J = J; S.inrun = J.inrun; S.hill = J.hill; S.acc = [0]; for (let i = 1; i < S.inrun.length; i++) { const A = S.inrun[i - 1], B = S.inrun[i]; S.acc.push(S.acc[i - 1] + Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])); } S.LIN = S.acc[S.acc.length - 1];
     E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
     // distance boards along the hill sides, the K line (red) and lines for your best and the friend's distance
     for (const m of J.props.filter((p) => p[0] === 'Marker')) {
@@ -50,6 +51,18 @@ export default {
     E.groundAt = (x, z) => (z > 0 ? hillY(z) : null);
     E.drawDist = 320;
     this.reset(E);
+  },
+  // Christmas (2026-11-24): lights up the in-run and down both sides of the hill, decorated trees and gifts beside the landing, a big tree and a sleigh in the outrun
+  xmas(E, X) {
+    if (!X.ok) return; const { THREE } = E, hw = S.J.hillHalfWidth, H = (x, z, dy = 0) => new THREE.Vector3(x, hillY(z) + dy, z), c = { p: new THREE.Vector3(), ang: 0 };
+    for (const sd of [1, -1]) { for (let s0 = 0; s0 < S.LIN; s0 += 27) { const posts = []; for (let s = s0; s <= Math.min(S.LIN, s0 + 27); s += 4.5) { inrunAt(s, c); posts.push(c.p.clone().add(new THREE.Vector3(sd * IRW, 1.0, 0))); } if (posts.length > 1) X.lights(posts, { sag: 0.2, per: 4, size: 0.09, glow: 0.9 }); }
+      for (let z0 = 0; z0 < 180; z0 += 36) { const posts = []; for (let z = z0; z <= z0 + 36; z += 9) posts.push(H(sd * (hw + 0.8), z, 1.2)); X.lights(posts, { sag: 0.35, per: 5, size: 0.15, glow: 1.1 }); } }
+    for (let z = 40, i = 0; z < 190; z += 45, i++) { const sd = i % 2 ? 1 : -1;
+      X.put('XmasTree_Big', H(sd * (hw + 4.5), z), i, 1.35); X.put('XmasTree_Small', H(-sd * (hw + 3.6), z + 14), -i, 1.8);
+      X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], H(sd * (hw + 2.6), z - 2), i); 
+      if (i % 2) X.put('Snowman', H(-sd * (hw + 2.4), z - 5), -sd * 1.4); }
+    X.put('XmasTree_Small', H(-9, 234), 0.3, 2.6); X.put('Sleigh', H(6, 222), -2.4); X.put('Gift_A', H(-7, 229), 1);
+    inrunAt(0, c); X.put('StarLight', c.p.clone().add(new THREE.Vector3(0, 6, -3)), 0, 1.5); for (const sd of [1, -1]) X.put('Lantern', c.p.clone().add(new THREE.Vector3(sd * (IRW + 0.4), 0, 1)), sd);
   },
   reset(E) { Object.assign(S, { phase: 'menu', s: 0, v: 0, jump: 0, dist: [], asking: '', fl: null }); E.snapCam(); try { const b = JSON.parse(localStorage.getItem('snow-jump-best1') || 'null'); if (b) S.lines.best.set(b); } catch (e) {} },
   menu() { S.phase = 'menu'; },
