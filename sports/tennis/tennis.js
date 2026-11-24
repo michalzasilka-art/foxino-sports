@@ -13,7 +13,7 @@ import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=1';
-import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=2';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
+import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -40,7 +40,7 @@ export function snowCover(root, { skip = [], amount = 1, from = 0.55, to = 0.8 }
     if (!o.isMesh || o.isSkinnedMesh || o.userData.noSnow) return;
     for (let q = o; q; q = q.parent) if (skipSet.has(q)) return;
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-      if (!m || m.userData.snowed || m.isShaderMaterial || m.transparent || !('color' in m)) continue;
+      if (!m || m.userData.snowed || m.isShaderMaterial || m.transparent || !('color' in m) || !(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial)) continue;   // (lit materials only: a flat MeshBasic has no normals)
       m.userData.snowed = true; const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
       m.onBeforeCompile = (sh, r) => { if (prev) prev(sh, r);
         sh.uniforms.uSnowA = SNOW.a; sh.uniforms.uSnowB = SNOW.b; sh.uniforms.uSnowAmt = SNOW.amt; sh.uniforms.uSnowCol = SNOW.col;
