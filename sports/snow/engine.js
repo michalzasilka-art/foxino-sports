@@ -370,6 +370,10 @@ E.ask = (opts = {}) => new Promise((resolve) => {
   // (tests) the bot answers by itself: right, except every 4th question (?bot=1), or always wrong (?bot=wrong)
   if (BOT) setTimeout(() => { if (ASK && ASK.q === q && !ASK.done) answer(BOT === 'wrong' ? (q.correct + 1) % q.words.length : (BOT === '1' && E.asked % 4 === 0) ? (q.correct + 1) % q.words.length : q.correct); }, 900 / SPEED);
 });
+// (2026-11-24) a question can be closed unanswered (Ski Jump: the ramp ends while it is up): it counts neither way
+E.cancelAsk = () => { const A = ASK; if (!A) return; A.done = true; labelEls.forEach((el) => el.classList.remove('on')); bubbles.forEach((b) => { b.target = 0; });
+  $('card').classList.add('hidden'); document.body.classList.remove('asking'); E.slow = 1; ASK = null; A.resolve({ ok: false, cancelled: true, skipped: true }); };
+E.sfx = sfx;
 function answer(k) {
   const A = ASK; if (!A || A.done) return; A.done = true;
   const q = A.q, ok = k === q.correct, secs = (performance.now() - A.t0) / 1000;
@@ -510,7 +514,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 3, skijump: 3, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 3, skijump: 4, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
