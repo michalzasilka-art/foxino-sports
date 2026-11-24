@@ -90,7 +90,7 @@ export function stringLights(parent, posts, { sag = 0.4, per = 10, size = 0.07, 
 // ---------- the shared prop kit (from the PC) ----------
 let KIT = null;
 export async function loadXmasKit(loader, url = '/sports/models/xmas/xmas-kit.glb?v=1') {
-  if (KIT !== null) return KIT; try { const g = await loader.loadAsync(url); KIT = g.scene; KIT.traverse((o) => { if (o.isMesh) { const m = o.material; if (m && /glow/i.test(m.name || '')) { o.material = new THREE.MeshBasicMaterial({ color: m.color || 0xffd27a, map: m.map || null, toneMapped: false }); o.userData.noSnow = true; o.userData.noCast = true; } else { o.castShadow = true; o.receiveShadow = true; } } }); } catch (e) { KIT = false; }
+  if (KIT !== null) return KIT; try { const g = await loader.loadAsync(url); KIT = g.scene; KIT.traverse((o) => { if (o.isMesh) { const m = o.material; if (m && /glow/i.test(m.name || '')) { const c = (m.emissive && m.emissive.getHex() ? m.emissive.clone().multiplyScalar(Math.max(1, m.emissiveIntensity || 1)) : null) || m.color || new THREE.Color(0xffd27a); o.material = new THREE.MeshBasicMaterial({ color: c, map: m.map || null, toneMapped: false }); o.userData.glow = true; o.userData.noSnow = true; o.userData.noCast = true; } else { o.castShadow = true; o.receiveShadow = true; } } }); } catch (e) { KIT = false; }
   return KIT;
 }
 export function kitPart(name) { if (!KIT) return null; const src = KIT.getObjectByName(name); if (!src) return null; const c = src.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1); return c; }

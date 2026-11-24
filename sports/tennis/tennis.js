@@ -13,7 +13,7 @@ import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=1';
-import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=1';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
+import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=2';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -911,7 +911,7 @@ async function xmasDress() {
   snowCover(world);
   const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
   if (await loadXmasKit(L)) {   // (the PC's prop kit: until it is in, the court is dressed with snow and lights only)
-    for (const s of [-1, 1]) { placeKit(world, 'XmasTree_Big', s * 14.2, -24.6, { rot: s * 0.4 }); placeKit(world, 'XmasTree_Small', s * 10.9, -21.1, { rot: s }); if (placeKit(world, 'Snowman', s * 9.2, -15.5, { rot: -s * 0.5 })) world.children.filter((c) => c.name === 'Snowman-fallback').forEach((c) => world.remove(c));
+    for (const s of [-1, 1]) { placeKit(world, 'XmasTree_Big', s * 6.6, -28.6, { rot: s * 0.4, s: 1.6 });   /* (two big trees either side of the score screen, over Rob's stand) */ placeKit(world, 'XmasTree_Small', s * 10.9, -21.1, { rot: s }); if (placeKit(world, 'Snowman', s * 9.2, -15.5, { rot: -s * 0.5 })) world.children.filter((c) => c.name === 'Snowman-fallback').forEach((c) => world.remove(c));
       placeKit(world, 'Lantern', s * 10.7, -9, { rot: s * Math.PI / 2 }); placeKit(world, 'Lantern', s * 10.7, 9, { rot: s * Math.PI / 2 }); placeKit(world, 'Wreath', s * 4.5, 0, { y: 7.2, rot: 0 })?.position.set(s * 4.55, 7.2, -27.0); }
     placeKit(world, 'Gift_A', 8.5, 0.9, { rot: 0.3 }); placeKit(world, 'Gift_B', 8.9, 0.2, { rot: -0.4 }); placeKit(world, 'Gift_C', 8.4, -0.7, { rot: 0.9 });
     placeKit(world, 'Sleigh', -15.5, -21.5, { rot: 0.6 }); placeKit(world, 'SnowDrift_A', 13.5, -19.6); placeKit(world, 'SnowDrift_B', -12.8, 19.8, { rot: 2 });
