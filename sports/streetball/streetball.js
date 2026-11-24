@@ -19,6 +19,7 @@ import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=2';
 import { BPOSES } from './poses.js?v=1';
 import { makeAnimChar } from './charanim.js?v=2';
+import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -38,12 +39,12 @@ const TINTS = [0xff6fb5, 0xffcd1c, 0x48d8ff], CSS_TINTS = ['#ff8fc4', '#ffd84a',
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, powerPreference: 'high-performance' });
 let pr = Math.min(window.devicePixelRatio || 1, 2);
 renderer.setPixelRatio(pr); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xf2d2b0, 45, 140);
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x8d8ac6, 45, 140);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
-paintedSky(scene, '/adventures/sky/sky-sea-sunset.webp?v=1', { envRenderer: renderer, yaw: 0.25 });
+paintedSky(scene, '/sports/art/sky-winter-dusk.webp?v=1', { envRenderer: renderer, yaw: 0.25, onFog: () => scene.fog.color.set(0x8d8ac6) });   // (Christmas: a winter dusk with a soft aurora, a cool haze)
 { const pm = new THREE.PMREMGenerator(renderer); const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 16, 8), new THREE.MeshBasicMaterial({ color: 0xf2c9a0, side: THREE.BackSide }))); scene.environment = pm.fromScene(es, 0.02).texture; pm.dispose(); }
 // (2026-11-17, "ultimate" pass) golden hour: a low warm sun with long soft shadows, a cool sky fill, a cyan rim from behind
-scene.add(new THREE.HemisphereLight(0xffe8d0, 0x5a4a7a, 0.9));
+scene.add(new THREE.HemisphereLight(0xe6e8ff, 0x8a86b4, 1.0));   // (Christmas: a cool sky, snow light from below)
 const sun = new THREE.DirectionalLight(0xffd3a2, 2.1); sun.position.set(-13, 10, 11); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 1, far: 60 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 4;
 sun.target.position.set(0, 0, 5); scene.add(sun, sun.target);
@@ -71,6 +72,29 @@ async function loadCourt() {
   if (missing.length) standIns(missing);
   if (NET) { NET_BASE = NET.scale.clone(); NET.userData.base = NET_BASE.clone(); }
   await makeCrowd();
+  await xmasDress().catch((e) => console.warn('xmas', e));
+}
+// ---------- Christmas (2026-11-24): snow round the court and on top of things, lights on the fences and the wall, the shared props, falling snow ----------
+const XM = { snow: null, lights: [] };
+async function xmasDress() {
+  for (const n of ['sb-wall', 'sb-city', 'sb-fences', 'sb-bleachers', 'sb-props', 'sb-hoop', 'sb-extras']) if (SB[n]) snowCover(SB[n]);   // (never the court floor itself)
+  { const sh = new THREE.Shape([new THREE.Vector2(-60, -60), new THREE.Vector2(60, -60), new THREE.Vector2(60, 60), new THREE.Vector2(-60, 60)]);   // snow on the ground round the court (a hole where the court is)
+    sh.holes.push(new THREE.Path([new THREE.Vector2(-8.45, 3.9), new THREE.Vector2(8.45, 3.9), new THREE.Vector2(8.45, -15.3), new THREE.Vector2(-8.45, -15.3)]));
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#eef2fb'; g.fillRect(0, 0, 128, 128); for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(${Math.random() < 0.6 ? '160,175,220' : '255,255,255'},${Math.random() * 0.18})`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.12, 0.12);
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 })); m.position.y = 0.015; m.receiveShadow = true; m.userData.noSnow = true; scene.add(m); }
+  XM.snow = makeSnowfall({ n: innerWidth * innerHeight < 500000 ? 700 : 1100, box: [22, 12, 26], ahead: 0.45 }); scene.add(XM.snow);
+  for (const s of [-1, 1]) XM.lights.push(stringLights(scene, [-2, 2.5, 7, 11.5, 15].map((z) => new THREE.Vector3(s * 8.3, 3.15, z)), { sag: 0.3, per: 8 }));
+  XM.lights.push(stringLights(scene, [-9, -4.5, 0, 4.5, 9].map((x) => new THREE.Vector3(x, 5.3, -3.6)), { sag: 0.35, per: 9, warm: true }));   // (along the brick wall behind the hoop)
+  const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+  if (await loadXmasKit(L)) {
+    for (const s of [-1, 1]) {
+      placeKit(scene, 'XmasTree_Small', s * 7.0, -2.9, { rot: s * 0.6, s: 1.45 }); placeKit(scene, 'Snowman', s * 7.5, -0.9, { rot: -s * 0.6 });
+      placeKit(scene, 'XmasTree_Big', s * 12.2, -2.2, { rot: s, s: 1.4 }); placeKit(scene, 'XmasTree_Big', s * 13.5, 9, { rot: -s, s: 1.2 });
+      placeKit(scene, 'Wreath', s * 3.6, -3.68, { y: 3.4 }); placeKit(scene, 'Lantern', s * 9.0, -3.2, { rot: 0 }); }
+    placeKit(scene, 'Gift_A', -7.3, 9.2, { rot: 0.4 }); placeKit(scene, 'Gift_B', -7.6, 9.9, { rot: -0.5 }); placeKit(scene, 'Gift_C', 7.4, 11.0, { rot: 0.9 });
+    placeKit(scene, 'SnowDrift_A', -10.5, 3.5, { rot: 1.6 }); placeKit(scene, 'SnowDrift_B', 10.6, 6, { rot: 1.4 }); placeKit(scene, 'SnowPile', 9.4, -3.5);
+  }
 }
 let chainTex = null;
 function chainMat() {
@@ -767,6 +791,7 @@ function frame(now) {
   SLOWMO = Math.max(0, SLOWMO - dt); const ts = dt * G.slow * (SLOWMO > 0 ? 0.4 : 1); GT += ts;
   tickWaits(ts);
   updatePlayers(dt, GT, ts); updateBall(dt, GT, ts); updateBubbles(dt, T); updateNet(dt); updateCrowd(T, dt); updateExtras(dt); BURST.update(dt); updateTrail(); placeCamera(dt);
+  if (XM.snow) XM.snow.update(T, camera, pr); for (const l of XM.lights) l.update(T);
   POSTFX.draw(scene, camera, 9);
   updateLabels();
   if (POSTFX.governor(dt) && pr > 1) { pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); resize(); }
@@ -783,5 +808,5 @@ function frame(now) {
   setTimeout(() => $('loading').classList.add('gone'), 150);
   renderStart();
   if (LIST) { unlock(); match(); } else $('start').classList.remove('hidden');
-  window.SB = { G, P, BL, answer, get ask() { return G.ask; }, renderer, scene, POSTFX, models: () => Object.keys(SB) };
+  window.SB = { G, P, BL, answer, get ask() { return G.ask; }, renderer, scene, camera, POSTFX, models: () => Object.keys(SB) };
 })();
