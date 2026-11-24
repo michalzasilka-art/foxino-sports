@@ -45,6 +45,17 @@ export default {
     E.drawDist = 150;
     this.reset(E);
   },
+  // Christmas (2026-11-24): lights strung over the targets, decorated trees either side of the range, gifts; fairy lights round the loop
+  xmas(E, X) {
+    if (!X.ok) return; const { THREE } = E, side = new THREE.Vector3(...S.R.side), along = new THREE.Vector3(...S.R.along), T0 = new THREE.Vector3(...S.R.targets), M = new THREE.Vector3(...S.R.mat);
+    const R = (a, b, y = 0) => T0.clone().addScaledVector(along, a).addScaledVector(side, b).setY(T0.y + y), ry = Math.atan2(-side.x, -side.z);
+    X.lights([R(-9, -0.6, 3.6), R(-4.5, -0.6, 3.1), R(0, -0.6, 3.6), R(4.5, -0.6, 3.1), R(9, -0.6, 3.6)], { sag: 0.45, per: 7, size: 0.16, glow: 1.2 });
+    for (const sd of [1, -1]) { X.put('XmasTree_Big', R(sd * 10.5, 0.5), ry + sd, 1.45); X.put('Gift_A', R(sd * 8.6, -1.6), sd); X.put('Gift_C', R(sd * 9.4, -2.6), -sd); X.put('Lantern', M.clone().addScaledVector(along, sd * 3.2).addScaledVector(side, -0.5), ry); }
+    X.put('Gift_B', R(-2.2, -1.4), 0.4); X.put('Gift_A', R(2.6, -1.5), -0.6); X.put('Sleigh', M.clone().addScaledVector(side, -7).addScaledVector(along, 9), ry + 2.6);
+    const at = (s, sd, w, dy = 0) => { const c = S.path.at(s); return c.p.clone().addScaledVector(c.nrm, sd * w).setY(c.p.y + dy); };
+    for (const sd of [1, -1]) for (let s0 = 0; s0 < LO; s0 += 40) { const posts = []; for (let s = s0; s <= s0 + 40; s += 10) posts.push(at(s % LO, sd, 4.2, 1.1)); X.lights(posts, { sag: 0.35, per: 5, size: 0.12, glow: 1.0 }); }
+    for (let s = 40, i = 0; s < LO - 30; s += 70, i++) { const sd = i % 2 ? 1 : -1, c = S.path.at(s); X.put('XmasTree_Small', at(s, sd, 7), c.yaw + i, 2.0); X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], at(s - 2, sd, 5.4), i); }
+  },
   reset(E) { Object.assign(S, { s: START, v: 0, time: 0, pen: 0, hits: 0, phase: 'menu', stand: 0, ballT: -1, throwT: -1, shot: 'chase', shotT: 0 }); S.ball.visible = false; E.snapCam(); },
   menu() { S.phase = 'menu'; },
   async run(E) {
