@@ -44,6 +44,11 @@ const P0 = { tuck(t) { const p = blank(); p.legL = [-1.25, 0, 0.06]; p.legR = [-
 function blank() { const p = { y: 0, tail: 0 }; for (const j of ['hips', 'spine', 'neck', 'head', 'armL', 'elbowL', 'armR', 'elbowR', 'legL', 'kneeL', 'ankleL', 'legR', 'kneeR', 'ankleR']) p[j] = [0, 0, 0]; return p; }
 
 export const _S = S;
+// (2026-11-25, the user: "this is the intro fix it make it so it doesnt cover the screen") a camera in front of him down the ramp, looking back
+// up at him (ang: the in-run's slope at him), so the start screen and the first metres show Foxino, the ramp and the hill, not the start tower
+function frontCam(P, ang, sway) { const ca = Math.cos(ang), sa = Math.sin(ang), down = { x: 0, y: -sa, z: ca }, up = { x: 0, y: ca, z: sa };
+  const pos = P.clone(); pos.x += 1.3 + sway; pos.y += down.y * 6.5 + up.y * 1.7; pos.z += down.z * 6.5 + up.z * 1.7;
+  const look = P.clone(); look.y += up.y * 0.55; look.z += up.z * 0.55; return { pos, look }; }
 export default {
   id: 'skijump', blurb: 'Right words give speed, a perfect take-off and a longer flight. Two jumps!',
   light: { sky: 'alpine-gold', skyYaw: 0.55, skyBase: 0.22, sunDir: [0.75, 0.4, 0.45], sun: 0xffe4c4, sunI: 2.5, hemiSky: 0xdde6ff, hemiGround: 0x9a86c8, hemi: 0.9, rim: 0xffb27a, rimI: 1.0, exposure: 0.96, fog: [180, 760], fogColor: 0xf8d6bc, flakes: 120, flakeA: 0.35 },
@@ -148,8 +153,9 @@ export default {
     if (S.phase === 'menu' || S.phase === 'bar') {
       inrunAt(0.5, c); a.g.position.copy(c.p); pitch = c.ang; P = P0.sit(t);
       const Pp = a.g.position;
-      if (S.phase === 'menu') { const ang = t * 0.12 + 0.9; E.cam(new THREE.Vector3(Pp.x + Math.cos(ang) * 4.5, Pp.y + 1.6, Pp.z + Math.sin(ang) * 4.5), Pp.clone().setY(Pp.y + 0.6), 3, 50); }
-      else E.cam(new THREE.Vector3(Pp.x + 3.6, Pp.y + 1.4, Pp.z + 2.5), Pp.clone().setY(Pp.y + 0.5).add(new THREE.Vector3(0, -2, 6)), 3, 55);
+      // (2026-11-25, the user: "this is the intro fix it make it so it doesnt cover the screen") the start screen: a wide shot from beside and in
+      // front of the start bar, the ramp and the hill behind him (the old orbit went through the start tower and filled the screen)
+      { const o = frontCam(Pp, c.ang, S.phase === 'menu' ? Math.sin(t * 0.25) * 0.7 : 0); E.cam(o.pos, o.look, 3, 52); }   // (in front of him, looking back up at the start bar: the whole start in view)
       E.focusAt = Pp; E.focus = 4.5;
     } else if (S.phase === 'inrun') {
       inrunAt(S.s, c);
@@ -195,7 +201,14 @@ export default {
     if (S.phase === 'inrun') {
       if (S.asking === 'takeoff') { pos = new THREE.Vector3(7, P.y + 1.5, P.z + 4); look = P.clone().setY(P.y + 0.4).add(new THREE.Vector3(0, 0, 3)); k = 4; fov = 52; }
       else { const c = inrunAt(S.s, { p: new THREE.Vector3(), ang: 0 }), ca = Math.cos(c.ang), sa = Math.sin(c.ang);
-        pos = P.clone().add(new THREE.Vector3(0.5, sa * 5.5 + ca * 2.0, -ca * 5.5 + sa * 2.0)); look = P.clone().add(new THREE.Vector3(0, -sa * 7 + 0.4, ca * 7)); k = 7; fov = 62; }
+        pos = P.clone().add(new THREE.Vector3(0.5, sa * 5.5 + ca * 2.0, -ca * 5.5 + sa * 2.0)); look = P.clone().add(new THREE.Vector3(0, -sa * 7 + 0.4, ca * 7)); k = 7; fov = 62;
+        // (2026-11-25) the first metres: 5.5 m behind him is still inside the start tower (a pink/orange screen while he speeds up), so the
+        // camera starts in front of him looking back up (as on the start screen), then cranes up over his head to behind him once he is clear
+        const out = Math.max(0, Math.min(1, (S.s - 7) / 20)), b = out * out * (3 - 2 * out);
+        if (b < 1) { const F = frontCam(P, c.ang, 0), M = P.clone().add(new THREE.Vector3(1.0, 0, 0)).addScaledVector(new THREE.Vector3(0, ca, sa), 5.2).addScaledVector(new THREE.Vector3(0, -sa, ca), -0.6), q = 1 - b;
+          pos.set(0, 0, 0).addScaledVector(F.pos, q * q).addScaledVector(M, 2 * q * b).addScaledVector(pos.clone(), b * b);   // (a curve: front → over his head → behind, never through him)
+          look.lerp(P.clone().addScaledVector(new THREE.Vector3(0, ca, sa), 0.6), Math.min(1, q * 2.2)); fov = 54 + 8 * b; k = 12; }
+      }
     } else if (S.phase === 'flight') {
       const f = S.fl, u = f.z / f.D;
       if (S.asking === 'flight' || u < 0.75) { pos = P.clone().add(new THREE.Vector3(8.5, 1.8, -3)); look = P.clone().add(new THREE.Vector3(0, -0.6, 3)); k = 5; fov = 56; }
