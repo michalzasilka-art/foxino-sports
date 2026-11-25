@@ -242,11 +242,22 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
   A.pose = (P, k = 12, dt = 1 / 60) => fox.apply(P, k, dt);
   // the gear follows the feet and the hands every frame
   A.update = () => {
+    // (2026-11-25, the user: "the legs arent matching ... there are 2 sticks holding it above it, i want the plank touching the slope") with the
+    // Tripo gear the board and skis lie flat on the snow and his body is lifted (or lowered) so his ankles end exactly at the boot tops: his shins
+    // never poke out under the board or the skis
+    if (A.tg && A.baseY == null) A.baseY = fox.root.position.y;
+    if (A.tg && (A.board || (A.skis.length && !A.skiFree))) {
+      fox.root.position.y = A.baseY; g.updateMatrixWorld(true);
+      fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); g.worldToLocal(_v); g.worldToLocal(_v2);
+      const H = A.board ? -A.board.userData.tb.bottom * (A.bScale || 1) : Math.max(-A.skis[0].userData.bottom, -A.skis[1].userData.bottom);
+      const lift = A.board ? H - (_v.y + _v2.y) / 2 : H - Math.min(_v.y, _v2.y);
+      A.lift = lift; fox.root.position.y = A.baseY + lift;
+    } else if (A.tg && A.baseY != null) { fox.root.position.y = A.baseY; A.lift = 0; }
     g.updateMatrixWorld(true);
     const feet = [fox.bones.LeftFoot, fox.bones.RightFoot], hands = [fox.bones.LeftHand, fox.bones.RightHand];
     if (A.skis.length) feet.forEach((b, i) => {
       const s = A.skis[i]; b.getWorldPosition(_v); g.worldToLocal(_v);
-      if (A.tg) { s.position.copy(_v); if (!A.skiFree) s.position.y = Math.max(_v.y, -s.userData.bottom); }   // (the boot top at the ankle; never through the snow)
+      if (A.tg) { s.position.copy(_v); }   // (the boot top at the ankle: on the snow the body was lifted so the lower ski's base is on the snow)
       else if (A.skiFree) { s.position.copy(_v).add(_v2.set(0, -0.09, 0.05)); }
       else { s.position.set(_v.x, Math.max(0, _v.y - 0.1), _v.z + 0.04); }
       s.rotation.set(A.skiPitch, A.skiYaw[i], A.skiRoll, 'YXZ');
@@ -259,7 +270,7 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
       const tb = A.board.userData.tb; fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); g.worldToLocal(_v); g.worldToLocal(_v2);
       if ((A.bN = (A.bN || 0) + 1) < 40) { const d = Math.hypot(_v2.x - _v.x, _v2.z - _v.z); A.bScale = Math.max(A.bScale || 0.8, Math.min(2.2, d / tb.gap)); A.board.scale.setScalar(A.bScale); }   // (sized over the first frames, to his widest stance)
       const yaw = Math.atan2(-(_v2.z - _v.z), _v2.x - _v.x); _v.add(_v2).multiplyScalar(0.5);
-      A.board.position.set(_v.x, Math.max(_v.y, -tb.bottom * A.bScale), _v.z); A.board.rotation.set(0, yaw, 0);
+      A.board.position.set(_v.x, -tb.bottom * A.bScale, _v.z); A.board.rotation.set(0, yaw, 0);   // (the base flat on the snow; his ankles were brought to the boot tops above)
     } else if (A.board) { fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); _v.add(_v2).multiplyScalar(0.5); g.worldToLocal(_v); A.board.position.set(_v.x * 0.3, Math.max(0, _v.y - 0.1), _v.z * 0.3); }
   };
   return A;
