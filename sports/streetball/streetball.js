@@ -12,7 +12,7 @@
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { GLTFLoader } from '/penalty/lib/GLTFLoader.js';
 import { MeshoptDecoder } from '/adventures/lib/meshopt_decoder.module.js';
-import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: 1 on 1 against the party friend)
+import { MP } from '../mp.js?v=3';   // (2026-11-25, multiplayer patch: 1 on 1 against the party friend)
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
@@ -582,13 +582,13 @@ const botAns = (q) => { const ok = Math.random() < 0.6; return { k: ok ? q.corre
 // one step: the same question on both phones; resolves my answer plus theirs ({them: {k, ok, ms}})
 async function duel(id, title, sub, spots, secs, fixRight = -1) {
   let q = null;
-  if (MP.alive && !MP.host) { const m = await mpWait('q', id, 25000); if (m) q = m.q; }
+  if (MP.alive && !MP.host) { const m = await mpWait('q', id, 45000); if (m) q = m.q; else MP.giveUp(); }
   if (!q) { q = FSQ.make(PACKS, packIds, { n: 3, count: G.asked }); if (q && fixRight >= 0 && fixRight !== q.correct) { const w = q.words.slice(); [w[fixRight], w[q.correct]] = [w[q.correct], w[fixRight]]; q.words = w; q.correct = fixRight; } if (q && MP.alive && MP.host) MP.send({ t: 'q', id, q }); }
   const mine = await ask(title, sub, spots, secs, -1, q); if (!q) return { ...mine, them: { k: -1, ok: false, ms: 99999 } };
   let them = null;
   if (MP.alive) { $('note').innerHTML += ` <span class="wait">· waiting for ${esc(MP.fname)}…</span>`;
     if (MP.host) { const a = await mpWait('ans', id, secs * 1000 + 6000); them = a ? { k: a.k, ms: a.ms } : { k: -1, ms: 99999 }; if (MP.alive) MP.send({ t: 'res', id, h: { k: mine.k, ms: mine.ms }, g: them }); }
-    else { MP.send({ t: 'ans', id, k: mine.k, ms: Math.round(mine.ms) }); const res = await mpWait('res', id, secs * 1000 + 15000); if (res) them = res.h; } }
+    else { MP.send({ t: 'ans', id, k: mine.k, ms: Math.round(mine.ms) }); const res = await mpWait('res', id, secs * 1000 + 30000); if (res) them = res.h; else MP.giveUp(); } }
   if (!them) them = botAns(q);
   const sp = document.querySelector('#note .wait'); if (sp) sp.remove();
   return { ...mine, them: { k: them.k, ms: them.ms, ok: them.k === q.correct } };
@@ -848,6 +848,6 @@ function frame(now) {
   setTimeout(() => $('loading').classList.add('gone'), 150);
   renderStart();
   window.MPBOT = { q: () => (G.ask && !G.ask.done ? { id: 'b' + G.asked, correct: G.ask.q.correct, n: G.ask.q.words.length } : null), answer: (k) => answer(k) };
-  if (LIST) { unlock(); if (MPS.on) { banner('GET READY', `1 on 1 with ${MP.fname}`); const ok = await MP.ready(25000); if (!ok) MPS.on = false; score(); } match(); } else $('start').classList.remove('hidden');
+  if (LIST) { unlock(); if (MPS.on) { banner('GET READY', `1 on 1 with ${MP.fname}`); const ok = await MP.ready(90000); if (!ok) MPS.on = false; score(); } match(); } else $('start').classList.remove('hidden');
   window.SB = { G, P, BL, answer, get ask() { return G.ask; }, renderer, scene, camera, POSTFX, models: () => Object.keys(SB) };
 })();

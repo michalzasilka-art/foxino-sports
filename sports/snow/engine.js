@@ -15,7 +15,7 @@ import { makeFoxinoGLB } from '/penalty/foxino-glb.js?v=3';
 import { blankPose } from '/penalty/foxino.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
-import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: the two players start together and see each other live)
+import { MP } from '../mp.js?v=3';   // (2026-11-25, multiplayer patch: the two players start together and see each other live)
 import { paintedSky, makePost } from '../look.js?v=3';
 import { loadXmasKit, placeKit, stringLights, bulbGlows } from '../xmas.js?v=5';   // (2026-11-24, the user: a Christmas atmosphere in every sport)
 
@@ -516,7 +516,7 @@ $('packBtn').onclick = async () => { if (!window.FugioPacks) return; const ids =
 async function play() {
   $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
   E.right = 0; E.asked = 0; E.combo = 0; E.missed = []; renderCombo(); E.running = true;
-  if (MP.on && !E.mpStarted) { E.mpStarted = true; E.banner('GET READY', `with ${MP.fname}`, 1500); const ok = await MP.ready(25000); if (ok) await E.sync('start'); }
+  if (MP.on && !E.mpStarted) { E.mpStarted = true; E.banner('GET READY', `with ${MP.fname}`, 1500); const ok = await MP.ready(90000); if (ok) await E.sync('start', 30000); }
   await MOD.run(E);
 }
 $('playBtn').onclick = () => { unlock(); sfx.click && sfx.click(); play(); };
@@ -532,7 +532,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 5, skijump: 5, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 6, skijump: 6, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

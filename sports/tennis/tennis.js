@@ -13,7 +13,7 @@ import { makeRob, RPOSES } from '/penalty/rob.js';
 import { makeBubble } from '/penalty/props.js';
 import { sfx, unlock, isMuted, setMuted } from '/penalty/sound.js';
 import { paintedSky, makePost } from '../look.js?v=1';
-import { MP } from '../mp.js?v=1';   // (2026-11-25, multiplayer patch: a party game goes through the lobby's link, no second connection)
+import { MP } from '../mp.js?v=3';   // (2026-11-25, multiplayer patch: a party game goes through the lobby's link, no second connection)
 import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '../xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
@@ -735,8 +735,8 @@ const FR = {
     FR.viaMP = true; FR.host = MP.host; FR.names = { h: MP.host ? MP.name : MP.fname, g: MP.host ? MP.fname : MP.name };
     MP.listen((m) => FR.msg(m, true));
     MP.onLost(() => { if (!FR.on) { if (!FR.started) { FR.viaMP = false; SOLO.start(); } return; } clearTimeout(FR.tmo); clearTimeout(FR.selfT); banner('YOUR FRIEND LEFT', 'the match ends here'); const g = FR.gms.slice(), mine = FR.host ? g[0] : g[1], theirs = FR.host ? g[1] : g[0]; setTimeout(() => FR.finish(mine >= theirs, g), 1800); });
-    const ok = await MP.ready(25000); if (!ok) { FR.viaMP = false; SOLO.start(); return; }
-    FR.started = true; if (!FR.host) FR.send({ t: 'hello', name: MP.name }); else $('loading').classList.add('gone');
+    const ok = await MP.ready(90000); if (!ok) { FR.viaMP = false; SOLO.start(); return; }
+    FR.started = true; if (!FR.host) { FR.send({ t: 'hello', name: MP.name }); setTimeout(() => { if (!FR.on && FR.viaMP) { MP.giveUp(); } }, 40000); } else $('loading').classList.add('gone');
   },
   send(m) { if (FR.viaMP) { MP.send(m); return; } try { if (FR.conn && FR.conn.open) FR.conn.send(m); } catch (e) {} },
   // the referee: to the friend and to this phone

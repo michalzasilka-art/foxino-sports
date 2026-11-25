@@ -168,6 +168,8 @@ function toast(html, ms = 2400) { const d = document.createElement('div'); d.inn
 const PT = { peer: null, conn: null, host: false, code: '', friend: null, libs: null, round: 0 };
 const loadJs = (src) => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
 const libs = () => PT.libs || (PT.libs = Promise.all([window.Peer ? 0 : loadJs('https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js'), window.qrcode ? 0 : loadJs('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js')]).catch((e) => { PT.libs = null; throw e; }));
+// (2026-11-25, school networks) PeerJS's own servers, plus its relays over TCP for networks that block UDP
+const ICE = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478', 'turn:eu-0.turn.peerjs.com:3478?transport=tcp', 'turn:us-0.turn.peerjs.com:3478?transport=tcp'], username: 'peerjs', credential: 'peerjsp' }] } };
 const inParty = () => !!(PT.conn && PT.conn.open && PT.friend);
 const leader = () => !inParty() || PT.host;
 function pErr(t) { $('pErr').textContent = t || ''; }
@@ -185,7 +187,7 @@ async function makeParty() {
   closePeer(); PT.host = true; PT.friend = null;
   const go = () => {
     PT.code = String(Math.floor(100000 + Math.random() * 900000));
-    const peer = new Peer('fugio-party-' + PT.code); PT.peer = peer;
+    const peer = new Peer('fugio-party-' + PT.code, ICE); PT.peer = peer;
     peer.on('open', () => {
       $('pHome').hidden = true; $('pHost').hidden = false; $('pCodeBig').textContent = PT.code.replace(/(\d{3})(\d{3})/, '$1 $2');
       const qr = qrcode(0, 'M'); qr.addData(`${location.origin}/sports/?join=${PT.code}`); qr.make(); $('pQr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
@@ -203,7 +205,7 @@ async function makeParty() {
 // the joiner lost the link (not a "leave"): try the same code again quietly, every 3 s for a minute
 function rejoin(code, n) { if (PT.friend || PT.byed || n > 20) { if (n > 20) toast('Could not reconnect. Join the party again.'); return; }
   if (n === 0) toast('Connection lost… reconnecting');
-  libs().then(() => { if (PT.friend) return; closePeer(); PT.host = false; PT.code = code; const peer = new Peer(); PT.peer = peer;
+  libs().then(() => { if (PT.friend) return; closePeer(); PT.host = false; PT.code = code; const peer = new Peer(ICE); PT.peer = peer;
     peer.on('error', () => { if (PT.peer === peer) { try { peer.destroy(); } catch (e) {} setTimeout(() => rejoin(code, n + 1), 3000); } });
     peer.on('open', () => { const conn = peer.connect('fugio-party-' + code, { reliable: true }); PT.conn = conn; wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: myName, kit: myKit() })); setTimeout(() => { if (!PT.friend && PT.peer === peer) { try { peer.destroy(); } catch (e) {} rejoin(code, n + 1); } }, 6000); }); }).catch(() => setTimeout(() => rejoin(code, n + 1), 3000)); }
 async function joinParty() { PT.byed = false;
@@ -211,7 +213,7 @@ async function joinParty() { PT.byed = false;
   const code = $('pCode').value.replace(/\D/g, ''); if (code.length !== 6) { pErr("Type your friend's 6-number code."); return; }
   pErr('Joining…'); try { await libs(); } catch (e) { pErr('No internet connection.'); return; }
   closePeer(); PT.host = false; PT.code = code; PT.friend = null;
-  const peer = new Peer(); PT.peer = peer;
+  const peer = new Peer(ICE); PT.peer = peer;
   peer.on('error', (e) => { if (PT.peer !== peer) return; pErr(e.type === 'peer-unavailable' ? "No party with this code. Check the code on your friend's phone." : 'Connection problem. Try again.'); });
   peer.on('open', () => { const conn = peer.connect('fugio-party-' + code, { reliable: true }); PT.conn = conn; wire(conn); conn.on('open', () => conn.send({ t: 'hello', name: myName, kit: myKit() })); });
 }
@@ -231,7 +233,7 @@ const MPB = { q: [], ready: -1 };
 function mpToFrame(d) { try { $('frame').contentWindow.postMessage({ mpIn: d }, '*'); } catch (e) {} }
 function mpLostToFrame() { try { $('frame').contentWindow && $('frame').contentWindow.postMessage({ mpLost: true }, '*'); } catch (e) {} }
 async function friendArrived(f) {
-  PT.friend = f; $('party').hidden = true; FRD.on = true; FRD.waveT = 0; ME.cheerT = 0; vib([30, 40, 60]); sfx.whistle && sfx.whistle();
+  PT.friend = f; PT.lastFriend = f.name; $('party').hidden = true; FRD.on = true; FRD.waveT = 0; ME.cheerT = 0; vib([30, 40, 60]); sfx.whistle && sfx.whistle();
   $('frTag').hidden = false; $('slot').hidden = true; $('frName').textContent = f.name.toUpperCase();
   if (!PT.host) { $('partyCode').hidden = false; $('partyCode').textContent = `PARTY ${PT.code.replace(/(\d{3})(\d{3})/, '$1 $2')}`; }
   toast(`🎉 ${esc(f.name)} joined the party!`);
@@ -321,7 +323,7 @@ function srcFor(id, i) {
 }
 function nextSport() {
   if (!RUN) return;
-  RUN.i++; $('result').hidden = true;
+  RUN.i++; RUN.waitOver = false; clearTimeout(RUN.waitT); $('result').hidden = true;
   if (RUN.i >= RUN.list.length) { stopList(); return; }
   const id = RUN.list[RUN.i]; MPB.ready = -1; MPB.q = MPB.q.filter((m) => m.r === RUN.round && m.i >= RUN.i);
   $('game').hidden = false; $('frame').src = srcFor(id, RUN.i);
@@ -342,7 +344,7 @@ addEventListener('message', (e) => {
 });
 function showResult(i) {
   if (!RUN || RUN.i !== i) return;
-  const id = RUN.list[i], r = RUN.mine[i] || {}, last = i >= RUN.list.length - 1, fname = PT.friend ? PT.friend.name : 'Friend';
+  const id = RUN.list[i], r = RUN.mine[i] || {}, last = i >= RUN.list.length - 1, fname = PT.friend ? PT.friend.name : PT.lastFriend || 'Friend';
   let body = '';
   if (id === 'penalty') {
     const th = RUN.their[i];
@@ -373,7 +375,8 @@ function showResult(i) {
   if (last) {
     const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : isSnow(sid) ? `${x.shown ?? '–'} ${x.unit || ''}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
     btns = `${RUN.list.length > 1 ? `<ul class="list">${sum}</ul>` : ''}<div class="btns"><button class="big" type="button" id="rDone">BACK TO THE STADIUM</button></div>`;
-  } else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
+  } else if (inParty() && PT.host && id !== 'tennis' && !RUN.their[i] && !RUN.waitOver) { btns = `<p class="line">NEXT comes when ${esc(fname)} has finished…</p>`; clearTimeout(RUN.waitT); RUN.waitT = setTimeout(() => { if (RUN && RUN.i === i && !RUN.their[i]) { RUN.waitOver = true; showResult(i); } }, 45000); }   /* (2026-11-25: never pull the friend out of a sport they are still playing) */
+  else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
   else btns = `<p class="line">Waiting for ${esc(fname)}…</p>`;
   $('rcard').innerHTML = body + btns; $('result').hidden = false;
   if ((id === 'penalty' && (r.stars || 0) >= 2) || r.won || (r.medal || 0) >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }

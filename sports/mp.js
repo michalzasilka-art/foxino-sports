@@ -12,29 +12,34 @@
 const Q = new URLSearchParams(location.search);
 const ROLE = Q.get('mp');
 const on = (ROLE === 'host' || ROLE === 'join') && window.parent !== window;
-const fns = [], lost = [];
+const fns = [], lost = [], early = [];   // (early: what came before the sport was listening: a slow phone still loading its 3D models)
 let hi = false, theirHi = false, alive = on, waiters = [];
 function post(m) { try { window.parent.postMessage(m, '*'); } catch (e) {} }
 export const MP = {
   on, host: ROLE === 'host', name: (Q.get('name') || 'You').slice(0, 12), fname: (Q.get('fname') || 'Friend').slice(0, 12),
   get alive() { return alive; },
   send(m) { if (on && alive) post({ mp: m }); },
-  listen(fn) { fns.push(fn); },
+  listen(fn) { fns.push(fn); if (early.length) { const q = early.splice(0); setTimeout(() => { for (const d of q) for (const f of fns) { try { f(d); } catch (err) { console.warn('mp', err); } } }, 0); } },
   onLost(fn) { if (!alive && on) fn(); else lost.push(fn); },
-  ready(ms = 25000) {
+  // the friend's frame or data never came: tell them, so BOTH play on alone (never one waiting for the other forever)
+  giveUp() { if (!on || !alive) return; post({ mp: { t: '_solo' } }); drop('gaveUp'); },
+  ready(ms = 90000) {
     if (!on) return Promise.resolve(false);
     if (theirHi) return Promise.resolve(true);
-    return new Promise((res) => { const w = { res }; waiters.push(w); w.t = setTimeout(() => { waiters = waiters.filter((x) => x !== w); res(false); }, ms); });
+    return new Promise((res) => { const w = { res }; waiters.push(w); w.t = setTimeout(() => { waiters = waiters.filter((x) => x !== w); MP.giveUp(); res(false); }, ms); });
   },
 };
-function drop() { if (!alive) return; alive = false; const L = lost.splice(0); for (const f of L) { try { f(); } catch (e) { console.warn(e); } } for (const w of waiters.splice(0)) { clearTimeout(w.t); w.res(false); } }
+window.__MP = MP; MP.why = '';   // (tests)
+function drop(why = 'lost') { if (!alive) return; alive = false; MP.why = why; const L = lost.splice(0); for (const f of L) { try { f(); } catch (e) { console.warn(e); } } for (const w of waiters.splice(0)) { clearTimeout(w.t); w.res(false); } }
 if (on) {
   addEventListener('message', (e) => {
     if (e.source !== window.parent) return; const m = e.data; if (!m || typeof m !== 'object') return;
-    if (m.mpLost) { drop(); return; }
+    if (m.mpLost) { drop('linkLost'); return; }
     if (!('mpIn' in m)) return; const d = m.mpIn; if (!d || typeof d !== 'object') return;
+    if (d.t === '_solo') { drop('friendGaveUp'); return; }
     if (d.t === '_hi') { if (!theirHi) { theirHi = true; MP.send({ t: '_hi' }); for (const w of waiters.splice(0)) { clearTimeout(w.t); w.res(true); } } return; }
     if (!alive) return;
+    if (!fns.length) { early.push(d); return; }
     for (const f of fns) { try { f(d); } catch (err) { console.warn('mp', err); } }
   });
   post({ mpHello: true });   // (the lobby flushes what came before this frame was up)
