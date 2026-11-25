@@ -16,7 +16,7 @@ function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, 
 
 export const _S = S;
 // (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
-const NB = !/[?&]nb=0/.test(location.search);   /* (?nb=0: the old rider) */
+const NB = /[?&]nb=1/.test(location.search);   /* (2026-11-25 02:00: the old rider is the default again for the school test: the new Snowboard Foxino read dark and hunched at phone size; ?nb=1 = the new one) */
 // the clip for where he is: on the walls he carves, at the lips he pumps, in the air a tuck or the trick's grab, then the landing
 function clipFor(st) {
   if (st.ph === 'menu' || st.ph === 'drop') return ['stance_idle', 1];
