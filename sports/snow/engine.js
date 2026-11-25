@@ -165,6 +165,42 @@ export async function addMountains(yBase = -200, tint = 0xffffff) {
 const FOX_URL = '/penalty/models/foxino-football.glb?v=1';
 let GEAR = null;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4();
+// (2026-11-25, the user: "make new models using tripo ai on my computer to create new skis and snowboard so it already has the snow boots on it
+// and you remove foxino feet to just make it look better attached") Tripo models (Foxino/Foxino Sports/Snow Gear (Tripo)): the snowboard with both
+// boots strapped in, and the skis with a boot clipped into each. Foxino's feet are hidden (the foot bones shrunk to nothing) and each boot's top
+// sits at his ankle. ?gear=0 brings back the old board and skis.
+const NEWGEAR = !/[?&]gear=0/.test(location.search);
+let TGEAR = null;
+function bakedGeo(root) { let mesh = null; root.updateMatrixWorld(true); root.traverse((o) => { if (o.isMesh && !mesh) mesh = o; }); const geo = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld); const mat = mesh.material; if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace; mat.roughness = 0.7; mat.metalness = 0; return { geo: geo.index ? geo.toNonIndexed() : geo, mat }; }
+// the boot: the vertices well above the board/ski; its top-centre becomes the origin (just under the rim, so the shin goes into it)
+function bootOf(P, idx, y0, y1) { let x = 0, z = 0, n = 0, top = -1e9; for (const i of idx) { const y = P[i * 3 + 1]; if (y < y0 + (y1 - y0) * 0.42) continue; x += P[i * 3]; z += P[i * 3 + 2]; n++; if (y > top) top = y; } return n ? { x: x / n, z: z / n, top } : null; }
+function prepBoard(root) {
+  const { geo, mat } = bakedGeo(root), P = geo.attributes.position.array, N = P.length / 3; geo.computeBoundingBox(); const bb = geo.boundingBox;
+  const all = [...Array(N).keys()], L = bootOf(P, all.filter((i) => P[i * 3] < 0), bb.min.y, bb.max.y), R = bootOf(P, all.filter((i) => P[i * 3] >= 0), bb.min.y, bb.max.y);
+  const ox = (L.x + R.x) / 2, oz = (L.z + R.z) / 2, oy = Math.max(L.top, R.top) - (bb.max.y - bb.min.y) * 0.12;
+  geo.translate(-ox, -oy, -oz);
+  return { geo, mat, gap: Math.hypot(R.x - L.x, R.z - L.z), bottom: bb.min.y - oy, len: bb.max.x - bb.min.x };
+}
+function prepSkis(root) {
+  const { geo, mat } = bakedGeo(root), P = geo.attributes.position.array, N = P.length / 3; geo.computeBoundingBox(); const bb = geo.boundingBox, out = [];
+  for (const side of [-1, 1]) {   // (split the pair: the triangles on each side of the middle)
+    const pos = []; for (let t = 0; t < N / 3; t++) { const cz = (P[t * 9 + 2] + P[t * 9 + 5] + P[t * 9 + 8]) / 3; if ((cz < 0 ? -1 : 1) === side) for (let k = 0; k < 9; k++) pos.push(P[t * 9 + k]); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const uvAll = geo.attributes.uv.array, uv = []; for (let t = 0; t < N / 3; t++) { const cz = (P[t * 9 + 2] + P[t * 9 + 5] + P[t * 9 + 8]) / 3; if ((cz < 0 ? -1 : 1) === side) for (let k = 0; k < 6; k++) uv.push(uvAll[t * 6 + k]); }
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    if (geo.attributes.normal) { const nA = geo.attributes.normal.array, nr = []; for (let t = 0; t < N / 3; t++) { const cz = (P[t * 9 + 2] + P[t * 9 + 5] + P[t * 9 + 8]) / 3; if ((cz < 0 ? -1 : 1) === side) for (let k = 0; k < 9; k++) nr.push(nA[t * 9 + k]); } g.setAttribute('normal', new THREE.Float32BufferAttribute(nr, 3)); } else g.computeVertexNormals();
+    const Q = g.attributes.position.array, M = Q.length / 3, idx = [...Array(M).keys()], b = bootOf(Q, idx, bb.min.y, bb.max.y);
+    let xmin = 1e9, xmax = -1e9; for (const i of idx) { xmin = Math.min(xmin, Q[i * 3]); xmax = Math.max(xmax, Q[i * 3]); }
+    let hiMin = -1e9, hiMax = -1e9; for (const i of idx) { const x = Q[i * 3], y = Q[i * 3 + 1]; if (x < xmin + 0.08) hiMin = Math.max(hiMin, y); if (x > xmax - 0.08) hiMax = Math.max(hiMax, y); }
+    g.translate(-b.x, -(b.top - (bb.max.y - bb.min.y) * 0.1), -b.z);
+    g.rotateY(hiMax > hiMin ? -Math.PI / 2 : Math.PI / 2);   // (the curved-up tip points forward, +z)
+    out.push({ geo: g, mat, bottom: bb.min.y - (b.top - (bb.max.y - bb.min.y) * 0.1) });
+  }
+  return out;   // [the -z one, the +z one]
+}
+// stretch a ski's front and back (not the boot): the jumping skis are long
+function stretchSki(geo, k) { if (k === 1) return geo; const g = geo.clone(), Q = g.attributes.position.array; for (let i = 2; i < Q.length; i += 3) { const z = Q[i], a = Math.abs(z); if (a > 0.13) Q[i] = Math.sign(z) * (0.13 + (a - 0.13) * k); } return g; }
+function loadTGear() { return TGEAR || (TGEAR = Promise.all([loadGLB('models/snowboard-boots.glb?v=1'), loadGLB('models/skis-boots.glb?v=1')]).then(([b, s]) => ({ board: prepBoard(b.scene), skis: prepSkis(s.scene) }))); }
 export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
   const [fg, gg] = await Promise.all([loadGLB(FOX_URL), GEAR || (GEAR = loadGLB('models/fox-gear.glb?v=1'))]);
   const raw = fg.scene; raw.updateMatrixWorld(true);
@@ -191,11 +227,16 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
   const A = { g, fox, gear, kit, skis: [], poles: [], board: null, sled: null, ball: null,
     skiYaw: [0, 0], skiPitch: 0, skiRoll: 0, skiFree: false, poleDir: [new THREE.Vector3(0.15, -1, -0.55), new THREE.Vector3(-0.15, -1, -0.55)], poleOn: true };
   await loadProps();
+  const TG = NEWGEAR && (gear === 'board' || gear === 'ski' || gear === 'jump') ? await loadTGear() : null; A.tg = !!TG;
+  if (TG) { for (const b of [fox.bones.LeftFoot, fox.bones.RightFoot]) b.scale.setScalar(0.001); }   // (his feet hidden: the boots are his feet now)
   if (gear === 'ski' || gear === 'xc' || gear === 'jump') {
-    for (let i = 0; i < 2; i++) { const s = prop('Ski'); if (gear === 'jump') s.scale.set(1, 1, 1.55); else if (gear === 'xc') s.scale.set(0.8, 1, 1.25); g.add(s); A.skis.push(s); }
+    for (let i = 0; i < 2; i++) { let s;
+      if (TG) { const k = gear === 'jump' ? 1.7 : 1.2, sk = TG.skis[i]; s = new THREE.Mesh(stretchSki(sk.geo, k), sk.mat); s.userData.bottom = sk.bottom; }
+      else { s = prop('Ski'); if (gear === 'jump') s.scale.set(1, 1, 1.55); else if (gear === 'xc') s.scale.set(0.8, 1, 1.25); }
+      g.add(s); A.skis.push(s); }
     if (gear !== 'jump') for (let i = 0; i < 2; i++) { const p = prop('Pole'); g.add(p); A.poles.push(p); }
   }
-  if (gear === 'board') { A.board = prop('Snowboard'); g.add(A.board); fox.root.rotation.y = -Math.PI / 2; }
+  if (gear === 'board') { A.board = TG ? new THREE.Mesh(TG.board.geo, TG.board.mat) : prop('Snowboard'); if (TG) A.board.userData.tb = TG.board; g.add(A.board); fox.root.rotation.y = -Math.PI / 2; }
   if (gear === 'sled') { A.sled = prop('Sled'); g.add(A.sled); }
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   A.pose = (P, k = 12, dt = 1 / 60) => fox.apply(P, k, dt);
@@ -205,7 +246,8 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
     const feet = [fox.bones.LeftFoot, fox.bones.RightFoot], hands = [fox.bones.LeftHand, fox.bones.RightHand];
     if (A.skis.length) feet.forEach((b, i) => {
       const s = A.skis[i]; b.getWorldPosition(_v); g.worldToLocal(_v);
-      if (A.skiFree) { s.position.copy(_v).add(_v2.set(0, -0.09, 0.05)); }
+      if (A.tg) { s.position.copy(_v); if (!A.skiFree) s.position.y = Math.max(_v.y, -s.userData.bottom); }   // (the boot top at the ankle; never through the snow)
+      else if (A.skiFree) { s.position.copy(_v).add(_v2.set(0, -0.09, 0.05)); }
       else { s.position.set(_v.x, Math.max(0, _v.y - 0.1), _v.z + 0.04); }
       s.rotation.set(A.skiPitch, A.skiYaw[i], A.skiRoll, 'YXZ');
     });
@@ -213,7 +255,12 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
       const p = A.poles[i]; p.visible = A.poleOn; b.getWorldPosition(_v); g.worldToLocal(_v); p.position.copy(_v);
       _v2.copy(A.poleDir[i]).normalize(); p.quaternion.setFromUnitVectors(_v.set(0, -1, 0), _v2);
     });
-    if (A.board) { fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); _v.add(_v2).multiplyScalar(0.5); g.worldToLocal(_v); A.board.position.set(_v.x * 0.3, Math.max(0, _v.y - 0.1), _v.z * 0.3); }
+    if (A.board && A.board.userData.tb) {   // (the Tripo board: centred between his ankles, turned along them, sized once so the boots sit under his shins)
+      const tb = A.board.userData.tb; fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); g.worldToLocal(_v); g.worldToLocal(_v2);
+      if ((A.bN = (A.bN || 0) + 1) < 40) { const d = Math.hypot(_v2.x - _v.x, _v2.z - _v.z); A.bScale = Math.max(A.bScale || 0.8, Math.min(2.2, d / tb.gap)); A.board.scale.setScalar(A.bScale); }   // (sized over the first frames, to his widest stance)
+      const yaw = Math.atan2(-(_v2.z - _v.z), _v2.x - _v.x); _v.add(_v2).multiplyScalar(0.5);
+      A.board.position.set(_v.x, Math.max(_v.y, -tb.bottom * A.bScale), _v.z); A.board.rotation.set(0, yaw, 0);
+    } else if (A.board) { fox.bones.LeftFoot.getWorldPosition(_v); fox.bones.RightFoot.getWorldPosition(_v2); _v.add(_v2).multiplyScalar(0.5); g.worldToLocal(_v); A.board.position.set(_v.x * 0.3, Math.max(0, _v.y - 0.1), _v.z * 0.3); }
   };
   return A;
 }
