@@ -96,9 +96,9 @@ let CARDN = 0;
 function trickCard(name, streak, oops = false, extra = '') { const c = fxRoot(); c.className = ''; c.dataset.gen = String(++CARDN); void c.offsetWidth; c.innerHTML = `<b>${name}</b>${streak >= 2 ? `<i>🔥 ${streak} in a row</i>` : ''}${extra ? `<i class="x">${extra}</i>` : ''}`;
   c.classList.add('go'); if (oops) c.classList.add('oops'); else if (streak >= 9) c.classList.add('lv9'); else if (streak >= 6) c.classList.add('lv6'); else if (streak >= 3) c.classList.add('lv3'); }
 // on landing: the trick's points count up over Foxino, then fly into the total at the top, which ticks up and bumps
-async function scoreFly(E, pts, at) { const c = fxRoot(), gen = c.dataset.gen; const v = at.clone().project(E.camera); let x = (v.x * 0.5 + 0.5) * innerWidth, y = (-v.y * 0.5 + 0.5) * innerHeight; x = Math.max(70, Math.min(innerWidth - 70, x)); y = Math.max(150, Math.min(innerHeight - 120, y));
-  const d = document.createElement('div'); d.className = 'scoreFly'; d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = '+0'; document.body.appendChild(d);
-  await new Promise((r) => setTimeout(r, 350));   // (a short beat with +0 shown before it counts)
+async function scoreFly(E, pts, at) { if (!(pts > 0)) return; while (S.fall > 0) await new Promise((r) => setTimeout(r, 120));   /* (2026-11-26: no score while he is down in a crash; never a +0) */
+  const c = fxRoot(), gen = c.dataset.gen; const v = at.clone().project(E.camera); let x = (v.x * 0.5 + 0.5) * innerWidth, y = (-v.y * 0.5 + 0.5) * innerHeight; x = Math.max(70, Math.min(innerWidth - 70, x)); y = Math.max(150, Math.min(innerHeight - 120, y));
+  const d = document.createElement('div'); d.className = 'scoreFly'; d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = ''; document.body.appendChild(d);   // (2026-11-26: the old '+0' beat read like a broken score: it starts counting at once)
   const t0 = performance.now(), up = 1100; let last = -1; S.shown = S.pts;   /* (2026-11-25, the user: "make the animation slower": the count-up 0.52 → 1.1 s, the flight 0.43 → 0.85 s, the total 0.45 → 0.8 s) */
   await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t0) / up), n = Math.round(pts * (1 - Math.pow(1 - k, 3))); d.textContent = '+' + n; if ((n / 10 | 0) !== last) { last = n / 10 | 0; try { E.sfx.click && E.sfx.click(); } catch (e) {} } if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
   await new Promise((r) => setTimeout(r, 450)); if (c.dataset.gen === gen) c.classList.add('out'); await new Promise((r) => setTimeout(r, 300));
@@ -400,7 +400,7 @@ export default {
       // the trick: spins round the vertical, flips; a grab in the middle (the new rider: wind-up, turn + grab, spot the landing)
       const w = (f - t0) / (t1 - t0), TT = TA ? trickAt(T, w, !!T.fail) : null; if (TT) S.tc = [TT.clip, (a.dur && a.dur[TT.clip] || 1) / Math.max(0.12, TT.frac * (t1 - t0) * S.airT / slowFor(t1 - t0))]; else S.tc = null;
       const k = TT ? TT.k : T ? smoothStep(w) : 0;
-      S.spin = T ? T[1] * Math.PI * 2 * k : 0; S.flip = T ? T[2] * Math.PI * 2 * k : 0; S.cork = T ? T[3] * 0.55 * Math.sin(Math.PI * k) : 0;
+      S.spin = T ? T[1] * Math.PI * 2 * k : 0; S.flip = T ? (T[2] + (a.isClip ? T[3] : 0)) * Math.PI * 2 * k : 0;   /* (a cork = an off-axis flip with the spin) */ S.cork = T ? T[3] * 0.55 * Math.sin(Math.PI * k) : 0;
       if (T && T !== OOPS && !T.fail && k > 0.02 && k < 0.99) act = { T, k };
       P = T && T !== OOPS && k > 0.08 && k < 0.93 ? this.grabPose(t, T[4], Math.min(1, Math.sin(Math.PI * k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
       if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS || (S.trick && S.trick.fail)) { S.fallBack = !S.trick[1]; this.wipe(E); } S.tc = null; }
@@ -437,7 +437,7 @@ export default {
         // (the latest trick that has started decides the clip; a trick done early in the big air goes back to the calm air pose, not spotting a landing)
         if (TT && w > 0) { const early = tr.f1 < 0.8, cl = TT.clip === 'spot_land' && early ? 'air_tuck' : TT.clip;
           S.tc = w >= 1 ? (tr.fail ? S.tc : [early || f <= 0.82 ? 'air_tuck' : 'spot_land', 1]) : [cl, (a.dur && a.dur[cl] || 1) / Math.max(0.12, TT.frac * (tr.f1 - tr.f0) * S.airT / slowFor(tr.f1 - tr.f0))]; }
-        if (tr.fail) S.fallBack = !tr.T[1]; S.spin += tr.T[1] * Math.PI * 2 * k; S.flip += tr.T[2] * Math.PI * 2 * k; S.cork += tr.T[3] * 0.55 * Math.sin(Math.PI * k); if (k > 0.02 && k < 0.99) act = { T: tr.T, k }; }
+        if (tr.fail) S.fallBack = !tr.T[1]; S.spin += tr.T[1] * Math.PI * 2 * k; S.flip += (tr.T[2] + (a.isClip ? tr.T[3] : 0)) * Math.PI * 2 * k; S.cork += tr.T[3] * 0.55 * Math.sin(Math.PI * k); if (k > 0.02 && k < 0.99) act = { T: tr.T, k }; }
       P = act && act.T[4] && act.k > 0.08 && act.k < 0.93 ? this.grabPose(t, act.T[4], Math.min(1, Math.sin(Math.PI * act.k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
       if (f >= 1) { const big = S.phase === 'bair'; S.phase = big ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
@@ -527,6 +527,9 @@ export default {
     } else if (S.phase === 'bair' || S.phase === 'end') {
       // the big air: ahead of him and to the side, looking back up at the jump (the friend comes over the kicker behind)
       const air = S.phase === 'bair', zc = S.s + (air ? 8 : 10); pos = new THREE.Vector3(air ? 6 : 5, air ? Math.max(-zc * S.SL + 2, P.y - 0.6) : P.y + 1.8, zc); look = new THREE.Vector3(P.x * 0.5, P.y + (air ? (innerWidth > innerHeight ? 2.4 : 0.6) : 0.8), P.z - (air ? 0 : 3));   /* (a wide screen: aim above him, so he sits under the answer bubbles) */ k = S.asking ? 3 : 5; fov = air ? 62 : 58;   // (in the air: just ahead and a little below him, so he flies big over the huge kicker)
+    }
+    if (S.fall > 0 && (S.phase === 'end' || S.phase === 'line') && !(S.phase === 'line' && KICKS.some((K) => S.s > K.s - 4 && S.s < K.s + K.len + K.T * 8.5 + 2))) {   // (2026-11-26: a crash after the big air or on the run: framed on him, never off the edge)
+      pos = new THREE.Vector3(P.x + 3.2, P.y + 2.0, P.z + 5.2); look = P.clone().setY(P.y + 0.5); k = 6; fov = 52;
     } else if (S.phase === 'stop') {
       pos = new THREE.Vector3(P.x + 2.5, P.y + 1.5, P.z + 4.5); look = P.clone().setY(P.y + 0.8); k = 2; fov = 50;
     } else {
