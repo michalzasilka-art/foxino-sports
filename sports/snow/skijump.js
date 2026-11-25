@@ -4,7 +4,7 @@
 const S = { a: null, ghost: null, inrun: [], acc: [], LIN: 100, hill: [], phase: 'menu', s: 0, v: 0, z: 0, fl: null, jump: 0, dist: [], bonus: 0, takeoff: false, glide: 0, lines: {}, asking: '', stopT: 0, shotT: 0 };
 const THREEp = {};
 const FR_X = -6.5;   // (the friend's ramp, in a party game)
-const RAMP_T = 15, RAMP_END = 0.93, PER_RIGHT = 5.5;   // (the ramp: ~15 s at a steady speed; the questions stop at 93 %; metres per right answer)
+const RAMP_T = 15, RAMP_END = 0.93, PER_RIGHT = 5.5, V0 = 1.2;   // (the ramp: ~15 s, speeding up from V0 m/s all the way down; the questions stop at 93 %; metres per right answer)
 // (2026-11-24, the user: "make there a motion animation of your jump lenght adding up at the top of the screen when you land make it more
 // satysfiing") the metres tick up at the top while he flies; on landing they roll on to the final distance and pop
 let JM = null; function jumpMeter(on) { if (!JM) { const st = document.createElement('style'); st.textContent = `
@@ -153,7 +153,7 @@ export default {
       E.focusAt = Pp; E.focus = 4.5;
     } else if (S.phase === 'inrun') {
       inrunAt(S.s, c);
-      { const cruise = S.LIN * RAMP_END / RAMP_T; S.v = S.s < S.LIN * RAMP_END ? Math.min(cruise, S.v + 3.5 * dt) : Math.min(26, S.v + 16 * dt); } S.s += S.v * dt;   /* (2026-11-24: ~15 s down the ramp, then the push to the table) */
+      { const END = S.LIN * RAMP_END, acc = 2 * (END - V0 * RAMP_T) / (RAMP_T * RAMP_T); S.v = S.s < END ? Math.max(V0, S.v) + acc * dt : Math.min(26, S.v + 16 * dt); } S.s += S.v * dt;   /* (2026-11-25, the user: "make there acceleration so you dont go constant speed all the time": speeding up all the way down like gravity, still ~15 s to the table, then the push off it) */
       a.g.position.copy(c.p); pitch = c.ang; P = S.s > S.LIN - 4 ? P0.pop(t) : P0.tuck(t);
       if (S.s >= S.LIN) { // take-off: the target distance from the answers
         S.phase = 'flight';
