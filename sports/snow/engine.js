@@ -277,7 +277,7 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
 }
 // (2026-11-25) the Snowboard Foxino (Tripo + Claudee RCC, blender/foxino-snowboard): his own snowboard gear, no tail, the board in the model,
 // 19 animation clips. A.want(name) cross-fades to a clip (once-clips hold their last frame); A.update(dt) runs the clips.
-const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'grab_indy', 'grab_melon', 'grab_tail', 'grab_method', 'grab_stalefish', 'land', 'land_wobble', 'fall_sit', 'sad', 'wipeout']);
+const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'windup_spin', 'windup_flip', 'spot_land', 'wipeout_back', 'grab_indy', 'grab_melon', 'grab_tail', 'grab_method', 'grab_stalefish', 'land', 'land_wobble', 'fall_sit', 'sad', 'wipeout']);
 // (2026-11-25, the user: "Make 2 separate models / Ski / Foxino / Make the foxino so it just attached to the skis / Make sure that the skis arent
 // deformed ...") the skier: Foxino (Tripo + Claudee RCC, rigged, his own clips) and ONE straight ski model hung on his SkiL / SkiR mount bones.
 // jump: the ski-jumping skis are longer in front and behind (not at the binding).
@@ -314,7 +314,7 @@ export async function makeBoarder({ friend = false, url = 'models/foxino-snowboa
   const g = new THREE.Group(); g.add(inner); scene.add(g);
   const mixer = new THREE.AnimationMixer(inner), acts = {};
   for (const c of gl.animations) { const a = mixer.clipAction(c); if (ONCE_CLIPS.has(c.name)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } acts[c.name] = a; }
-  const A = { g, isClip: true, cur: '', skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts),
+  const A = { g, isClip: true, cur: '', skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts), dur: Object.fromEntries(gl.animations.map((c) => [c.name, c.duration])),
     want(name, fade = 0.18, speed = 1) { const a = acts[name]; if (!a) return; a.timeScale = speed; if (name === A.cur) return; const old = acts[A.cur]; a.reset(); a.enabled = true; a.setEffectiveWeight(1); a.play(); if (old) a.crossFadeFrom(old, fade, false); A.cur = name; },
     again(name, speed = 1) { A.cur = ''; A.want(name, 0.12, speed); },
     pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); } };
@@ -638,7 +638,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 10, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 8, skijump: 10, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

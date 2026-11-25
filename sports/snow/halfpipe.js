@@ -47,15 +47,34 @@ function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, 
 export const _S = S;
 // (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
 const QALL = (() => { let q = location.search; try { if (window.parent !== window) q += '&' + window.parent.location.search.slice(1); } catch (e) {} return q; })();   // (the switch also works on the Sports lobby's address: /sports/?nb=2)
-const NB = /[?&]nb=[12]/.test(QALL), RIDER_URL = /[?&]nb=2/.test(QALL) ? 'models/foxino-snowrider.glb?v=1' : 'models/foxino-snowboard.glb?v=1';   /* (2026-11-25: ?nb=2 = the snowrider: the whole Foxino on his board in a purple jacket and black ski pants (Tripo + Claudee RCC, 19 clips), behind a switch until it is approved) */   /* (2026-11-25 02:00: the old rider is the default again for the school test: the new Snowboard Foxino read dark and hunched at phone size; ?nb=1 = the new one) */
+const NB = !/[?&]nb=0/.test(QALL), RIDER_URL = /[?&]nb=1/.test(QALL) ? 'models/foxino-snowboard.glb?v=1' : 'models/foxino-snowrider.glb?v=2';   /* (2026-11-25 night: the snowrider (v2 clips) is the default rider; ?nb=0 = the old rider, ?nb=1 = the first Snowboard Foxino) */   /* (2026-11-25: ?nb=2 = the snowrider: the whole Foxino on his board in a purple jacket and black ski pants (Tripo + Claudee RCC, 19 clips), behind a switch until it is approved) */   /* (2026-11-25 02:00: the old rider is the default again for the school test: the new Snowboard Foxino read dark and hunched at phone size; ?nb=1 = the new one) */
+// (2026-11-25 night, the user: "The snowboard foxino should have bend knees bend a bit forward and jump while jump and until he makes a trick it
+// is natural like hes slowly going to do that trick because we already know what he will do if he fails he falls. Make it on every trick")
+// every trick's time in the air: a wind-up (his body leads, the board barely turns), the turn with the grab, then he spots the landing.
+// A missed word = he still goes for the trick he was about to do, but late: still turning as he lands, so he crashes. The air runs at TSLOW
+// while a trick is on, so the build-up reads.
+const TW = { wind: 0.28, spot: 0.84 }, TSLOW = 0.72, GRAB = { stale: 'stalefish' };
+// (the trick starts when the word is answered: the less air is left, the slower the air runs, so every trick takes about the same time)
+const slowFor = (len) => Math.max(0.3, Math.min(TSLOW, len / 0.5 * TSLOW));
+function trickAt(T, w, fail) {
+  w = Math.max(0, Math.min(1, w));
+  const k = fail ? Math.pow(Math.max(0, (w - TW.wind) / (1 - TW.wind)), 1.5) : w < TW.wind ? 0.04 * smoothStep(w / TW.wind) : 0.04 + 0.96 * smoothStep((w - TW.wind) / (TW.spot - TW.wind + 0.06));
+  const seg = w < TW.wind ? 'wind' : fail || w < TW.spot ? 'grab' : 'spot';
+  const clip = seg === 'wind' ? (T[1] ? 'windup_spin' : 'windup_flip') : seg === 'grab' ? 'grab_' + (GRAB[T[4]] || T[4] || 'indy') : 'spot_land';
+  const frac = seg === 'wind' ? TW.wind : seg === 'grab' ? (fail ? 1 - TW.wind : TW.spot - TW.wind) : 1 - TW.spot;
+  return { k, clip, frac };
+}
+const failTrick = (c0) => Object.assign(TRICKS[Math.max(0, Math.min(TRICKS.length - 1, c0))].slice(), { fail: true });
 // the clip for where he is: on the walls he carves, at the lips he pumps, in the air a tuck or the trick's grab, then the landing
 function clipFor(st) {
   if (st.ph === 'menu' || st.ph === 'drop') return ['stance_idle', 1];
-  if (st.fall && st.has && st.has.wipeout) return ['wipeout', 1];   // (the snowrider's own wipeout: down, slide, up)
+  if (st.fall && st.has && st.has.wipeout) return [st.fallBack && st.has.wipeout_back ? 'wipeout_back' : 'wipeout', 1];   // (the snowrider's own wipeout: down, slide, up)
   if (st.rail && st.has && st.has.boardslide) return ['boardslide', 1];
   if (st.ph === 'stop' || st.ph === 'out' && st.u > 0.7) return ['cheer', 1];
+  if (st.ph === 'air' && st.tc && st.has && st.has[st.tc[0]]) return st.tc;
+  if (st.ph === 'air' && st.has && st.has.windup_spin) return st.air < 0.3 ? ['takeoff', 1] : ['air_tuck', 1];
   if (st.ph === 'air') { if (st.gk && st.gkk > 0.02) return ['grab_' + st.gk, st.gs || 1]; return st.air < 0.32 && !st.tr ? ['takeoff', 1.3] : ['air_tuck', 1]; }
-  if (st.landT > 0) return [st.oops ? 'land_wobble' : 'land', st.oops ? 1.2 : 1.4];
+  if (st.landT > 0) return [st.oops && (!st.has || st.has.land_wobble) ? 'land_wobble' : 'land', st.oops ? 1.2 : 1.4];
   if (st.u > 0.86) return ['pump', 1.2];
   return [st.roll > 0.2 ? 'carve_left' : st.roll < -0.2 ? 'carve_right' : 'ride', 1];
 }
@@ -305,9 +324,9 @@ export default {
     for (const F of FEAT) {
       if (F.k === 'kick') {   // a kicker: the question in the air; a right word = a trick in what is left of the air; a miss = a wipeout on landing
         await E.until(() => S.phase === 'kair' && S.kick === F && S.air / S.airT >= 0.28);
-        S.asking = true; const r = await ask(F.name); S.asking = false; S.hit++; const f = S.air / S.airT; let due = 0;
+        const c0 = E.combo; S.asking = true; const r = await ask(F.name); S.asking = false; S.hit++; const f = S.air / S.airT; let due = 0;
         if (r.ok) { const T = ladder(r), sc = score(r, T[5]); S.airTr.push({ T, f0: f + 0.02, f1: Math.min(0.95, f + 0.55) }); due = sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
-        else { S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
+        else { S.bOops = true; if (S.a.isClip) S.airTr.push({ T: failTrick(c0), f0: f + 0.02, f1: 0.995, fail: true }); trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
         react(r); await E.until(() => S.phase !== 'kair'); if (due) free(due);
       } else if (F.k === 'rail') {   // a rail or box: the question on it; a right word = a slide; a miss = a wobble, then off and down at the end
         await E.until(() => S.phase === 'rail' && S.rail === F && S.s >= F.a + 1.2);
@@ -318,9 +337,10 @@ export default {
       } else if (F.k === 'pipe') {   // the U-ramp: a question at the top of each of the 3 airs
         for (let i = 0; i < HITS; i++) {
           await E.until(() => S.phase === 'air' && S.pN > i && S.air > 0.42 * S.airT);
-          S.asking = true; const r = await ask(`HALFPIPE AIR ${i + 1}`); S.asking = false; S.hit++;
+          const c0 = E.combo; S.asking = true; const r = await ask(`HALFPIPE AIR ${i + 1}`); S.asking = false; S.hit++;
+          S.tw0 = Math.min(0.8, S.air / S.airT);
           if (r.ok) { const T = ladder(r), sc = score(r, T[5]); S.trick = T; S.due = sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
-          else { S.trick = OOPS; S.due = 0; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
+          else { S.trick = S.a.isClip ? failTrick(c0) : OOPS; S.due = 0; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
           react(r); S.spin = 0; S.flip = 0;
           await E.until(() => S.phase !== 'air'); if (S.due) free(S.due); S.due = 0;
           E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` });
@@ -330,9 +350,9 @@ export default {
         for (let q = 0; q < 2; q++) {
           if (q === 1) await E.until(() => S.phase !== 'bair' || S.air / S.airT >= 0.56);
           if (S.phase !== 'bair') break;
-          S.asking = true; const r = await ask(`BIG AIR ${q + 1}`); S.asking = false; S.hit++; const f = S.air / S.airT;
+          const c0 = E.combo; S.asking = true; const r = await ask(`BIG AIR ${q + 1}`); S.asking = false; S.hit++; const f = S.air / S.airT;
           if (r.ok) { const T = ladder(r), sc = score(r, T[5]); S.airTr.push({ T, f0: f + 0.02, f1: Math.min(0.95, f + 0.33) }); due += sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
-          else { S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
+          else { if (!S.bOops && S.a.isClip) S.airTr.push({ T: failTrick(c0), f0: f + 0.02, f1: 0.995, fail: true }); S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
           react(r);
         }
         await E.until(() => S.phase !== 'bair'); if (due) free(due); await chain;
@@ -345,9 +365,9 @@ export default {
     E.finish({ score: S.pts, shown: `${S.pts}`, unit: 'points', better: 'high', line: `${QN} questions` });
   },
   // a wipeout (a wrong word or the clock ran out): he goes down, slides, gets up; the streak is gone
-  wipe(E) { if (S.fall > 0) return; S.fall = FALL; E.combo = 0; E.shake(0.55); E.spray.emit(S.a.g.position, 36, 0, 2.2, 2, 2.4); try { E.sfx.thud && E.sfx.thud(); } catch (e) {} },
+  wipe(E) { if (S.fall > 0) return; const dr = S.a && S.a.dur; S.fall = dr ? Math.max(FALL, (S.fallBack && dr.wipeout_back ? dr.wipeout_back : dr.wipeout || FALL) - 0.1) : FALL; E.combo = 0; E.shake(0.55); E.spray.emit(S.a.g.position, 36, 0, 2.2, 2, 2.4); try { E.sfx.thud && E.sfx.thud(); } catch (e) {} },
   // takeoff from a kicker: a parabola from the lip down to the slope (heights over the slope line)
-  takeoff(E, ph, K) { S.phase = ph; S.air = 0; S.airT = K.T; S.airH = K.H; S.lip = K.lip; S.airN = (S.airN || 0) + 1; S.airTr = []; S.bOops = false; S.trick = null; E.spray.emit(S.a.g.position, 16, 0, 3, 3, 1.6); },
+  takeoff(E, ph, K) { S.tc = null; S.phase = ph; S.air = 0; S.airT = K.T; S.airH = K.H; S.lip = K.lip; S.airN = (S.airN || 0) + 1; S.airTr = []; S.bOops = false; S.trick = null; E.spray.emit(S.a.g.position, 16, 0, 3, 3, 1.6); },
   update(E, dt, rdt) {
     const a = S.a; if (!a) return; const t = E.T, { THREE } = E;
     let y = 0, roll = 0, pitch = 0, P, act = null;
@@ -371,17 +391,19 @@ export default {
       P = S.fall > 0 ? this.ridePose(t, 1) : S.wob > 0 ? E.SP.wobble(t) : this.ridePose(t, Math.sin(Math.PI * u));
       if (Math.abs(S.d) < S.FLAT && dt > 0.002) E.spray.emit(a.g.position, 1, 0, 0.8, 0, 0.8, 0.09);
       if (S.pN >= HITS && S.u >= 0.5) { S.phase = 'line'; S.d = 0; }   // (the 3 pipe airs done: straight down the middle to the big air)
-      else if (S.u >= 1) { const lv = Math.min(11, E.combo); S.phase = 'air'; S.airN = (S.airN || 0) + 1; S.pN++; S.air = 0; S.airT = 1.15 + lv * 0.06; S.airH = 3.2 + lv * 0.16; S.trick = null; E.spray.emit(a.g.position, 14, 0, 3, 0, 1.6); }
+      else if (S.u >= 1) { const lv = Math.min(11, E.combo); S.phase = 'air'; S.airN = (S.airN || 0) + 1; S.pN++; S.air = 0; S.airT = 1.15 + lv * 0.06; S.airH = 3.2 + lv * 0.16; S.trick = null; S.tw0 = null; S.tc = null; E.spray.emit(a.g.position, 14, 0, 3, 0, 1.6); }
     } else if (S.phase === 'air') {
-      S.air += dt; const f = Math.min(1, S.air / S.airT);
+      const T = S.trick, TA = T && T !== OOPS && a.isClip, t0 = S.tw0 ?? 0.42, t1 = T && T.fail ? 0.995 : 0.95, w0 = (S.air / S.airT - t0) / (t1 - t0), sl = TA && w0 >= 0 && w0 < 1 ? slowFor(t1 - t0) : 1;
+      S.air += dt * sl; const f = Math.min(1, S.air / S.airT);   // (a trick on: the air in gentle slow motion)
       S.d = S.side * (W() + 0.25 * Math.sin(Math.PI * f));
       y = S.R + S.WALLV * 0.5 + 4 * S.airH * f * (1 - f) * (S.trick === OOPS ? 0.55 : 1);
-      // the trick: spins round the vertical, flips; a grab in the middle
-      const T = S.trick, k = T ? smoothStep((S.air - 0.42 * S.airT) / (0.5 * S.airT)) : 0;
+      // the trick: spins round the vertical, flips; a grab in the middle (the new rider: wind-up, turn + grab, spot the landing)
+      const w = (f - t0) / (t1 - t0), TT = TA ? trickAt(T, w, !!T.fail) : null; if (TT) S.tc = [TT.clip, (a.dur && a.dur[TT.clip] || 1) / Math.max(0.12, TT.frac * (t1 - t0) * S.airT / slowFor(t1 - t0))]; else S.tc = null;
+      const k = TT ? TT.k : T ? smoothStep(w) : 0;
       S.spin = T ? T[1] * Math.PI * 2 * k : 0; S.flip = T ? T[2] * Math.PI * 2 * k : 0; S.cork = T ? T[3] * 0.55 * Math.sin(Math.PI * k) : 0;
-      if (T && T !== OOPS && k > 0.02 && k < 0.99) act = { T, k };
+      if (T && T !== OOPS && !T.fail && k > 0.02 && k < 0.99) act = { T, k };
       P = T && T !== OOPS && k > 0.08 && k < 0.93 ? this.grabPose(t, T[4], Math.min(1, Math.sin(Math.PI * k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
-      if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS) this.wipe(E); }
+      if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS || (S.trick && S.trick.fail)) { S.fallBack = !S.trick[1]; this.wipe(E); } S.tc = null; }
     } else if (S.phase === 'line' || S.phase === 'rail' || S.phase === 'end') {
       // the course down the middle: speed up for the kickers, steady over the rail, slower into the pipe, flat out to the big air
       const z = S.s, late = S.pN >= HITS && z > 316; let tv = z < KICK.s + KICK.len ? 9 : z < PIPE_A - 4 ? 8.5 : S.pN < HITS ? 6.5 : late ? 15 : 8.5; if (S.phase === 'end') tv = 0;
@@ -407,10 +429,15 @@ export default {
       P = S.fall > 0 ? this.ridePose(t, 1) : S.wob > 0 ? E.SP.wobble(t) : S.phase === 'stop' ? E.SP.cheer(t) : this.ridePose(t, crouch);
       if (S.phase === 'line' && Math.abs(S.d) < 1 && dt > 0.002 && Math.random() < 0.4) E.spray.emit(a.g.position, 1, 0, 0.8, 0, 0.8, 0.09);
     } else if (S.phase === 'kair' || S.phase === 'bair') {
-      S.air += dt; const f = Math.min(1, S.air / S.airT);
+      const f0 = S.air / S.airT, on = a.isClip && S.airTr.find((tr) => f0 > tr.f0 && f0 < tr.f1);
+      S.air += dt * (on ? slowFor(on.f1 - on.f0) : 1); const f = Math.min(1, S.air / S.airT);   // (a trick on: the air in gentle slow motion)
       S.d = E.damp(S.d, 0, 3, dt); y = S.lip * (1 - f) + 4 * S.airH * f * (1 - f) * (S.bOops ? 0.8 : 1);
-      S.spin = 0; S.flip = 0; S.cork = 0;
-      for (const tr of S.airTr) { const k = smoothStep((f - tr.f0) / Math.max(0.05, tr.f1 - tr.f0)); S.spin += tr.T[1] * Math.PI * 2 * k; S.flip += tr.T[2] * Math.PI * 2 * k; S.cork += tr.T[3] * 0.55 * Math.sin(Math.PI * k); if (k > 0.02 && k < 0.99) act = { T: tr.T, k }; }
+      S.spin = 0; S.flip = 0; S.cork = 0; S.tc = null;
+      for (const tr of S.airTr) { const w = (f - tr.f0) / Math.max(0.05, tr.f1 - tr.f0), TT = a.isClip ? trickAt(tr.T, w, !!tr.fail) : null, k = TT ? TT.k : smoothStep(w);
+        // (the latest trick that has started decides the clip; a trick done early in the big air goes back to the calm air pose, not spotting a landing)
+        if (TT && w > 0) { const early = tr.f1 < 0.8, cl = TT.clip === 'spot_land' && early ? 'air_tuck' : TT.clip;
+          S.tc = w >= 1 ? (tr.fail ? S.tc : [early || f <= 0.82 ? 'air_tuck' : 'spot_land', 1]) : [cl, (a.dur && a.dur[cl] || 1) / Math.max(0.12, TT.frac * (tr.f1 - tr.f0) * S.airT / slowFor(tr.f1 - tr.f0))]; }
+        if (tr.fail) S.fallBack = !tr.T[1]; S.spin += tr.T[1] * Math.PI * 2 * k; S.flip += tr.T[2] * Math.PI * 2 * k; S.cork += tr.T[3] * 0.55 * Math.sin(Math.PI * k); if (k > 0.02 && k < 0.99) act = { T: tr.T, k }; }
       P = act && act.T[4] && act.k > 0.08 && act.k < 0.93 ? this.grabPose(t, act.T[4], Math.min(1, Math.sin(Math.PI * act.k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
       if (f >= 1) { const big = S.phase === 'bair'; S.phase = big ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
@@ -425,7 +452,7 @@ export default {
     const air = !!AIRS[S.phase], gkk = act ? Math.min(1, Math.sin(Math.PI * act.k) * 1.6) : 0;
     if (a.isClip) { S.landClk = air ? 0.75 : Math.max(0, (S.landClk || 0) - dt);
       if (air) S.wasOops = S.phase === 'air' ? S.trick === OOPS : S.bOops; if (S.fall > 0) S.landClk = 0.4;
-      const st = { has: a.has || (a.has = Object.fromEntries((a.clips || []).map((c) => [c, 1]))), fall: S.fall > 0, rail: S.phase === 'rail', ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll };
+      const st = { has: a.has || (a.has = Object.fromEntries((a.clips || []).map((c) => [c, 1]))), fall: S.fall > 0, rail: S.phase === 'rail', ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll, tc: S.tc, fallBack: !!S.fallBack };
       const [cl, sp] = clipFor(st); if (cl !== S.clip) { S.clip = cl; a.want(cl, cl.startsWith('grab_') ? 0.1 : 0.18, sp); } a.update(dt); S.clipSt = st; }
     else { a.pose(P, 12, rdt); a.update(); }
     E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, pitch: S.pitch, fr: S.fr || 0, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: act ? act.T[0] : S.phase === 'air' && S.trick === OOPS ? 'OOPS' : '', gk: act && act.T[4] ? act.T[4] : '', gkk, pts: S.pts, n: S.airN || 0, cl: S.clip || '', cs: S.clipSt ? clipFor(S.clipSt)[1] : 1 });
