@@ -562,6 +562,8 @@ let packIds = (store.get('tennis-packs', []) || []).filter((id) => PACKS.some((p
 if (!packIds.length && PACKS.length) packIds = [(PACKS.find((p) => p.level === 'A1') || PACKS[0]).id];
 let gamesToWin = store.get('tennis-len', 2);
 const CALL = ['0', '15', '30', '40'];
+// Rob's aim: away from the lane you just used (the three lanes: 0 left, 1 middle, 2 right), now and then straight back
+const robAim = (k) => { if (k == null || k < 0 || Math.random() < 0.25) return Math.floor(Math.random() * 3); return k === 1 ? (Math.random() < 0.5 ? 0 : 2) : 2 - k; };
 const SOLO = {
   on: false, pts: [0, 0], games: [0, 0], server: 'a', rally: 0, right: 0, asked: 0, missed: [], q: null, t0: 0, waiting: false, tmo: null,
   start() {
@@ -570,7 +572,7 @@ const SOLO = {
     $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('hud').classList.remove('hidden');
     COURT.setNames('YOU', 'ROB', '#8f52d9', '#23a6d4', false); COURT.pointN = 0;
     SOLO.score(); sfx.whistle && sfx.whistle();
-    setTimeout(() => SOLO.serve(), 700);
+    setTimeout(() => SOLO.serve(), 400);
   },
   score() { const [a, b] = SOLO.pts, [ga, gb] = SOLO.games;
     Object.assign(SCREEN, { a: 'FOXINO', b: 'ROB', pts: `${CALL[Math.min(3, a)]} : ${CALL[Math.min(3, b)]}`, games: `${ga} – ${gb}` }); drawScreen(); setScore(`YOU <b>${a === 3 && b === 3 ? '40 : 40' : CALL[Math.min(3, a)] + ' : ' + CALL[Math.min(3, b)]}</b> ROB · <b>${ga}–${gb}</b>`); },
@@ -578,13 +580,14 @@ const SOLO = {
     if (!SOLO.on) return;
     SOLO.rally = 0;
     if (SOLO.server === 'a') SOLO.ask(true);
-    else { COURT.resetForServe('b'); setTimeout(() => { if (!SOLO.on) return; const ok = Math.random() > 0.08; COURT.hit('b', Math.floor(Math.random() * 3), ok); if (ok) setTimeout(() => SOLO.ask(false), 500); else setTimeout(() => SOLO.point(0, 'FAULT!'), 1500); }, 1300); }
+    else { COURT.resetForServe('b'); setTimeout(() => { if (!SOLO.on) return; const ok = Math.random() > 0.06; COURT.hit('b', robAim(), ok); if (ok) setTimeout(() => SOLO.ask(false), 400); else setTimeout(() => SOLO.point(0, 'FAULT!'), 1100); }, 850); }
   },
   ask(serve) {
     if (!SOLO.on) return;
     const q = FSQ.make(PACKS, packIds, { n: 3, count: SOLO.asked }); if (!q) return;
     SOLO.q = q; SOLO.t0 = performance.now(); SOLO.waiting = true;
-    const secs = Math.max(6, 11 - SOLO.rally * 0.8); SOLO.secs = secs;
+    // (2026-11-25, the user: "more time pressure: a better streak = shorter time to answer") the longer your streak and the rally, the less time
+    const secs = Math.max(4, 10.5 - SOLO.rally * 0.6 - Math.min(10, combo) * 0.45); SOLO.secs = secs;
     COURT.ask('a', q, secs, serve);
     clearTimeout(SOLO.tmo); SOLO.tmo = setTimeout(() => SOLO.answer(-1), secs * 1000);
   },
@@ -596,12 +599,14 @@ const SOLO = {
     if (k >= 0) sfx.pick && sfx.pick();
     juice(ok, ms, k);
     COURT.hit('a', k, ok);
-    if (!ok) { setTimeout(() => SOLO.point(1), k < 0 ? 2300 : 1700); return; }
+    if (!ok) { setTimeout(() => SOLO.point(1), k < 0 ? 1600 : 1100); return; }
     SOLO.rally++;
-    // Rob: he misses more after a fast answer and in a long rally
-    const pMiss = 0.27 + (ms < 3500 ? 0.15 : 0) + Math.min(0.15, SOLO.rally * 0.03);
-    const robOk = Math.random() > pMiss;
-    setTimeout(() => { if (!SOLO.on) return; COURT.hit('b', Math.floor(Math.random() * 3), robOk); if (robOk) setTimeout(() => SOLO.ask(false), 700); else setTimeout(() => SOLO.point(0, 'ROB MISSED!'), 1500); }, 300);
+    // Rob (2026-11-25, the user: "the solo bot should be better"): he returns about 3 in 4 balls now (was about 3 in 5). A fast answer
+    // (a hard shot) and a long rally still make him miss more, so a quick, right answer is how you win a point; he aims away from where
+    // you just hit, like a real player
+    const pMiss = 0.18 + (ms < 2500 ? 0.12 : ms < 4000 ? 0.06 : 0) + Math.min(0.12, SOLO.rally * 0.02);
+    const robOk = Math.random() > pMiss; SOLO.lastK = k;
+    setTimeout(() => { if (!SOLO.on) return; COURT.hit('b', robAim(k), robOk); if (robOk) setTimeout(() => SOLO.ask(false), 450); else setTimeout(() => SOLO.point(0, 'ROB MISSED!'), 1100); }, 250);
   },
   point(w, why) {
     if (!SOLO.on) return;
@@ -613,8 +618,8 @@ const SOLO = {
     COURT.point(w === 0 ? 'a' : 'b', label, sub);
     if (w === 1) sfx.aww && setTimeout(() => sfx.aww(), 200);
     SOLO.score();
-    if (SOLO.games[w] >= gamesToWin) { SOLO.on = false; setTimeout(() => SOLO.finish(w === 0), 2200); return; }
-    setTimeout(() => SOLO.serve(), g ? 2600 : 2000);
+    if (SOLO.games[w] >= gamesToWin) { SOLO.on = false; setTimeout(() => SOLO.finish(w === 0), 1800); return; }
+    setTimeout(() => SOLO.serve(), g ? 1800 : 1300);   /* (2026-11-25, the user: "the game should be swifter": shorter pauses everywhere) */
   },
   finish(won) {
     $('hud').classList.add('hidden'); bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; });
@@ -752,15 +757,15 @@ const FR = {
     FR.apply(m);
   },
   startMatch() {
-    Object.assign(FR, { pts: [0, 0], gms: [0, 0], server: 'h', rally: 0, n: 0 });
+    Object.assign(FR, { pts: [0, 0], gms: [0, 0], server: 'h', rally: 0, n: 0, streak: { h: 0, g: 0 } });
     FR.cast({ t: 'begin', names: FR.names, games: FR.games });
-    setTimeout(() => FR.serveNext(), 1600);
+    setTimeout(() => FR.serveNext(), 1000);
   },
   serveNext() { if (!FR.on) return; FR.rally = 0; FR.askTurn(FR.server, true); },
   askTurn(who, serve) {
     if (!FR.on) return;
     const q = FSQ.make(PACKS, packIds, { n: 3, count: FR.n++ }); if (!q) return;
-    const secs = Math.max(5.5, 12 - FR.n * 0.2 - FR.rally * 0.25), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time slowly gets shorter over the match) */
+    const st = (FR.streak || (FR.streak = { h: 0, g: 0 }))[who] || 0, secs = Math.max(4, 11 - FR.n * 0.15 - FR.rally * 0.25 - Math.min(10, st) * 0.45), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time gets shorter over the match, in a rally and with each player's own streak) */
     FR.turn = { who, q, id, done: false };
     FR.cast({ t: 'ask', who, q, secs, serve, id });
     clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + (who === 'h' ? 900 : 4000));   /* (the friend's own clock decides; this is only the safety net) */
@@ -768,10 +773,10 @@ const FR = {
   resolve(who, id, k, ms) {
     const T = FR.turn; if (!T || T.id !== id || T.done || T.who !== who) return;
     T.done = true; clearTimeout(FR.tmo);
-    const ok = k === T.q.correct;
+    const ok = k === T.q.correct; FR.streak = FR.streak || { h: 0, g: 0 }; FR.streak[who] = ok ? (FR.streak[who] || 0) + 1 : 0;
     FR.cast({ t: 'hit', who, id, k: k >= 0 && k < 3 ? k : -1, ok, right: T.q.right, ms: Math.round(Math.min(ms, 99999)) });
-    if (ok) { FR.rally++; setTimeout(() => FR.askTurn(who === 'h' ? 'g' : 'h', false), 1300); }
-    else setTimeout(() => FR.point(who === 'h' ? 'g' : 'h'), k < 0 ? 2300 : 1700);
+    if (ok) { FR.rally++; setTimeout(() => FR.askTurn(who === 'h' ? 'g' : 'h', false), 950); }
+    else setTimeout(() => FR.point(who === 'h' ? 'g' : 'h'), k < 0 ? 1600 : 1100);
   },
   point(w) {
     if (!FR.on) return;
@@ -781,8 +786,8 @@ const FR = {
     else label = FR.pts[0] === 3 && FR.pts[1] === 3 ? 'DEUCE' : `${CALL[FR.pts[0]]} – ${CALL[FR.pts[1]]}`;
     const over = FR.gms[i] >= FR.games;
     FR.cast({ t: 'point', w, label, game, pts: FR.pts.slice(), gms: FR.gms.slice() });
-    if (over) setTimeout(() => FR.cast({ t: 'end', w, gms: FR.gms.slice() }), 2200);
-    else setTimeout(() => FR.serveNext(), game ? 2600 : 2200);
+    if (over) setTimeout(() => FR.cast({ t: 'end', w, gms: FR.gms.slice() }), 1800);
+    else setTimeout(() => FR.serveNext(), game ? 1800 : 1400);
   },
   // both phones: show what the referee says
   apply(m) {
