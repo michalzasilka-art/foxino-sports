@@ -1,14 +1,17 @@
-// HALFPIPE (the snowboard run): a night course under the floodlights, top to bottom down the pipe. (2026-11-25, the user: "make there more
+// HALFPIPE (the snowboard run): a night course under the floodlights, top to bottom. (2026-11-25, the user: "make there more
 // jumps starting with classic jump going on to sliding bar going on to 3 question U ramp and finishing of with 2 question big jump")
-//   1. a classic kicker (a free 360 melon)   2. a candy-cane rail (a boardslide)   3. the U-ramp: 3 airs, a question at the top of each
-//   4. the BIG AIR: one long jump, 2 questions in the air. Right words = big tricks (bigger with every right answer in a row); highest score wins.
+//   (2026-11-25, then: "you need to answer a question on the first jump and on the bar. Dont make it all in u ramp make the first and last
+//   section outside and the last jump should appear a lot bigger")
+//   1. a classic kicker (a question in the air)   2. a candy-cane rail (a question on it): both on the open slope   3. the U-ramp: 3 airs,
+//   a question at the top of each   4. out on the open slope again: the BIG AIR, a huge kicker, one long jump, 2 questions in the air. Right words = big tricks (bigger with every right answer in a row); highest score wins.
 // With a friend: each phone shows the friend one kicker-length behind (when you land the first jump, they are just leaving its lip).
-const HITS = 3, QN = 5;   // (the pipe airs; all the questions)
+const HITS = 3, QN = 7;   // (the pipe airs; all the questions)
 const KICK = { s: 16, len: 4, lip: 1.0, w: 3.6, back: 1.4, T: 1.05, H: 1.4 };   // the classic kicker (s: where its ramp starts, metres down the pipe)
-const BIG = { s: 136, len: 7, lip: 2.2, w: 5.2, back: 2.6, T: 2.6, H: 4.2 };    // the big air kicker
+const BIG = { s: 168, len: 12, lip: 4.6, w: 9, back: 5, T: 3.6, H: 8.5 };    // the BIG air kicker (out on the open slope below the pipe)
 const RAIL = { a: 44, b: 57, h: 0.5 };                                           // the rail (from, to, height)
-const PIPE_IN = 64, GAP = 9.6;   // (where the U-ramp starts; the friend's distance behind: the kicker's air, so they take off as you land)
-const KICK_T = ['360 MELON', 1, 0, 0, 'melon', 150], RAIL_T = ['BOARDSLIDE', 0, 0, 0, '', 100];
+const PIPE_A = 72, PIPE_B = 136, DECK = 4.5, STOP_Z = 254, COURSE_END = 262, GAP = 9.6;   // (the halfpipe from / to; its decks; where the run stops; the friend's distance behind: the kicker's air, so they take off as you land)
+// the rail: a right word = a slide (bigger with the streak), a wrong one = a wobble
+const RAIL_TRICKS = [['50-50', 0, 100], ['BOARDSLIDE', 1, 150], ['LIPSLIDE', 1, 200], ['NOSE PRESS', 0, 260], ['TAIL PRESS', 0, 320], ['270 BOARDSLIDE', 1, 400], ['BACK LIPSLIDE 270', 1, 480]];
 // (2026-11-24, the user: "Add more tricks each one getting more insane based on your streak … show count up points for each trick going to total
 // score") 12 tricks, one step up the ladder for every right answer in a row (a perfect, quick answer jumps one more). [name, spins, flips, cork tilt, grab, points]
 const TRICKS = [
@@ -85,71 +88,134 @@ function makeRail(THREE) {
   for (const f of [0.04, 0.5, 0.96]) { const p = A.clone().lerp(B, f), post = new THREE.Mesh(new THREE.BoxGeometry(0.1, RAIL.h + 0.3, 0.1), postM); post.position.set(0, p.y - (RAIL.h + 0.3) / 2, p.z); g.add(post); }
   return g;
 }
+// the open slope: flat down the course (|x| < 14), rolling gently up into snowy hills beside it
+function gY(x, z) { const ax = Math.abs(x), k = Math.max(0, Math.min(1, (ax - 14) / 12)); return -z * S.SL + k * k * (3 - 2 * k) * ((ax - 14) * 0.16 + Math.sin(x * 0.13 + z * 0.07) * 0.9 + Math.sin(x * 0.05 - z * 0.11) * 1.3); }
+function gridMesh(THREE, xs, zs, f, mat) {
+  const pos = [], idx = []; for (const z of zs) for (const x of xs) pos.push(x, f(x, z), z);
+  for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b = a + 1, c = a + xs.length, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; return m;
+}
+function makeGround(THREE, snowM, pisteM) {
+  const zs = []; for (let z = -80; z <= 360; z += 10) zs.push(z);
+  const side = [14, 17, 21, 26, 32, 40, 50, 62, 78, 98, 124], xs = [...side.map((x) => -x).reverse(), ...side];
+  const grp = new THREE.Group(); grp.add(gridMesh(THREE, xs, zs, gY, snowM));
+  const strip = gridMesh(THREE, [-14, -7, 0, 7, 14], zs, (x, z) => gY(x, z) + 0.02, pisteM); grp.add(strip);   // (the groomed course: piste lines)
+  return grp;
+}
+// the halfpipe, built standing on the slope from PIPE_A to PIPE_B: the curved walls, the vertical bit, the decks, the outer walls, both ends closed
+function makePipe(THREE, mat) {
+  const prof = []; for (let i = 0; i <= 10; i++) { const x = S.FLAT + S.R * i / 10; prof.push([x, pipeY(x)]); }
+  const top = S.R + S.WALLV; prof.push([W(), top]); prof.push([W() + DECK, top]); prof.push([W() + DECK, -0.6]);
+  const pos = [], quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 8) { const z1 = Math.min(PIPE_B, z0 + 8);
+    for (let i = 0; i < prof.length - 1; i++) { const [x0, h0] = prof[i], [x1, h1] = prof[i + 1], Y = (z, h) => -z * S.SL + h;
+      quad([sd * x0, Y(z0, h0), z0], [sd * x1, Y(z0, h1), z0], [sd * x1, Y(z1, h1), z1], [sd * x0, Y(z1, h0), z1]); } }
+  // the two ends: each side's cross-section filled down to the snow
+  for (const z of [PIPE_A, PIPE_B]) for (const sd of [1, -1]) for (let i = 0; i < prof.length - 1; i++) { const [x0, h0] = prof[i], [x1, h1] = prof[i + 1], b = -z * S.SL - 0.6;
+    quad([sd * x0, -z * S.SL + h0, z], [sd * x1, -z * S.SL + h1, z], [sd * x1, b, z], [sd * x0, b, z]); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.castShadow = true;
+  // the blue coping along both lips
+  const grp = new THREE.Group(); grp.add(m); const cop = new THREE.MeshStandardMaterial({ color: 0x36b5e0, roughness: 0.45, emissive: 0x0d3a52 }), len = (PIPE_B - PIPE_A) / Math.cos(Math.atan(S.SL));
+  for (const sd of [1, -1]) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, len), cop); const zm = (PIPE_A + PIPE_B) / 2; c.position.set(sd * (W() + 0.1), -zm * S.SL + top + 0.05, zm); c.rotation.x = Math.atan(S.SL); grp.add(c); }
+  return grp;
+}
+// an arch over the course: two posts and a banner facing the riders coming down
+function makeArch(E, text, color, z, hw, h) {
+  const { THREE } = E, grp = new THREE.Group(), postM = new THREE.MeshStandardMaterial({ color: 0x2a2f5c, roughness: 0.6 }), y0 = -z * S.SL;
+  for (const sd of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, h + 1.6, 0.35), postM); p.position.set(sd * hw, y0 + (h + 1.6) / 2 - 0.3, z); p.castShadow = true; grp.add(p); }
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, Math.min(2.2, hw * 2 / 8)), E.bannerMaterial(text, color)); b.position.set(0, y0 + h + 0.6, z); b.rotation.y = Math.PI; grp.add(b);
+  return grp;
+}
 export default {
-  id: 'halfpipe', blurb: 'A kicker, a rail, the halfpipe and a BIG AIR. Right words make big tricks!',
+  id: 'halfpipe', blurb: 'A kicker, a rail, the halfpipe and a HUGE big air. Right words make big tricks!',
   light: { sky: 'alpine-night', skyYaw: 0.1, skyBase: 0.3, skySpan: 1.0, sunDir: [0.3, 0.85, -0.35], sun: 0xf2f4ff, sunI: 2.3, hemiSky: 0x7f96ff, hemiGround: 0x34307a, hemi: 0.65, rim: 0x8fd6ff, rimI: 1.4, exposure: 1.05, fog: [60, 330], fogColor: 0x3a3f9a, env: 0.25, flakes: 500, flakeA: 0.8 },
   bestShown: (s) => `${s} points`,
   async build(E, prog) {
     const { THREE } = E;
     const [g, J] = await Promise.all([E.loadGLB('models/halfpipe.glb?v=1'), E.loadJSON('models/halfpipe.json?v=1')]);
-    Object.assign(S, { L: J.length, SL: Math.tan(J.slope * Math.PI / 180), R: J.R, FLAT: J.flat, WALLV: J.wallV });
-    E.dressModel(g.scene, { banner: (n) => (n === 'Banner' ? E.bannerMaterial('DROP IN', '#36b5e0') : E.bannerMaterial('FINISH', '#ff4d6d')) });
-    E.scene.add(g.scene); prog(30, 'Planting the trees…');
-    E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
-    E.scene.add(E.instanceField(J.props.map((p) => [0, p[1], p[2], p[3], p[4], 1]), () => 'Floodlight', 400));
-    // the floodlights' glow on the snow: a few warm point lights along the pipe (no shadows), the "sun" is the main floodlight
-    for (let i = 0; i < 4; i++) { const pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(i % 2 ? 9 : -9, -((20 + i * 48) * S.SL) + 12, 20 + i * 48); E.scene.add(pl); }
-    // the course on the pipe's floor: the kicker, the rail, the big air kicker
+    Object.assign(S, { L: COURSE_END, SL: Math.tan(J.slope * Math.PI / 180), R: J.R, FLAT: J.flat, WALLV: J.wallV });
+    // (2026-11-25, the user: "dont make it all in u ramp make the first and last section outside and the last jump should appear a lot bigger")
+    // the course is made here: one long open slope, a short halfpipe standing on it in the middle, the kickers and the rail. The old long pipe
+    // model is only used for its snow materials (the same look).
+    const names = new Map(); g.scene.traverse((o) => { if (o.isMesh && o.material) names.set(o, o.material.name); });
+    E.dressModel(g.scene, { banner: () => E.bannerMaterial('', '#36b5e0') });
+    let snowM = null, pisteM = null; for (const [o, n] of names) { if (n === 'Snow' && !snowM) snowM = o.material; if (n === 'Piste' && !pisteM) pisteM = o.material; }
+    snowM = snowM || new THREE.MeshStandardMaterial({ color: 0xeef2fd, roughness: 0.88 }); pisteM = pisteM || new THREE.MeshStandardMaterial({ color: 0xe4ebfb, roughness: 0.8 });
+    const wallM = pisteM.clone(); wallM.side = THREE.DoubleSide; wallM.onBeforeCompile = pisteM.onBeforeCompile;
+    E.scene.add(makeGround(THREE, snowM, pisteM), makePipe(THREE, wallM)); prog(30, 'Planting the trees…');
+    // trees, rocks and floodlights round the course (the same props as before, placed for the new slope)
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const trees = [], rocks = [], lights = [];
+    for (let i = 0; i < 230; i++) { const sd = rnd() < 0.5 ? -1 : 1, x = sd * (19 + Math.pow(rnd(), 1.4) * 95), z = -70 + rnd() * 410; trees.push([1 + Math.floor(rnd() * 3), x, gY(x, z) - 0.15, z, rnd() * 6.28, 0.8 + rnd() * 0.5]); }
+    for (let i = 0; i < 32; i++) { const sd = rnd() < 0.5 ? -1 : 1, x = sd * (17 + rnd() * 60), z = -50 + rnd() * 380; rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
+    for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { const x = sd * (z > PIPE_A - 3 && z < PIPE_B + 3 ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
+    E.scene.add(E.instanceField(trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(rocks, (t) => `Rock${t}`)); E.scene.add(E.instanceField(lights, () => 'Floodlight', 400));
+    // the floodlights' glow on the snow: a few warm point lights down the course (no shadows)
+    for (const [i, z] of [14, 82, 150, 222].entries()) { const pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(i % 2 ? 9 : -9, -z * S.SL + 12, z); E.scene.add(pl); }
+    // the features: the kicker, the rail, the BIG kicker; arches over the pipe's entrance, the big air and the finish
     const snow = new THREE.MeshStandardMaterial({ color: 0xf2f5ff, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }), lip = new THREE.MeshStandardMaterial({ color: 0x36b5e0, roughness: 0.5, emissive: 0x0d3a52 }), sideM = new THREE.MeshStandardMaterial({ color: 0x9fb4f2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide });
-    E.scene.add(makeKicker(THREE, KICK, snow, lip, sideM), makeKicker(THREE, BIG, snow, lip, sideM), makeRail(THREE));
+    const bigLip = new THREE.MeshStandardMaterial({ color: 0xff4d8d, roughness: 0.5, emissive: 0x5a0d2a });
+    E.scene.add(makeKicker(THREE, KICK, snow, lip, sideM), makeKicker(THREE, BIG, snow, bigLip, sideM), makeRail(THREE));
+    E.scene.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), makeArch(E, 'BIG AIR', '#ff4d8d', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#7b3fd1', STOP_Z + 8, 9, 6.5));
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
     S.a = NB ? await E.makeBoarder() : await E.makeActor({ gear: 'board' });
     if (/[?&]party=1/.test(location.search)) { S.ghost = NB ? await E.makeBoarder({ friend: true }) : await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
-    E.groundAt = (x, z) => -z * S.SL + pipeY(Math.abs(x)) - 0.2;
-    E.drawDist = E.MP.on ? 140 : 170;   /* (2026-11-24: 260 → 170 m: the bigger airs look further down the pipe; under 100k a frame) */
+    E.groundAt = (x, z) => gY(x, z) + (z > PIPE_A && z < PIPE_B && Math.abs(x) < W() + DECK ? pipeY(Math.abs(x)) : 0) - 0.2;
+    E.drawDist = E.MP.on ? 150 : 180;
     this.reset(E);
   },
+  // Christmas: lights along the pipe's lips and down both edges of the open slopes, trees, gifts and snowmen beside the course, a big tree at the finish
   xmas(E, X) {
-    if (!X.ok) return; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z);
-    for (const sd of [1, -1]) for (let z0 = -6; z0 < S.L + 6; z0 += 30) { const posts = []; for (let z = z0; z <= z0 + 30; z += 6) posts.push(P(sd * (W0 + 0.45), z, 1.15)); X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
-    for (let z = 28, i = 0; z < S.L; z += 36, i++) { const sd = i % 2 ? 1 : -1;
-      X.put('XmasTree_Big', P(sd * (W0 + 4.2), z), i, 1.3); X.put('XmasTree_Small', P(-sd * (W0 + 3.4), z + 12), -i, 1.8);
-      X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], P(sd * (W0 + 2.4), z - 1.5), i); X.put('Gift_B', P(sd * (W0 + 2.7), z + 1.4), -i);
-      if (i % 2 === 0) X.put('Snowman', P(-sd * (W0 + 2.2), z - 6), sd * 1.2); }
-    for (const sd of [1, -1]) { X.put('Lantern', P(sd * (W0 + 1.2), -4), sd); X.put('CandyCane', P(sd * (W0 + 0.9), 4), sd); X.put('XmasTree_Small', P(sd * (W0 + 3), -8), sd, 1.6); }
-    X.put('XmasTree_Big', new THREE.Vector3(0, -(S.L + 14) * S.SL - 0.3, S.L + 14), 0.4, 2.2);
-    // (2026-11-25) lights along both sides of the big air kicker, and at the rail's ends
-    for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 6; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 6; posts.push(new THREE.Vector3(sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.1, glow: 1.1 }); }
-    X.put('CandyCane', new THREE.Vector3(1.2, -(RAIL.a - 1) * S.SL, RAIL.a - 1), 1); X.put('CandyCane', new THREE.Vector3(-1.2, -(RAIL.b + 1) * S.SL, RAIL.b + 1), -1); X.put('Sleigh', P(W0 + 3.5, S.L - 4), 2.4);
+    if (!X.ok) return; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z), G = (x, z, dy = 0) => new THREE.Vector3(x, gY(x, z) + dy, z);
+    for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 32) { const posts = []; for (let z = z0; z <= Math.min(PIPE_B, z0 + 32); z += 6.4) posts.push(P(sd * (W0 + 0.45), z, 1.15)); X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
+    for (const [a, b] of [[-6, PIPE_A - 6], [PIPE_B + 4, STOP_Z + 6]]) for (const sd of [1, -1]) for (let z0 = a; z0 < b; z0 += 30) { const posts = []; for (let z = z0; z <= Math.min(b, z0 + 30); z += 6) posts.push(G(sd * 11, z, 1.0)); X.lights(posts, { sag: 0.25, per: 6, size: 0.13, glow: 1.1 }); }
+    for (const [z, i] of [[8, 0], [34, 1], [62, 2], [150, 3], [196, 4], [240, 5]]) { const sd = i % 2 ? 1 : -1;
+      X.put('XmasTree_Big', G(sd * 15, z), i, 1.3); X.put('XmasTree_Small', G(-sd * 14, z + 10), -i, 1.8);
+      X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], G(sd * 13, z - 1.5), i); X.put('Gift_B', G(sd * 13.3, z + 1.4), -i);
+      if (i % 2 === 0) X.put('Snowman', G(-sd * 13, z - 6), sd * 1.2); }
+    for (const sd of [1, -1]) { X.put('Lantern', G(sd * 3.5, -3), sd); X.put('XmasTree_Small', G(sd * 6, -8), sd, 1.6); X.put('XmasTree_Small', P(sd * (W0 + 3), PIPE_A + 3), sd, 1.6); }
+    X.put('XmasTree_Big', G(0, STOP_Z + 22, -0.3), 0.4, 2.4); X.put('Sleigh', G(8, STOP_Z + 2), 2.4);
+    for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3(sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
+    X.put('CandyCane', G(1.2, RAIL.a - 1), 1); X.put('CandyCane', G(-1.2, RAIL.b + 1), -1);
   },
-  reset(E) { Object.assign(S, { airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, head: 0, fbuf: [], fAt: 0, fTrickK: '' }); E.snapCam(); },
+  reset(E) { Object.assign(S, { airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, railSide: 1, head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false }); E.snapCam(); },
   menu() { S.phase = 'menu'; },
   async run(E) {
     this.reset(E); S.phase = 'drop';
     E.banner('3', '', 700); await E.wait(0.8); E.banner('2', '', 700); await E.wait(0.8); E.banner('1', '', 700); await E.wait(0.8);
     E.banner('GO!', 'KICKER · RAIL · PIPE · BIG AIR', 900); S.phase = 'line';
     const at = (dy = 1.5) => S.a.g.position.clone().setY(S.a.g.position.y + dy);
-    let chain = Promise.resolve();   // (the free points fly into the total one after another)
-    const free = (T) => { chain = chain.then(() => scoreFly(E, T[5], at())).then(() => { S.pts += T[5]; E.send({ p: Math.min(0.95, S.s / 186), v: `${S.pts}` }); }); };
-    // 1) the classic kicker: a 360 melon for free
-    await E.until(() => S.phase === 'kair'); S.airTr = [{ T: KICK_T, f0: 0.12, f1: 0.86 }]; trickCard(KICK_T[0], 0);
-    await E.until(() => S.phase !== 'kair'); free(KICK_T);
-    // 2) the rail: a boardslide
-    await E.until(() => S.phase === 'rail' && S.s >= RAIL.a + 1); trickCard(RAIL_T[0], 0);
-    await E.until(() => S.phase !== 'rail'); free(RAIL_T);
+    let chain = Promise.resolve();   // (the points fly into the total one after another)
+    const free = (pts) => { chain = chain.then(() => scoreFly(E, pts, at())).then(() => { S.pts += pts; E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` }); }); };
+    const anchors = (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.9), out, 2.3, 1.5);
+    const ladder = (r) => TRICKS[Math.min(TRICKS.length - 1, E.combo - 1 + (r.grade === 'perfect' ? 1 : 0))];
+    // 1) the classic kicker: a question in the air; a right word = a trick in what is left of the air
+    await E.until(() => S.phase === 'kair' && S.air / S.airT >= 0.28);
+    { S.asking = true; const r = await E.ask({ who: 'KICKER', num: `${S.pts} pts`, size: 0.95, anchors }); S.asking = false; S.hit++; const f = S.air / S.airT; let due;
+      if (r.ok) { const T = ladder(r); S.airTr.push({ T, f0: f + 0.02, f1: Math.min(0.95, f + 0.55) }); due = T[5] + (r.grade === 'perfect' ? 25 : 0); trickCard(T[0], E.combo); }
+      else { S.bOops = true; due = 20; trickCard('OOPS!', 0, true); }
+      E.juice(r, at(1.4), ''); await E.until(() => S.phase !== 'kair'); free(due); }
+    // 2) the rail: a question once he is on it; a right word = a slide (the streak makes it bigger), a wrong one = a wobble
+    await E.until(() => S.phase === 'rail' && S.s >= RAIL.a + 1.2);
+    { S.asking = true; const r = await E.ask({ who: 'RAIL', num: `${S.pts} pts`, size: 0.95, anchors }); S.asking = false; S.hit++; let due;
+      if (r.ok) { const T = RAIL_TRICKS[Math.min(RAIL_TRICKS.length - 1, E.combo - 1 + (r.grade === 'perfect' ? 1 : 0))]; S.railSide = T[1]; due = T[2] + (r.grade === 'perfect' ? 25 : 0); trickCard(T[0], E.combo); }
+      else { S.wob = 1.3; due = 20; trickCard('WOBBLE!', 0, true); }
+      E.juice(r, at(1.4), ''); await E.until(() => S.phase !== 'rail'); free(due); }
     // 3) the U-ramp: a question at the top of each of the 3 airs
     for (let i = 0; i < HITS; i++) {
       await E.until(() => S.phase === 'air' && S.pN > i && S.air > 0.42 * S.airT);
       S.asking = true;
       const r = await E.ask({ who: `HALFPIPE · AIR ${i + 1} OF ${HITS}`, num: `${S.pts} pts`, size: 0.95,
-        anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.9), out, 2.3, 1.5) });
+        anchors });
       S.asking = false; S.hit++;
       if (r.ok) { const T = TRICKS[Math.min(TRICKS.length - 1, E.combo - 1 + (r.grade === 'perfect' ? 1 : 0))]; S.trick = T; S.due = T[5] + (r.grade === 'perfect' ? 25 : 0); trickCard(T[0], E.combo); E.juice(r, at(1.4), ''); }
       else { S.trick = OOPS; S.due = 20; S.wob = 1.2; trickCard('OOPS!', 0, true); E.juice(r, at(1.4), ''); }
       S.spin = 0; S.flip = 0;
       await E.until(() => S.phase !== 'air'); await chain; await scoreFly(E, S.due, at()); S.pts += S.due; S.due = 0;
-      E.send({ p: Math.min(0.95, S.s / 186), v: `${S.pts}` });
+      E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` });
     }
     // 4) the BIG AIR: two questions in one long jump, a trick for each right word
     await E.until(() => S.phase === 'bair' && S.air / S.airT >= 0.16); let due = 0;
@@ -157,8 +223,7 @@ export default {
       if (q === 1) await E.until(() => S.phase !== 'bair' || S.air / S.airT >= 0.56);
       if (S.phase !== 'bair') break;
       S.asking = true;
-      const r = await E.ask({ who: `BIG AIR · QUESTION ${q + 1} OF 2`, num: `${S.pts} pts`, size: 0.95,
-        anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.9), out, 2.3, 1.5) });
+      const r = await E.ask({ who: `BIG AIR · QUESTION ${q + 1} OF 2`, num: `${S.pts} pts`, size: 0.95, anchors });
       S.asking = false; S.hit++; const f = S.air / S.airT;
       if (r.ok) { const T = TRICKS[Math.min(TRICKS.length - 1, E.combo - 1 + (r.grade === 'perfect' ? 1 : 0))]; S.airTr.push({ T, f0: f + 0.02, f1: Math.min(0.95, f + 0.33) }); due += T[5] + (r.grade === 'perfect' ? 25 : 0); trickCard(T[0], E.combo); E.juice(r, at(1.4), ''); }
       else { S.bOops = true; due += 20; trickCard('OOPS!', 0, true); E.juice(r, at(1.4), ''); }
@@ -171,7 +236,7 @@ export default {
     E.finish({ score: S.pts, shown: `${S.pts}`, unit: 'points', better: 'high', line: `${QN} questions` });
   },
   // takeoff from a kicker: a parabola from the lip down to the slope (heights over the slope line)
-  takeoff(E, ph, K) { S.phase = ph; S.air = 0; S.airT = K.T; S.airH = K.H; S.lip = K.lip; S.airN = (S.airN || 0) + 1; if (ph === 'bair') S.airTr = []; S.bOops = false; S.trick = null; E.spray.emit(S.a.g.position, 16, 0, 3, 3, 1.6); },
+  takeoff(E, ph, K) { S.phase = ph; S.air = 0; S.airT = K.T; S.airH = K.H; S.lip = K.lip; S.airN = (S.airN || 0) + 1; S.airTr = []; S.bOops = false; S.trick = null; E.spray.emit(S.a.g.position, 16, 0, 3, 3, 1.6); },
   update(E, dt, rdt) {
     const a = S.a; if (!a) return; const t = E.T, { THREE } = E;
     let y = 0, roll = 0, pitch = 0, P, act = null;
@@ -207,8 +272,8 @@ export default {
       if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); }
     } else if (S.phase === 'line' || S.phase === 'rail' || S.phase === 'end') {
       // the course down the middle: speed up for the kickers, steady over the rail, slower into the pipe, flat out to the big air
-      const z = S.s; let tv = z < KICK.s + KICK.len ? 9 : z < PIPE_IN - 4 ? 8.5 : S.pN >= HITS ? 12 : 6.5; if (S.phase === 'end') tv = 0;
-      S.v = S.v < tv ? Math.min(tv, S.v + 3 * dt) : Math.max(tv, S.v - (S.phase === 'end' ? 6 : 3) * dt);
+      const z = S.s; let tv = z < KICK.s + KICK.len ? 9 : z < PIPE_A - 4 ? 8.5 : S.pN >= HITS ? 15 : 6.5; if (S.phase === 'end') tv = 0;
+      S.v = S.v < tv ? Math.min(tv, S.v + (S.pN >= HITS ? 3.6 : 3) * dt) : Math.max(tv, S.v - (S.phase === 'end' ? 6 : 3) * dt);
       S.d = E.damp(S.d, 0, 3, dt); y = pipeY(Math.abs(S.d)); S.wob = Math.max(0, S.wob - dt);
       let crouch = 0.25;
       if (S.phase === 'rail') {
@@ -220,7 +285,7 @@ export default {
         for (const K of [KICK, BIG]) if (z >= K.s && z < K.s + K.len) { y += kickH(K, z); pitch = Math.atan(kickSlope(K, z)); crouch = 0.4 + 0.5 * (z - K.s) / K.len; }
         if (!S.k1 && z >= KICK.s + KICK.len) { S.k1 = 1; this.takeoff(E, 'kair', KICK); }
         else if (!S.r1 && z >= RAIL.a - 1.4) { S.r1 = 1; S.phase = 'rail'; }
-        else if (!S.p1 && z >= PIPE_IN) { S.p1 = 1; S.phase = 'cross'; S.u = 0.5; S.side = 1; }
+        else if (!S.p1 && z >= PIPE_A) { S.p1 = 1; S.phase = 'cross'; S.u = 0.5; S.side = 1; }
         else if (!S.b1 && S.pN >= HITS && z >= BIG.s + BIG.len) { S.b1 = 1; this.takeoff(E, 'bair', BIG); }
         if (S.phase === 'kair' || S.phase === 'bair') y = pipeY(0) + S.lip;
       } else if (S.v < 0.4) { S.phase = 'stop'; S.v = 0; }
@@ -237,7 +302,7 @@ export default {
     // place: on the wall the board stands on the wall (roll), on a kicker it tips up, in the air the trick turns him
     a.g.position.set(S.d, -S.s * S.SL + y, S.s);
     const dd = dt > 1e-5 ? (S.d - (S.dPrev ?? S.d)) / dt : 0; S.dPrev = S.d;
-    S.head = E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? Math.PI / 2 : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
+    S.head = E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railSide === 0 ? 0.05 : Math.PI / 2) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
     S.pitch = E.damp(S.pitch || 0, pitch, 12, rdt);
     a.g.rotation.set(0, 0, 0); a.g.rotateZ(roll); a.g.rotateY(S.head); a.g.rotateX(-S.pitch);
     if (AIRS[S.phase]) { a.g.rotateY(S.spin); a.g.rotateZ(S.cork || 0); a.g.rotateX(S.flip); }
@@ -251,7 +316,7 @@ export default {
     if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt);
     else if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(-S.d * 0.8, -gs * S.SL + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
     const where = S.s < KICK.s + KICK.len + 12 ? 'KICKER' : S.s < RAIL.b + 3 ? 'RAIL' : S.pN < HITS || S.phase === 'cross' || S.phase === 'air' ? `HALFPIPE · AIR ${Math.min(HITS, S.pN + (S.phase === 'air' ? 0 : 1))} OF ${HITS}` : 'BIG AIR';
-    E.hud(`${Math.round(S.shown ?? S.pts)}`, where); E.progress(Math.min(1, S.s / 186));
+    E.hud(`${Math.round(S.shown ?? S.pts)}`, where); E.progress(Math.min(1, S.s / STOP_Z));
     this.camera(E, rdt);
   },
   ridePose(t, crouch) { const p = { y: 0, tail: 0 }; for (const j of ['hips', 'spine', 'neck', 'head', 'armL', 'elbowL', 'armR', 'elbowR', 'legL', 'kneeL', 'ankleL', 'legR', 'kneeR', 'ankleR']) p[j] = [0, 0, 0];
@@ -276,8 +341,9 @@ export default {
     else { let lo = 0, hi = B.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m].s <= want) lo = m; else hi = m; } A0 = B[lo]; A1 = B[hi]; k = (want - A0.s) / Math.max(1e-4, A1.s - A0.s); }
     const same = A0.ph === A1.ph, L = (p) => (A0[p] ?? 0) + ((A1[p] ?? 0) - (A0[p] ?? 0)) * k, Fr = k < 0.5 ? A0 : A1, Ang = (p) => (same ? L(p) : Fr[p] || 0);
     const gs = L('s'), pos = new THREE.Vector3(L('d'), -gs * S.SL + L('y'), gs);
-    if (!G.g.visible || G.g.position.distanceTo(pos) > 12) G.g.position.copy(pos); else G.g.position.lerp(pos, 1 - Math.exp(-rdt * 16));
-    G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateZ(Ang('roll')); G.g.rotateY(Ang('head')); G.g.rotateX(-Ang('pitch'));
+    if (!S.gOn || G.g.position.distanceTo(pos) > 12) G.g.position.copy(pos); else G.g.position.lerp(pos, 1 - Math.exp(-rdt * 16)); S.gOn = true;
+    G.g.visible = G.g.position.distanceTo(E.camera.position) > 5;   // (never right in front of the camera: it would cover the question)
+    G.g.rotation.set(0, 0, 0); G.g.rotateZ(Ang('roll')); G.g.rotateY(Ang('head')); G.g.rotateX(-Ang('pitch'));
     const air = !!AIRS[Fr.ph]; if (air) { G.g.rotateY(Ang('spin')); G.g.rotateZ(Ang('cork')); G.g.rotateX(Ang('flip')); }
     if (G.isClip) { if (Fr.cl && Fr.cl !== G.cur) G.want(Fr.cl, Fr.cl.startsWith('grab_') ? 0.1 : 0.18, Fr.cs || 1); G.update(rdt); }
     else { const P = air && Fr.gk && Fr.gkk > 0.05 ? this.grabPose(t + 0.5, Fr.gk, Fr.gkk) : Fr.ph === 'stop' ? E.SP.cheer(t) : this.ridePose(t + 0.7, air ? 0.6 : Fr.ph === 'rail' ? 0.5 : 0.25); G.pose(P, 12, rdt); G.update(); }
@@ -304,14 +370,15 @@ export default {
     } else if (S.phase === 'kair' || (S.phase === 'line' && S.s > KICK.s - 4 && S.s < KICK.s + KICK.len + GAP + 2)) {
       // the kicker from below its landing, looking back up the hill: he flies at us, the friend behind him leaves the same lip
       const zc = KICK.s + KICK.len + GAP + 5; pos = new THREE.Vector3(3.2, -zc * S.SL + 2.4, zc); look = new THREE.Vector3(P.x * 0.5, P.y + 0.4, P.z - 1.5); k = 4; fov = 58;
-    } else if (S.phase === 'bair' || S.phase === 'end' || (S.phase === 'line' && S.pN >= HITS && S.s > BIG.s - 12)) {
+    } else if (S.phase === 'bair' || S.phase === 'end') {
       // the big air: ahead of him and to the side, looking back up at the jump (the friend comes over the kicker behind)
-      const zc = S.s + 8.5; pos = new THREE.Vector3(4.8, -zc * S.SL + 2.8 + Math.max(0, P.y + zc * S.SL - 3) * 0.35, zc); look = new THREE.Vector3(P.x * 0.5, P.y + 0.5, P.z - 1); k = S.asking ? 3 : 4.5; fov = 62;
+      const air = S.phase === 'bair', zc = S.s + (air ? 8 : 10); pos = new THREE.Vector3(air ? 6 : 5, air ? Math.max(-zc * S.SL + 2, P.y - 0.6) : P.y + 1.8, zc); look = new THREE.Vector3(P.x * 0.5, P.y + (air ? (innerWidth > innerHeight ? 2.4 : 0.6) : 0.8), P.z - (air ? 0 : 3));   /* (a wide screen: aim above him, so he sits under the answer bubbles) */ k = S.asking ? 3 : 5; fov = air ? 62 : 58;   // (in the air: just ahead and a little below him, so he flies big over the huge kicker)
     } else if (S.phase === 'stop') {
       pos = new THREE.Vector3(P.x + 2.5, P.y + 1.5, P.z + 4.5); look = P.clone().setY(P.y + 0.8); k = 2; fov = 50;
     } else {
-      // following down the pipe, a little above
-      pos = new THREE.Vector3(P.x * 0.7, P.y + 2.6, S.s - 6.2); look = new THREE.Vector3(P.x * 0.85, P.y + 0.7, P.z + 4); k = 5; fov = 60;
+      // following down the course, a little above (higher and further back on the run-in to the huge kicker, so it towers ahead)
+      const big = S.pN >= HITS && S.phase === 'line' && S.s > PIPE_B;
+      pos = new THREE.Vector3(P.x * 0.7, P.y + (big ? 3.4 : 2.6), S.s - (big ? 8.5 : 6.2)); look = new THREE.Vector3(P.x * 0.85, P.y + (big ? 1.6 : 0.7), P.z + (big ? 8 : 4)); k = 5; fov = 60;
     }
     E.cam(pos, look, k, fov); E.focusAt = P; E.focus = P.distanceTo(E.camera.position);
   },
