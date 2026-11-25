@@ -260,7 +260,7 @@ export default {
     S.a = await E.makeActor({ gear: 'jump' });
     if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => (z > 0 ? hillY(z) : null);
-    E.drawDist = E.MP.on ? 130 : 185;   /* (2026-11-25: 235/160 → 185/130 with the longer in-run, its decorations and the deeper forest: under 100k a frame) */   /* (2026-11-25: 195 → 160 m with the Tripo skis and boots on both jumpers) (a party game draws a second ramp and the friend: a bit less far away) */   /* (2026-11-24: 320 → 235 m, the slower ramp keeps the long view on screen: under 100k a frame) */
+    E.drawDist = E.MP.on ? 120 : 185;   /* (2026-11-25 v054: 2-player 130 → 120: a sideways phone reached 100.2k once) */   /* (2026-11-25: 235/160 → 185/130 with the longer in-run, its decorations and the deeper forest: under 100k a frame) */   /* (2026-11-25: 195 → 160 m with the Tripo skis and boots on both jumpers) (a party game draws a second ramp and the friend: a bit less far away) */   /* (2026-11-24: 320 → 235 m, the slower ramp keeps the long view on screen: under 100k a frame) */
     this.reset(E);
   },
   // Christmas (2026-11-24): lights up the in-run and down both sides of the hill, decorated trees and gifts beside the landing, a big tree and a sleigh in the outrun

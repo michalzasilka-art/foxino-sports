@@ -96,7 +96,7 @@ function makeScreen(o) {
     const g = m.geometry; if (!g.attributes.uv) { g.computeBoundingBox(); const b = g.boundingBox, P = g.attributes.position, uv = new Float32Array(P.count * 2), w = Math.max(1e-6, b.max.x - b.min.x), h = Math.max(1e-6, b.max.y - b.min.y);
       for (let i = 0; i < P.count; i++) { uv[i * 2] = (P.getX(i) - b.min.x) / w; uv[i * 2 + 1] = (b.max.y - P.getY(i)) / h; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); } });
   const base = new URL('art/', import.meta.url).href;
-  const slides = [{ img: 'logo.webp', t: '' }, { img: 'card-penalties.webp', t: 'PENALTIES' }, { img: 'card-tennis.webp', t: 'TENNIS' }, { img: 'card-streetball.webp', t: 'STREETBALL' }].map((s) => { const im = new Image(); im.src = base + s.img + '?v=1'; return { ...s, im }; });
+  const slides = [{ img: 'logo.webp', t: '' }, { img: 'card-penalties.webp', t: 'PENALTIES' }, { img: 'card-tennis.webp', t: 'TENNIS' }, { img: 'card-halfpipe.webp', t: 'HALFPIPE', v: 2 }, { img: 'card-skijump.webp', t: 'SKI JUMP', v: 2 }].map((s) => { const im = new Image(); im.src = base + s.img + '?v=' + (s.v || 1);   /* (2026-11-25: Streetball is out: the screen shows the four sports left) */ return { ...s, im }; });
   const draw = (sl, a) => { if (!sl.im.complete || !sl.im.naturalWidth) return; g.globalAlpha = a;
     if (!sl.t) { g.fillStyle = '#2a1466'; g.fillRect(0, 0, 1024, 576); const r = Math.min(900 / sl.im.naturalWidth, 420 / sl.im.naturalHeight); const w = sl.im.naturalWidth * r, h = sl.im.naturalHeight * r; g.drawImage(sl.im, 512 - w / 2, 288 - h / 2, w, h); }
     else { const r = 1024 / sl.im.naturalWidth, h = sl.im.naturalHeight * r; g.drawImage(sl.im, 0, 288 - h / 2, 1024, h); g.fillStyle = 'rgba(20,10,50,.55)'; g.fillRect(0, 470, 1024, 106);

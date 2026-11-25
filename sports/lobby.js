@@ -10,7 +10,7 @@
 //    (tennis/?list=1&friend=host|join&room=…) and in Penalties both play and the points are compared
 import * as THREE from '/penalty/lib/three.module.min.js';
 import { RoomEnvironment } from '/penalty/lib/RoomEnvironment.js';
-import { makeWinterPlaza } from './winter.js?v=5';
+import { makeWinterPlaza } from './winter.js?v=6';
 import { loadFoxino } from '/penalty/foxino-glb.js?v=3';
 import { POSES } from '/penalty/foxino.js';
 import { makeBall } from '/penalty/props.js';
@@ -24,7 +24,8 @@ const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ==
 const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
 // (2026-11-24, the user: "I want to remove Sledge, biathlon, Slalom sport activities from this game") they are out for players; their code and
 // art stay (snow/slalom.js, sled.js, biathlon.js): take an id out of HIDDEN_ACTS to bring it back
-const HIDDEN_ACTS = new Set(['slalom', 'sled', 'biathlon']);
+// (2026-11-25, the user: "Remove game street ball from foxino sports") Streetball out the same way (streetball/ stays; ?dev still opens it there)
+const HIDDEN_ACTS = new Set(['slalom', 'sled', 'biathlon', 'streetball']);
 const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
@@ -298,6 +299,7 @@ let SEL = (store.get('sports-sel', null) || ['halfpipe', 'skijump']).filter((id)
 if (!SEL.length) SEL = ACTS.map((a) => a.id);
 function renderPicker(view) {
   $('acts').classList.toggle('view', !!view);
+  $('acts').classList.toggle('two', ACTS.length === 4);
   $('acts').innerHTML = ACTS.map((a) => { const i = SEL.indexOf(a.id); return `<button class="act${i >= 0 ? ' on' : ''}" type="button" data-id="${a.id}"><span class="pic" style="background-image:url('${a.pic}')"></span><span class="tag">${a.tag}</span>${a.snow ? '<span class="new">NEW</span>' : ''}${i >= 0 && SEL.length > 1 ? `<span class="num">${ordinal(i)}</span>` : ''}<span class="tick">✓</span><span class="nm">${a.name}</span></button>`; }).join('');
   $('pickPlay').disabled = !SEL.length;
   $('pickPlay').hidden = !!view; $('pickBack').hidden = !!view;
