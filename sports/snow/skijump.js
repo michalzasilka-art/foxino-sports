@@ -38,7 +38,7 @@ function inrunAt(s, out) {
 // (2026-11-25, the user: "Make 2 separate models / Ski / Foxino ...") ?sk=1 (on this address or the Sports lobby's) = the new skier: the rigged
 // Foxino with his own clips and the straight skis on his ski mounts (Tripo + Claudee RCC); the old jumper stays the default until it is approved
 const QALL = (() => { let q = location.search; try { if (window.parent !== window) q += '&' + window.parent.location.search.slice(1); } catch (e) {} return q; })();
-const SK = /[?&]sk=1/.test(QALL);
+const SK = !/[?&]sk=0/.test(QALL);   /* (2026-11-25 night: the new skier is the default jumper (the user asked for the remake); ?sk=0 = the old one) */
 function skiClip(ph, s, z, D) {
   if (ph === 'inrun') return s > S.LIN - 4 ? 'takeoff' : s < 2.5 ? 'start_push' : 'tuck';
   if (ph === 'flight') return 'fly';

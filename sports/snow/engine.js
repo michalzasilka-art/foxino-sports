@@ -281,14 +281,14 @@ const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'grab_indy', 'grab_melon', 'gr
 // (2026-11-25, the user: "Make 2 separate models / Ski / Foxino / Make the foxino so it just attached to the skis / Make sure that the skis arent
 // deformed ...") the skier: Foxino (Tripo + Claudee RCC, rigged, his own clips) and ONE straight ski model hung on his SkiL / SkiR mount bones.
 // jump: the ski-jumping skis are longer in front and behind (not at the binding).
-export async function makeSkier({ friend = false, jump = false, url = 'models/foxino-skier.glb?v=1', skiUrl = 'models/ski.glb?v=1' } = {}) {
+export async function makeSkier({ friend = false, jump = false, url = 'models/foxino-skier.glb?v=2', skiUrl = 'models/ski.glb?v=2' } = {}) {
   const [gl, sk] = await Promise.all([loadGLB(url), loadGLB(skiUrl)]), inner = gl.scene;
   inner.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(inner), s = 1.3 / Math.max(0.1, box.max.y - box.min.y);
   inner.scale.setScalar(s); inner.position.y = 0.032 * s;   // (he faces +Z in the file, the skis' noses +Z; lifted so the ski bases, 32 mm under his soles, are on the snow)
   const dress = (o) => { o.frustumCulled = false; o.castShadow = !friend; if (friend) o.userData.noCast = true; const m = o.material = o.material.clone(); if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; m.roughness = 0.75; if (friend && o.isSkinnedMesh) m.color.set(0xffd7b0); };
   inner.traverse((o) => { if (o.isMesh) dress(o); });
   const mounts = []; inner.traverse((o) => { if (o.isBone && /^Ski[LR]$/.test(o.name)) mounts[o.name === 'SkiL' ? 0 : 1] = o; });
-  const skis = mounts.map((b) => { const m = sk.scene.clone(true); m.traverse((o) => { if (o.isMesh) { if (jump) { o.geometry = stretchSki(bakeGeo(o), 1.45, 0.17); o.position.set(0, 0, 0); o.quaternion.identity(); o.scale.setScalar(1); } dress(o); } }); b.add(m); return m; });   // (no offsets: the mounts' frame is the ski's)
+  const skis = mounts.map((b) => { const m = sk.scene.clone(true); m.traverse((o) => { if (o.isMesh) { if (jump) { const bg = bakeGeo(o); o.geometry = stretchSki(bg, 1.45, bindingReach(bg)); o.position.set(0, 0, 0); o.quaternion.identity(); o.scale.setScalar(1); } dress(o); } }); b.add(m); return m; });   // (no offsets: the mounts' frame is the ski's)
   const g = new THREE.Group(); g.add(inner); scene.add(g);
   const mixer = new THREE.AnimationMixer(inner), acts = {};
   for (const c of gl.animations) { const a = mixer.clipAction(c); if (SKI_ONCE.has(c.name)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } acts[c.name] = a; }
@@ -303,6 +303,8 @@ export async function makeSkier({ friend = false, jump = false, url = 'models/fo
 // raw numbers stretched the whole ski)
 function bakeGeo(o) { const g = o.geometry.clone(); for (const k of ['position', 'normal']) { const a = g.attributes[k]; if (!a) continue; const f = new Float32Array(a.count * 3); for (let i = 0; i < a.count; i++) { f[i * 3] = a.getX(i); f[i * 3 + 1] = a.getY(i); f[i * 3 + 2] = a.getZ(i); } g.setAttribute(k, new THREE.BufferAttribute(f, 3)); }
   o.updateMatrix(); g.applyMatrix4(o.matrix); return g; }
+// how far the binding reaches along the ski (front or back), so the jump skis only grow beyond it and the binding stays round the boot
+function bindingReach(g) { const P = g.attributes.position; let r = 0.12; for (let i = 0; i < P.count; i++) { const y = P.getY(i), z = Math.abs(P.getZ(i)); if (y > 0.003 && z < 0.45 && z > r) r = z; } return r + 0.01; }
 const SKI_ONCE = new Set(['start_push', 'takeoff', 'land_telemark', 'stop', 'wipeout', 'sad']);
 export async function makeBoarder({ friend = false, url = 'models/foxino-snowboard.glb?v=1' } = {}) {   // (2026-11-25: url: models/foxino-snowrider.glb = the whole Foxino on his board, purple jacket, black ski pants, from Tripo + Claudee RCC)
   const gl = await loadGLB(url), inner = gl.scene;
@@ -636,7 +638,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 9, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 10, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
