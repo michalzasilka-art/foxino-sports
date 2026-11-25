@@ -61,7 +61,7 @@ function clipFor(st) {
 }
 let FX = null; function fxRoot() { if (FX) return FX; const st = document.createElement('style'); st.textContent = `
 #trickCard{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 84px);transform:translateX(-50%) scale(.5);opacity:0;z-index:31;pointer-events:none;text-align:center;font-family:'Lilita One','Arial Black',sans-serif;white-space:nowrap}
-#trickCard.go{animation:tcIn .35s cubic-bezier(.2,1.7,.4,1) forwards} #trickCard.out{animation:none;transition:opacity .3s,transform .3s;opacity:0;transform:translateX(-50%) translateY(-16px) scale(.9)} body.asking #trickCard{display:none}
+#trickCard.go{animation:tcIn .75s cubic-bezier(.2,1.4,.4,1) forwards} #trickCard.out{animation:none;transition:opacity .6s,transform .6s;opacity:0;transform:translateX(-50%) translateY(-16px) scale(.9)} body.asking #trickCard{display:none}
 #trickCard b{display:block;font-size:clamp(24px,7vw,40px);font-weight:400;color:#fff;-webkit-text-stroke:2px #2a1e5c;paint-order:stroke fill;text-shadow:0 4px 0 #2a1e5c,0 0 18px rgba(255,120,220,.6)}
 #trickCard i{display:inline-block;margin-top:4px;padding:3px 10px;border-radius:999px;background:#ff5fa8;color:#fff;font-style:normal;font-size:clamp(12px,3.4vw,15px);box-shadow:0 3px 0 #2a1e5c}
 #trickCard.lv3 b{color:#ffe27a} #trickCard.lv6 b{color:#7fe8ff;font-size:clamp(28px,8vw,46px)} #trickCard.lv9 b{color:#ff9ad6;font-size:clamp(30px,8.6vw,50px);animation:tcShake .12s linear infinite}
@@ -73,17 +73,19 @@ let FX = null; function fxRoot() { if (FX) return FX; const st = document.create
 body:has(#trickCard) #combo{display:none} #hudBig.bump{animation:hbBump .4s cubic-bezier(.2,1.8,.4,1)} 
 @keyframes tcIn{to{opacity:1;transform:translateX(-50%) scale(1)}} @keyframes tcShake{0%,100%{transform:translate(0,0)}25%{transform:translate(1px,-1px)}75%{transform:translate(-1px,1px)}} @keyframes hbBump{0%{transform:scale(1)}40%{transform:scale(1.5);color:#ffe27a}100%{transform:scale(1)}}`;
   document.head.appendChild(st); FX = document.createElement('div'); FX.id = 'trickCard'; document.body.appendChild(FX); return FX; }
-function trickCard(name, streak, oops = false, extra = '') { const c = fxRoot(); c.className = ''; void c.offsetWidth; c.innerHTML = `<b>${name}</b>${streak >= 2 ? `<i>🔥 ${streak} in a row</i>` : ''}${extra ? `<i class="x">${extra}</i>` : ''}`;
+let CARDN = 0;
+function trickCard(name, streak, oops = false, extra = '') { const c = fxRoot(); c.className = ''; c.dataset.gen = String(++CARDN); void c.offsetWidth; c.innerHTML = `<b>${name}</b>${streak >= 2 ? `<i>🔥 ${streak} in a row</i>` : ''}${extra ? `<i class="x">${extra}</i>` : ''}`;
   c.classList.add('go'); if (oops) c.classList.add('oops'); else if (streak >= 9) c.classList.add('lv9'); else if (streak >= 6) c.classList.add('lv6'); else if (streak >= 3) c.classList.add('lv3'); }
 // on landing: the trick's points count up over Foxino, then fly into the total at the top, which ticks up and bumps
-async function scoreFly(E, pts, at) { const c = fxRoot(); const v = at.clone().project(E.camera); let x = (v.x * 0.5 + 0.5) * innerWidth, y = (-v.y * 0.5 + 0.5) * innerHeight; x = Math.max(70, Math.min(innerWidth - 70, x)); y = Math.max(150, Math.min(innerHeight - 120, y));
+async function scoreFly(E, pts, at) { const c = fxRoot(), gen = c.dataset.gen; const v = at.clone().project(E.camera); let x = (v.x * 0.5 + 0.5) * innerWidth, y = (-v.y * 0.5 + 0.5) * innerHeight; x = Math.max(70, Math.min(innerWidth - 70, x)); y = Math.max(150, Math.min(innerHeight - 120, y));
   const d = document.createElement('div'); d.className = 'scoreFly'; d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = '+0'; document.body.appendChild(d);
-  const t0 = performance.now(), up = 520; let last = -1; S.shown = S.pts;
+  await new Promise((r) => setTimeout(r, 350));   // (a short beat with +0 shown before it counts)
+  const t0 = performance.now(), up = 1100; let last = -1; S.shown = S.pts;   /* (2026-11-25, the user: "make the animation slower": the count-up 0.52 → 1.1 s, the flight 0.43 → 0.85 s, the total 0.45 → 0.8 s) */
   await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t0) / up), n = Math.round(pts * (1 - Math.pow(1 - k, 3))); d.textContent = '+' + n; if ((n / 10 | 0) !== last) { last = n / 10 | 0; try { E.sfx.click && E.sfx.click(); } catch (e) {} } if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
-  c.classList.add('out'); await new Promise((r) => setTimeout(r, 180));
-  const hb = document.getElementById('hudBig').getBoundingClientRect(), tx = hb.left + hb.width / 2, ty = hb.top + hb.height / 2, t1 = performance.now(), fly = 430;
+  await new Promise((r) => setTimeout(r, 450)); if (c.dataset.gen === gen) c.classList.add('out'); await new Promise((r) => setTimeout(r, 300));
+  const hb = document.getElementById('hudBig').getBoundingClientRect(), tx = hb.left + hb.width / 2, ty = hb.top + hb.height / 2, t1 = performance.now(), fly = 850;
   await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t1) / fly), e = k * k * (3 - 2 * k); d.style.left = (x + (tx - x) * e) + 'px'; d.style.top = (y + (ty - y) * e - Math.sin(Math.PI * k) * 60) + 'px'; d.style.transform = `translate(-50%,-50%) scale(${1 - 0.55 * e})`; if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
-  d.remove(); const from = S.pts, t2 = performance.now(), tick = 450; const hbEl = document.getElementById('hudBig'); hbEl.classList.remove('bump'); void hbEl.offsetWidth; hbEl.classList.add('bump'); try { E.sfx.star && E.sfx.star(); } catch (e) {}
+  d.remove(); const from = S.pts, t2 = performance.now(), tick = 800; const hbEl = document.getElementById('hudBig'); hbEl.classList.remove('bump'); void hbEl.offsetWidth; hbEl.classList.add('bump'); try { E.sfx.star && E.sfx.star(); } catch (e) {}
   await new Promise((res) => { const f = () => { const k = Math.min(1, (performance.now() - t2) / tick); S.shown = from + pts * k; if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); }); S.shown = null; }
 const AIRS = { air: 1, kair: 1, bair: 1 };   // (the three kinds of air: pipe, kicker, big air)
 const kickH = (K, z) => K.lip * Math.pow(Math.max(0, Math.min(1, (z - K.s) / K.len)), 1.7);
@@ -297,7 +299,9 @@ export default {
     // the points: the trick × the streak (×1.1 for every right answer in a row, up to ×2) + a speed bonus (up to 80 for an instant answer)
     const score = (r, base) => { const mult = 1 + 0.1 * Math.min(10, Math.max(0, E.combo - 1)), fast = Math.round(80 * Math.max(0, 1 - (r.secs || LIMIT) / LIMIT));
       return { pts: Math.round(base * mult) + fast, chip: [mult > 1.001 ? `×${mult.toFixed(1)}` : '', fast ? `+${fast} FAST` : ''].filter(Boolean).join(' · ') }; };
-    const react = (r) => { if (r.timeout) E.pop('TOO SLOW!', at(1.4), 'bad'); else E.juice(r, at(1.4), ''); };
+    // (2026-11-25, the user: "make the congratulation text remove": no PERFECT!/GREAT!/GOOD! pop-ups over Foxino any more; a soft flash, a small
+    // shake and the sound only; the trick card (or WIPEOUT! / TOO SLOW!) still says what happened)
+    const react = (r) => { try { if (r.ok) { E.flash('rgba(120,255,170,.35)'); E.shake(0.2); E.sfx.star && E.sfx.star(Math.min(3, E.combo)); } else { E.flash('rgba(255,80,100,.45)'); E.shake(0.45); E.sfx.thud && E.sfx.thud(); } } catch (e) {} };
     for (const F of FEAT) {
       if (F.k === 'kick') {   // a kicker: the question in the air; a right word = a trick in what is left of the air; a miss = a wipeout on landing
         await E.until(() => S.phase === 'kair' && S.kick === F && S.air / S.airT >= 0.28);
@@ -318,7 +322,7 @@ export default {
           if (r.ok) { const T = ladder(r), sc = score(r, T[5]); S.trick = T; S.due = sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
           else { S.trick = OOPS; S.due = 0; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
           react(r); S.spin = 0; S.flip = 0;
-          await E.until(() => S.phase !== 'air'); await chain; if (S.due) { await scoreFly(E, S.due, at()); S.pts += S.due; } S.due = 0;
+          await E.until(() => S.phase !== 'air'); if (S.due) free(S.due); S.due = 0;
           E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` });
         }
       } else if (F.k === 'big') {   // the BIG AIR: two questions in one long jump, a trick for each right word
@@ -331,7 +335,7 @@ export default {
           else { S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
           react(r);
         }
-        await E.until(() => S.phase !== 'bair'); await chain; if (due) { await scoreFly(E, due, at()); S.pts += due; }
+        await E.until(() => S.phase !== 'bair'); if (due) free(due); await chain;
       }
     }
     E.send({ p: 1, v: `${S.pts}` });
