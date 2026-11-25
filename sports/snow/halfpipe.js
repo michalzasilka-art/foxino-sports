@@ -371,7 +371,8 @@ export default {
     if (S.phase === 'air') {
       // from the bottom of the pipe, looking up at him over the lip
       const up = Math.max(0, (S.airH || 3.2) - 3.2);   /* (bigger airs on a long streak: the camera backs off a little and keeps up) */
-      pos = new THREE.Vector3(S.side * (3.5 + up * 0.4), -(S.s - 7.5) * S.SL + S.R * 0.9 + up * 0.6, S.s - 7.5 - up * 0.6); look = new THREE.Vector3(P.x, P.y + 0.9, P.z); k = 6; fov = 60 + up * 2;
+      const nar = innerWidth < innerHeight;   /* (2026-11-25: on a portrait phone the camera starts nearer his wall and keeps up faster, so he never slips off the narrow screen) */
+      pos = new THREE.Vector3(S.side * ((nar ? 5.6 : 3.5) + up * 0.4), -(S.s - 7.5) * S.SL + S.R * 0.9 + up * 0.6, S.s - (nar ? 8.5 : 7.5) - up * 0.6); look = new THREE.Vector3(P.x, P.y + 0.9, P.z); k = nar ? 11 : 6; fov = 60 + up * 2;
     } else if (S.phase === 'kair' || (S.phase === 'line' && S.s > KICK.s - 4 && S.s < KICK.s + KICK.len + GAP + 2)) {
       // the kicker from below its landing, looking back up the hill: he flies at us, the friend behind him leaves the same lip
       const zc = KICK.s + KICK.len + GAP + 5; pos = new THREE.Vector3(3.2, -zc * S.SL + 2.4, zc); look = new THREE.Vector3(P.x * 0.5, P.y + 0.4, P.z - 1.5); k = 4; fov = 58;
@@ -383,7 +384,8 @@ export default {
     } else {
       // following down the course, a little above (higher and further back on the run-in to the huge kicker, so it towers ahead)
       const big = S.pN >= HITS && S.phase === 'line' && S.s > PIPE_B;
-      pos = new THREE.Vector3(P.x * 0.7, P.y + (big ? 3.4 : 2.6), S.s - (big ? 8.5 : 6.2)); look = new THREE.Vector3(P.x * 0.85, P.y + (big ? 1.6 : 0.7), P.z + (big ? 8 : 4)); k = 5; fov = 60;
+      const nar = innerWidth < innerHeight, inPipe = S.phase === 'cross';
+      pos = new THREE.Vector3(P.x * (nar && inPipe ? 0.85 : 0.7), P.y + (big ? 3.4 : 2.6), S.s - (big ? 8.5 : 6.2)); look = new THREE.Vector3(P.x * (nar && inPipe ? 1 : 0.85), P.y + (big ? 1.6 : 0.7), P.z + (big ? 8 : 4)); k = nar && inPipe ? 8 : 5; fov = 60;
     }
     E.cam(pos, look, k, fov); E.focusAt = P; E.focus = P.distanceTo(E.camera.position);
   },
