@@ -35,6 +35,18 @@ function inrunAt(s, out) {
   const f = (s - S.acc[i - 1]) / Math.max(1e-6, S.acc[i] - S.acc[i - 1]), A = S.inrun[i - 1], B = S.inrun[i];
   out.p.set(A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f); out.ang = Math.atan2(A[1] - B[1], B[2] - A[2]); return out;
 }
+// (2026-11-25, the user: "Make 2 separate models / Ski / Foxino ...") ?sk=1 (on this address or the Sports lobby's) = the new skier: the rigged
+// Foxino with his own clips and the straight skis on his ski mounts (Tripo + Claudee RCC); the old jumper stays the default until it is approved
+const QALL = (() => { let q = location.search; try { if (window.parent !== window) q += '&' + window.parent.location.search.slice(1); } catch (e) {} return q; })();
+const SK = /[?&]sk=1/.test(QALL);
+function skiClip(ph, s, z, D) {
+  if (ph === 'inrun') return s > S.LIN - 4 ? 'takeoff' : s < 2.5 ? 'start_push' : 'tuck';
+  if (ph === 'flight') return 'fly';
+  if (ph === 'land') return 'land_telemark';
+  if (ph === 'outrun') return z < (D || 0) + 12 ? 'land_telemark' : 'glide';
+  if (ph === 'stop') return 'cheer';
+  return 'stance_idle';
+}
 const P0 = { tuck(t) { const p = blank(); p.legL = [-1.25, 0, 0.06]; p.legR = [-1.25, 0, -0.06]; p.kneeL = [2.05, 0, 0]; p.kneeR = [2.05, 0, 0]; p.ankleL = [-0.85, 0, 0]; p.ankleR = [-0.85, 0, 0];
     p.spine = [1.05, 0, 0]; p.neck = [-0.4, 0, 0]; p.head = [-0.45, 0, 0]; p.armL = [0.45, 0, 0.12]; p.armR = [0.45, 0, -0.12]; p.elbowL = [-0.15, 0, 0]; p.elbowR = [-0.15, 0, 0]; p.y = -0.3 + 0.005 * Math.sin(t * 9); return p; },
   sit(t) { const p = blank(); p.legL = [-1.4, 0, 0.08]; p.legR = [-1.4, 0, -0.08]; p.kneeL = [1.6, 0, 0]; p.kneeR = [1.6, 0, 0]; p.ankleL = [-0.2, 0, 0]; p.ankleR = [-0.2, 0, 0];
@@ -257,8 +269,8 @@ export default {
     S.lines.k = line(J.K, 0xff3d5a); S.lines.best = line(0, 0xffd84a); S.lines.friend = line(0, 0xff7d22); S.lines.last = line(0, 0x6fe2ff);
     await E.addMountains(-300, 0xf2ecff);
     prog(60, 'Waxing the long skis…');
-    S.a = await E.makeActor({ gear: 'jump' });
-    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
+    S.a = SK ? await E.makeSkier({ jump: true }) : await E.makeActor({ gear: 'jump' });
+    if (/[?&]party=1/.test(location.search)) { S.ghost = SK ? await E.makeSkier({ jump: true, friend: true }) : await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => (z > 0 ? hillY(z) : null);
     E.drawDist = E.MP.on ? 120 : 185;   /* (2026-11-25 v054: 2-player 130 → 120: a sideways phone reached 100.2k once) */   /* (2026-11-25: 235/160 → 185/130 with the longer in-run, its decorations and the deeper forest: under 100k a frame) */   /* (2026-11-25: 195 → 160 m with the Tripo skis and boots on both jumpers) (a party game draws a second ramp and the friend: a bit less far away) */   /* (2026-11-24: 320 → 235 m, the slower ramp keeps the long view on screen: under 100k a frame) */
     this.reset(E);
@@ -353,12 +365,12 @@ export default {
     const c = { p: new THREE.Vector3(), ang: 0 }; let pos, pitch = 0, P;
     if (F.ph === 'menu' || F.ph === 'bar') { inrunAt(0.5, c); pos = c.p.clone(); pitch = c.ang; P = P0.sit(t); }
     else if (F.ph === 'inrun') { inrunAt(F.s || 0, c); pos = c.p.clone(); pitch = c.ang; P = (F.s || 0) > S.LIN - 4 ? P0.pop(t) : P0.tuck(t); }
-    else if (F.ph === 'flight') { pos = new THREE.Vector3(0, F.y || 0, F.z || 0); P = P0.fly(t + 1); pitch = 0.42; G.skiFree = true; G.skiYaw = [0.3, -0.3]; G.skiPitch = -0.55; }
+    else if (F.ph === 'flight') { pos = new THREE.Vector3(0, F.y || 0, F.z || 0); P = P0.fly(t + 1); pitch = G.isClip ? 0.1 : 0.42; G.skiFree = true; G.skiYaw = [0.3, -0.3]; G.skiPitch = -0.55; }
     else { const z = F.z || 0; pos = new THREE.Vector3(0, hillY(z), z); pitch = Math.atan(hillY(z) - hillY(z + 1)) * 0.9; P = F.ph === 'stop' ? E.SP.cheer(t) : P0.telemark(t); }
     if (F.ph !== 'flight') { G.skiFree = false; G.skiYaw = [0, 0]; G.skiPitch = 0; }
     pos.x += FR_X; const jump = !G.g.visible || G.g.position.distanceTo(pos) > 25;
     if (jump) G.g.position.copy(pos); else G.g.position.lerp(pos, 1 - Math.exp(-rdt * 12));
-    G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateX(pitch); G.pose(P, 8, rdt); G.update();
+    G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateX(pitch); if (G.isClip) { G.want(skiClip(F.ph, F.s || 0, F.z || 0, F.d)); G.update(rdt); } else { G.pose(P, 8, rdt); G.update(); }
   },
   // the flight: a parabola from where he is now (z0, y0, slope b) that lands exactly at the target distance D
   retarget(dD) { const f = S.fl; if (!f) return; f.D = Math.max(55, Math.min(128, f.D + dD)); const z0 = f.z, y0 = f.y, b = f.slope, L = f.D - z0; f.z0 = z0; f.y0 = y0; f.b = b; f.a = (hillY(f.D) - y0 - b * L) / (L * L); },
@@ -386,7 +398,7 @@ export default {
       }
     } else if (S.phase === 'flight') {
       const f = S.fl; f.z += f.vz * dt; const dz = f.z - f.z0; f.y = f.y0 + f.b * dz + f.a * dz * dz; f.slope = f.b + 2 * f.a * dz;
-      a.g.position.set(0, f.y, f.z); pitch = Math.atan(-f.slope) * 0.4 + 0.42; P = P0.fly(t);
+      a.g.position.set(0, f.y, f.z); pitch = Math.atan(-f.slope) * 0.4 + (a.isClip ? 0.1 : 0.42); P = P0.fly(t);   /* (the new skier's fly clip leans forward itself) */
       a.skiFree = true; a.skiYaw = [0.3, -0.3]; a.skiPitch = -0.55;
       jumpMeterLive(f.z);
       if (f.z >= f.D) { S.phase = 'land'; S.landT = 0; E.shake(0.6); E.spray.emit(a.g.position, 40, 0, 3, 5, 3); S.v = f.vz; S.z = f.z; }
@@ -402,7 +414,7 @@ export default {
       if (S.phase === 'stop') a.g.rotation.y = 0;
     }
     a.g.rotation.set(0, 0, 0); a.g.rotateX(pitch);
-    a.pose(P, S.phase === 'flight' ? 6 : 12, rdt); a.update();
+    if (a.isClip) { a.want(skiClip(S.phase, S.s, S.z, S.fl && S.fl.D)); a.update(rdt); } else { a.pose(P, S.phase === 'flight' ? 6 : 12, rdt); a.update(); }
     E.mpSend({ ph: S.phase, s: S.s, z: S.phase === 'flight' && S.fl ? S.fl.z : S.z, y: S.fl ? S.fl.y : 0, j: S.jump });
     // the friend: their longest jump as an orange line; their Foxino flies beside you
     if (E.friend && E.friend.best) S.lines.friend.set(E.friend.best);
