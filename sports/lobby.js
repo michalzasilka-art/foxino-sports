@@ -81,7 +81,19 @@ function dressPlatform(g, podium, col) {
   let ring = null; c.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; if (/PodiumRing/.test(o.name) || /PodiumGlow/.test(o.material?.name || '')) ring = o; });
   if (ring) { ring.material = new THREE.MeshBasicMaterial({ color: col, toneMapped: false }); g.userData.ring = ring; }
   g.userData.glowM.uniforms.uA.value = .5;
+  // (2026-11-25, the user: "foxino is levitating in lobby, move him more down") the podium's own top: Foxino stands on it, not on the old disc's 0.31
+  let top = -1; const v = new THREE.Vector3(); g.updateMatrixWorld(true); c.traverse((o) => { if (!o.isMesh || !/PodiumStone$/.test(o.material?.name || '')) return; const p = o.geometry.attributes.position; for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); top = Math.max(top, v.y - g.position.y); } });
+  if (top > 0.1 && top < 0.6) FLOOR = top;
 }
+// where the feet go: the platform's top, the standing pose's soles are ~3 mm under the root
+let FLOOR = 0.31; const footY = () => FLOOR + 0.002;
+// a soft round contact shadow on the podium under each Foxino (the low camera shows any gap under the shoes)
+const blobTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const x = cv.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(24,10,64,1)'); gr.addColorStop(0.35, 'rgba(24,10,64,0.75)'); gr.addColorStop(0.7, 'rgba(24,10,64,0.25)'); gr.addColorStop(1, 'rgba(20,12,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+function makeBlob(w, d, a) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, opacity: a, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); m.rotation.x = -Math.PI / 2; m.renderOrder = 2; m.userData.a = a; scene.add(m); return m; }
+const BLOB = { me: makeBlob(0.9, 1.0, 0.85), fr: makeBlob(0.9, 1.0, 0.85), ball: makeBlob(0.36, 0.36, 0.7) };   /* (deep front-to-back: the low camera squashes it) */ BLOB.fr.visible = false;
+// the blob follows the root and fades a little when he hops (the cheer)
+function placeBlob(b, F, spot) { const hop = F && F.fox && F.fox.body ? Math.max(0, F.fox.body.position.y) : 0;   /* (the cheer's hop lifts the body) */ b.position.set(spot.x, FLOOR + 0.006, spot.z); b.scale.setScalar(1 - Math.min(0.35, hop * 2.5)); b.material.opacity = b.userData.a * (1 - Math.min(0.5, hop * 4)); }
 platMe.position.copy(SPOT.me); platFr.position.copy(SPOT.fr); scene.add(platMe, platFr);
 let ball = null;
 
@@ -118,7 +130,7 @@ function fitCamera() {
   if (a < 0.8) { camera.fov = 58; CAM.pos.set(0.78, 1.55, 23.4); CAM.look.set(0.6, 4.2, -6); SPOT.fr.set(1.6, 0, 13.9); }
   else if (a < 1.3) { camera.fov = 46; CAM.pos.set(1.05, 1.5, 22.2); CAM.look.set(0.8, 3.6, -6); SPOT.fr.set(2.0, 0, 14.4); }
   else { camera.fov = 40; CAM.pos.set(1.1, 1.5, 21.8); CAM.look.set(0.7, 3.4, -6); SPOT.fr.set(2.25, 0, 14.7); }
-  platFr.position.copy(SPOT.fr); if (FRD.fox) FRD.fox.root.position.set(SPOT.fr.x, 0.31, SPOT.fr.z);
+  platFr.position.copy(SPOT.fr); if (FRD.fox) FRD.fox.root.position.set(SPOT.fr.x, footY(), SPOT.fr.z);
   camera.updateProjectionMatrix();
 }
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); }
@@ -146,9 +158,11 @@ function frame(now) {
     // me: idle, a wave now and then, cheering when the friend arrives
     ME.waveT -= dt; if (ME.waveT < -1.6) ME.waveT = 6 + Math.random() * 5;
     if (!ME.drag) { ME.yaw += ME.vel * dt; ME.vel *= Math.exp(-3 * dt); if (Math.abs(ME.vel) < 0.3) ME.yaw = damp(ME.yaw, 0.25, 1.2, dt); }
-    if (ME.fox) { ME.fox.root.position.set(SPOT.me.x, 0.31, SPOT.me.z); ME.fox.root.rotation.y = ME.yaw; ME.cheerT += dt;
+    if (ME.fox) { ME.fox.root.position.set(SPOT.me.x, footY(), SPOT.me.z); ME.fox.root.rotation.y = ME.yaw; ME.cheerT += dt;
       poseFox(ME, T, dt, ME.cheerT < 1.8 ? 'cheer' : ME.waveT < 0 ? 'wave' : ''); }
     if (FRD.fox) { FRD.fox.root.visible = FRD.on; FRD.waveT += dt; FRD.fox.root.rotation.y = -0.25; poseFox(FRD, T + 1.3, dt, FRD.waveT < 2.2 ? 'wave' : ''); }
+    placeBlob(BLOB.me, ME, SPOT.me); BLOB.me.visible = !!ME.fox; placeBlob(BLOB.fr, FRD, SPOT.fr); BLOB.fr.visible = !!(FRD.fox && FRD.on);
+    if (ball) { BLOB.ball.position.set(ball.position.x, FLOOR + 0.006, ball.position.z); } BLOB.ball.visible = !!ball;
     for (const p of [platMe, platFr]) { p.userData.glowM.uniforms.uT.value = T; }
     platFr.userData.glowM.uniforms.uC.value.set(FRD.on ? 0xff9a3c : 0x6fe2ff);
     platFr.userData.ring.material.color.set(FRD.on ? 0xff9a3c : 0x6fe2ff);
@@ -238,7 +252,7 @@ async function friendArrived(f) {
   if (!PT.host) { $('partyCode').hidden = false; $('partyCode').textContent = `PARTY ${PT.code.replace(/(\d{3})(\d{3})/, '$1 $2')}`; }
   toast(`🎉 ${esc(f.name)} joined the party!`);
   if (!FRD.fox) FRD.fox = await addFox(f.kit && Object.keys(f.kit).length ? f.kit : FRIEND_KIT); else FRD.fox.setKit(f.kit && Object.keys(f.kit).length ? f.kit : FRIEND_KIT);
-  FRD.fox.root.position.set(SPOT.fr.x, 0.31, SPOT.fr.z);
+  FRD.fox.root.position.set(SPOT.fr.x, footY(), SPOT.fr.z);
   renderMode();
 }
 function friendGone(msg) {
@@ -396,7 +410,7 @@ $('leaveBtn').onclick = () => { sfx.click && sfx.click(); send({ t: 'bye' }); cl
   try { stadium = await makeWinterPlaza(scene); if (stadium.podium) { dressPlatform(platMe, stadium.podium, 0xffd84a); dressPlatform(platFr, stadium.podium, 0x6fe2ff); } } catch (e) { console.warn('winter plaza', e); }
   bar(65, 'Foxino is on his way…');
   try { ME.fox = await addFox(myKit()); } catch (e) { console.warn('foxino', e); }
-  ball = makeBall(); ball.castShadow = true; ball.position.set(SPOT.me.x - 0.55, 0.31 + 0.11, SPOT.me.z + 0.35); scene.add(ball);
+  ball = makeBall(); ball.castShadow = true; ball.position.set(SPOT.me.x - 0.55, FLOOR + 0.105, SPOT.me.z + 0.35); scene.add(ball);
   bar(100, 'Ready!');
   requestAnimationFrame(frame);
   setTimeout(() => $('loading').classList.add('gone'), 200);
