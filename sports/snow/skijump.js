@@ -1,3 +1,4 @@
+import { sponsorTex } from './sponsors.js?v=1';
 // SKI JUMP: two jumps from a big hill at golden hour. On the in-run three questions (right = more speed), one at the
 // take-off (right = a perfect pop) and one in the air (right = he glides further). The two distances add up; the friend's and
 // your best distance show as lines on the hill. Longest total wins.
@@ -49,18 +50,83 @@ export const _S = S;
 function frontCam(P, ang, sway) { const ca = Math.cos(ang), sa = Math.sin(ang), down = { x: 0, y: -sa, z: ca }, up = { x: 0, y: ca, z: sa };
   const pos = P.clone(); pos.x += 1.3 + sway; pos.y += down.y * 6.5 + up.y * 1.7; pos.z += down.z * 6.5 + up.z * 1.7;
   const look = P.clone(); look.y += up.y * 0.55; look.z += up.z * 0.55; return { pos, look }; }
+// (2026-11-25, the user: "increase the model quality of that ski jumping building, more Christmas, better colours") the start tower made in code
+// in the FoxSports winter palette (whites and deep blues, warm red and gold accents): a deck on top of the in-run with a railing, a white chalet
+// start hut (navy frame, wine-red roof under thick snow, warm windows, a START sign and a wreath in the gable); railings and snow along the whole
+// in-run; the sponsors on the in-run's sides (ours only). xo: the x of the ramp (the friend's ramp in a party game gets the same, without banners)
+const PAL = { white: 0xeef3fb, navy: 0x26346a, steel: 0x8a9bc6, roof: 0xa8233b, snow: 0xfbfdff, warm: 0xffcf7a, green: 0x2f7a4a, gold: 0xffc23a };
+function buildTower(THREE, xo, banners) {
+  const G = new THREE.Group(), M = {}, mat = (k, o = {}) => (M[k + JSON.stringify(o)] ||= new THREE.MeshStandardMaterial({ color: PAL[k] ?? k, roughness: 0.7, ...o }));
+  const box = (w, h, d, x, y, z, m, ry = 0, rz = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x + xo, y, z); b.rotation.set(0, ry, rz); G.add(b); return b; };
+  const top = 53.45, z0 = -98.3, z1 = -93.55, hw = 2.6, wallH = 3.3, peak = top + wallH + 1.55;
+  // the deck under the hut and its railing (navy posts, a white rail)
+  box(7, 0.3, 6.6, 0, top - 0.15, -95.8, mat('navy'));
+  for (const sd of [-1, 1]) { for (let z = -98.9; z <= -92.7; z += 1.55) box(0.12, 1.0, 0.12, sd * 3.4, top + 0.5, z, mat('navy')); box(0.1, 0.1, 6.4, sd * 3.4, top + 1.02, -95.8, mat('white')); }
+  // the hut: white walls, navy corner posts and a band at the foot, warm windows
+  box(hw * 2, wallH, z1 - z0, 0, top + wallH / 2, (z0 + z1) / 2, mat('white'));
+  for (const sx of [-1, 1]) for (const zz of [z0, z1]) box(0.24, wallH + 0.05, 0.24, sx * hw, top + wallH / 2, zz, mat('navy'));
+  box(hw * 2 + 0.1, 0.35, z1 - z0 + 0.1, 0, top + 0.17, (z0 + z1) / 2, mat('navy'));
+  const glow = mat('warm', { emissive: 0xffb24a, emissiveIntensity: 0.9 });
+  box(3.6, 0.95, 0.06, 0, top + 2.0, z1 + 0.04, glow); box(0.06, 0.9, 2.6, -hw - 0.04, top + 2.0, (z0 + z1) / 2, glow); box(0.06, 0.9, 2.6, hw + 0.04, top + 2.0, (z0 + z1) / 2, glow);
+  for (const x of [-0.9, 0, 0.9]) box(0.08, 0.95, 0.08, x, top + 2.0, z1 + 0.08, mat('navy'));
+  // the START sign under the eave
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#a8233b'; c.fillRect(0, 0, 256, 64); c.fillStyle = '#fff'; c.font = '400 46px "Lilita One", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('START', 128, 35);
+  const st = new THREE.CanvasTexture(cv); st.colorSpace = THREE.SRGBColorSpace; const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshStandardMaterial({ map: st, roughness: 0.6 })); sign.position.set(xo, top + 2.95, z1 + 0.09); G.add(sign);
+  // the gable ends (white triangles) and the roof: two wine-red slopes under thick snow, a chimney
+  const tri = new THREE.BufferGeometry(); tri.setAttribute('position', new THREE.Float32BufferAttribute([-hw, 0, 0, hw, 0, 0, 0, 1.55, 0], 3)); tri.computeVertexNormals();
+  for (const zz of [z1 + 0.01, z0 - 0.01]) { const t = new THREE.Mesh(tri, mat('white', { side: THREE.DoubleSide })); t.position.set(xo, top + wallH, zz); G.add(t); }
+  const ang = Math.atan2(1.55, hw), len = Math.hypot(hw, 1.55) + 0.45;
+  for (const sd of [-1, 1]) { const cx = sd * (hw / 2 + 0.12), cy = top + wallH + 0.78;
+    box(len, 0.2, z1 - z0 + 0.9, cx, cy + 0.05, (z0 + z1) / 2, mat('roof'), 0, -sd * ang);
+    box(len - 0.25, 0.22, z1 - z0 + 0.7, cx - sd * 0.05, cy + 0.24, (z0 + z1) / 2, mat('snow'), 0, -sd * ang); }
+  box(0.55, 1.1, 0.55, 1.2, peak - 0.3, z0 + 1.2, mat('navy')); box(0.65, 0.2, 0.65, 1.2, peak + 0.3, z0 + 1.2, mat('snow'));
+  // a Christmas wreath in the front gable: a green ring, a red bow, gold berries
+  const wr = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.13, 6, 14), mat('green')); wr.position.set(xo, top + wallH + 0.62, z1 + 0.12); G.add(wr);
+  box(0.36, 0.16, 0.06, 0, top + wallH + 0.25, z1 + 0.2, mat('roof'));
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; box(0.09, 0.09, 0.09, Math.cos(a) * 0.42, top + wallH + 0.62 + Math.sin(a) * 0.42, z1 + 0.22, mat('gold', { emissive: 0xffaa22, emissiveIntensity: 0.6 })); }
+  // the in-run: a railing on both walls (navy posts every 4.5 m, a white rail) and snow along the wall tops
+  const P = S.inrun, at = (s) => { let acc = 0; for (let i = 1; i < P.length; i++) { const A = P[i - 1], B = P[i], d = Math.hypot(B[1] - A[1], B[2] - A[2]); if (acc + d >= s) { const f = (s - acc) / d; return [A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f, Math.atan2(A[1] - B[1], B[2] - A[2])]; } acc += d; } const L = P[P.length - 1]; return [L[1], L[2], 0]; };
+  for (let s0 = 0; s0 < S.LIN - 1; s0 += 4.5) { const [y, z, a] = at(s0), [y2, z2] = at(Math.min(S.LIN, s0 + 4.5)), mid = [(y + y2) / 2, (z + z2) / 2], seg = Math.hypot(y2 - y, z2 - z);
+    for (const sd of [-1, 1]) { box(0.1, 0.85, 0.1, sd * 2.12, y + 0.9 + 0.42, z, mat('navy'));
+      const r = box(0.08, 0.08, seg, sd * 2.12, mid[0] + 1.78, mid[1], mat('white')); r.rotation.x = a;
+      const sn = box(0.36, 0.1, seg, sd * 2.05, mid[0] + 0.95, mid[1], mat('snow')); sn.rotation.x = a; } }
+  // the sponsors on the in-run's outer sides (each side its own order)
+  if (banners) for (const [s, k] of [[22, 'red'], [48, 'face'], [74, 'red']]) for (const sd of [-1, 1]) { const [y, z, a] = at(s), kind = sd > 0 ? k : (k === 'red' ? 'face' : 'red');
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.8), new THREE.MeshStandardMaterial({ map: sponsorTex(THREE, kind), roughness: 0.6 }));
+    b.position.set(xo + sd * 2.24, y - 0.2, z); b.rotation.set(a, sd * Math.PI / 2, 0, 'YXZ'); G.add(b); }
+  G.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.userData.noCast = true; } });
+  return G;
+}
+// the judges' tower beside the landing hill: four legs, a white cabin with a blue glass band facing the hill, a red roof under snow, a flag
+function buildJudges(THREE, x, z, yb) {
+  const G = new THREE.Group(), m = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, ...o }), box = (w, h, d, px, py, pz, mm) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mm); b.position.set(px, py, pz); G.add(b); return b; };
+  const top = yb + 9, nv = m(PAL.navy);
+  for (const sx of [-1.6, 1.6]) for (const sz of [-1.3, 1.3]) box(0.3, top - yb + 1, 0.3, x + sx, (yb + top) / 2 - 0.5, z + sz, nv);
+  box(4.4, 0.3, 3.4, x, top, z, nv); box(4.2, 2.6, 3.2, x, top + 1.45, z, m(PAL.white)); box(0.06, 1.0, 2.8, x + 2.13, top + 1.7, z, m(0x9fd8ff, { emissive: 0x3a8ed0, emissiveIntensity: 0.5 }));
+  box(4.8, 0.3, 3.8, x, top + 2.9, z, m(PAL.roof)); box(4.6, 0.22, 3.6, x, top + 3.14, z, m(PAL.snow));
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#26346a'; c.fillRect(0, 0, 256, 64); c.fillStyle = '#fff'; c.font = '400 40px "Lilita One", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('JUDGES', 128, 34);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.65), new THREE.MeshStandardMaterial({ map: t })); sg.position.set(x + 2.14, top + 2.45, z); sg.rotation.y = Math.PI / 2; G.add(sg);
+  box(0.08, 2.4, 0.08, x - 1.8, top + 4.3, z - 1.4, nv); box(0.05, 0.6, 0.9, x - 1.8, top + 5.2, z - 0.95, m(0xe8304a));
+  G.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.userData.noCast = true; } });
+  return G;
+}
 export default {
   id: 'skijump', blurb: 'Right words give speed, a perfect take-off and a longer flight. Two jumps!',
-  light: { sky: 'alpine-gold', skyYaw: 0.55, skyBase: 0.22, sunDir: [0.75, 0.4, 0.45], sun: 0xffe4c4, sunI: 2.5, hemiSky: 0xdde6ff, hemiGround: 0x9a86c8, hemi: 0.9, rim: 0xffb27a, rimI: 1.0, exposure: 0.96, fog: [180, 760], fogColor: 0xf8d6bc, flakes: 120, flakeA: 0.35 },
+  light: { sky: 'alpine-gold', skyYaw: 0.55, skyBase: 0.22, sunDir: [0.75, 0.4, 0.45], sun: 0xfff0e0, sunI: 2.4, hemiSky: 0xdfe8ff, hemiGround: 0x9a8ed0, hemi: 0.95, rim: 0xffb27a, rimI: 1.0, exposure: 0.96, fog: [180, 760], fogColor: 0xeadcea, flakes: 160, flakeA: 0.45 },   /* (2026-11-25: a little cooler and snowier: whites and blues, the gold sunset as the warm accent) */
   bestShown: (s) => `${s.toFixed(1)} m`,
   async build(E, prog) {
     const { THREE } = E; THREEp.T = THREE;
     const [g, J] = await Promise.all([E.loadGLB('models/skijump.glb?v=1'), E.loadJSON('models/skijump.json?v=1')]);
     E.dressModel(g.scene); E.scene.add(g.scene); prog(30, 'Planting the trees…');
+    // (2026-11-25) the winter palette on the model: the in-run's walls deep blue, the supports steel blue; the old box cabin replaced (buildTower)
+    const reMat = { WoodDark: new THREE.MeshStandardMaterial({ color: PAL.navy, roughness: 0.75 }), MastGrey: new THREE.MeshStandardMaterial({ color: PAL.steel, roughness: 0.5, metalness: 0.25 }) };
+    g.scene.traverse((o) => { if (!o.isMesh) return; if (/^Start/.test(o.name)) o.visible = false; const set = (mm) => (mm && reMat[mm.name]) || mm; o.material = Array.isArray(o.material) ? o.material.map(set) : set(o.material); });
     // (2026-11-25, multiplayer: "exactly 2 ramps side by side, you see your friend right next to you") the friend's in-run, a copy of ours
     // 6.5 m to the left (the cameras look from the right, so it never comes between them and Foxino)
     if (E.MP.on) { for (const o of g.scene.children.slice()) if (/^(Inrun|Brace|Pillar|Start)/.test(o.name)) { const c = o.clone(); c.position.x += FR_X; c.traverse((m) => { m.castShadow = false; m.userData.noCast = true; }); g.scene.add(c); } }
     S.J = J; S.inrun = J.inrun; S.hill = J.hill; S.acc = [0]; for (let i = 1; i < S.inrun.length; i++) { const A = S.inrun[i - 1], B = S.inrun[i]; S.acc.push(S.acc[i - 1] + Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])); } S.LIN = S.acc[S.acc.length - 1];
+    E.scene.add(buildTower(THREE, 0, true)); if (E.MP.on) E.scene.add(buildTower(THREE, FR_X, false));
+    E.scene.add(buildJudges(THREE, -24, 52, hillY(52) - 1.5));
     E.scene.add(E.instanceField(J.trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(J.rocks, (t) => `Rock${t}`));
     // distance boards along the hill sides, the K line (red) and lines for your best and the friend's distance
     for (const m of J.props.filter((p) => p[0] === 'Marker')) {
@@ -73,7 +139,7 @@ export default {
     const line = (z, col) => { const geo = new THREE.PlaneGeometry(J.hillHalfWidth * 2, 0.35); const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, toneMapped: false, transparent: true, opacity: 0.85, depthWrite: false }));
       m.rotation.x = -Math.PI / 2; m.renderOrder = 2; E.scene.add(m); const set = (zz) => { m.visible = zz > 0; const a = Math.atan2(hillY(zz) - hillY(zz + 1), 1); m.position.set(0, hillY(zz) + 0.06, zz); m.rotation.set(-Math.PI / 2 + a, 0, 0); }; set(z); return { m, set }; };
     S.lines.k = line(J.K, 0xff3d5a); S.lines.best = line(0, 0xffd84a); S.lines.friend = line(0, 0xff7d22); S.lines.last = line(0, 0x6fe2ff);
-    await E.addMountains(-300, 0xffe8d8);
+    await E.addMountains(-300, 0xf2ecff);
     prog(60, 'Waxing the long skis…');
     S.a = await E.makeActor({ gear: 'jump' });
     if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'jump', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
@@ -84,14 +150,17 @@ export default {
   // Christmas (2026-11-24): lights up the in-run and down both sides of the hill, decorated trees and gifts beside the landing, a big tree and a sleigh in the outrun
   xmas(E, X) {
     if (!X.ok) return; const { THREE } = E, hw = S.J.hillHalfWidth, H = (x, z, dy = 0) => new THREE.Vector3(x, hillY(z) + dy, z), c = { p: new THREE.Vector3(), ang: 0 };
-    for (const sd of [1, -1]) { for (let s0 = 0; s0 < S.LIN; s0 += 27) { const posts = []; for (let s = s0; s <= Math.min(S.LIN, s0 + 27); s += 4.5) { inrunAt(s, c); posts.push(c.p.clone().add(new THREE.Vector3(sd * IRW, 1.0, 0))); } if (posts.length > 1) X.lights(posts, { sag: 0.2, per: 4, size: 0.09, glow: 0.9 }); }
+    for (const sd of [1, -1]) { for (let s0 = 0; s0 < S.LIN; s0 += 27) { const posts = []; for (let s = s0; s <= Math.min(S.LIN, s0 + 27); s += 4.5) { inrunAt(s, c); posts.push(c.p.clone().add(new THREE.Vector3(sd * 2.12, 1.82, 0))); } if (posts.length > 1) X.lights(posts, { sag: 0.2, per: 4, size: 0.09, glow: 0.9 }); }
       for (let z0 = 0; z0 < 180; z0 += 36) { const posts = []; for (let z = z0; z <= z0 + 36; z += 9) posts.push(H(sd * (hw + 0.8), z, 1.2)); X.lights(posts, { sag: 0.35, per: 5, size: 0.15, glow: 1.1 }); } }
     for (let z = 40, i = 0; z < 190; z += 45, i++) { const sd = i % 2 ? 1 : -1;
       X.put('XmasTree_Big', H(sd * (hw + 4.5), z), i, 1.35); X.put('XmasTree_Small', H(-sd * (hw + 3.6), z + 14), -i, 1.8);
       X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], H(sd * (hw + 2.6), z - 2), i); 
       if (i % 2) X.put('Snowman', H(-sd * (hw + 2.4), z - 5), -sd * 1.4); }
     X.put('XmasTree_Small', H(-9, 234), 0.3, 2.6); X.put('Sleigh', H(6, 222), -2.4); X.put('Gift_A', H(-7, 229), 1);
-    inrunAt(0, c); X.put('StarLight', c.p.clone().add(new THREE.Vector3(0, 6, -3)), 0, 1.5); for (const sd of [1, -1]) X.put('Lantern', c.p.clone().add(new THREE.Vector3(sd * (IRW + 0.4), 0, 1)), sd);
+    inrunAt(0, c); X.put('StarLight', new THREE.Vector3(0, 53.45 + 3.3 + 1.55 + 0.55, -95.9), 0, 1.6); for (const sd of [1, -1]) X.put('Lantern', c.p.clone().add(new THREE.Vector3(sd * (IRW + 0.4), 0, 1)), sd);
+    // (2026-11-25) the hut: lights along both roof edges and the eaves, a little tree on each front corner of the deck
+    const tp = 53.45 + 3.3; X.lights([new THREE.Vector3(-2.95, tp - 0.1, -93.05), new THREE.Vector3(0, tp + 1.62, -93.05), new THREE.Vector3(2.95, tp - 0.1, -93.05)], { sag: 0.05, per: 9, size: 0.1, glow: 1.2 });
+    for (const sd of [-1, 1]) { X.lights([new THREE.Vector3(sd * 2.95, tp - 0.1, -93.05), new THREE.Vector3(sd * 2.95, tp - 0.1, -98.75)], { sag: 0.12, per: 7, size: 0.1, glow: 1.1 }); X.put('XmasTree_Small', new THREE.Vector3(sd * 2.9, 53.45, -93.2), sd, 0.9); }
   },
   reset(E) { if (JM) JM.classList.remove('on', 'done'); Object.assign(S, { phase: 'menu', s: 0, v: 0, jump: 0, dist: [], asking: '', fl: null }); E.snapCam(); try { const b = JSON.parse(localStorage.getItem('snow-jump-best1') || 'null'); if (b) S.lines.best.set(b); } catch (e) {} },
   menu() { S.phase = 'menu'; },
