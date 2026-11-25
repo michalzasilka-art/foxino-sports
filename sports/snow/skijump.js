@@ -4,7 +4,7 @@
 const S = { a: null, ghost: null, inrun: [], acc: [], LIN: 100, hill: [], phase: 'menu', s: 0, v: 0, z: 0, fl: null, jump: 0, dist: [], bonus: 0, takeoff: false, glide: 0, lines: {}, asking: '', stopT: 0, shotT: 0 };
 const THREEp = {};
 const FR_X = -6.5;   // (the friend's ramp, in a party game)
-const RAMP_T = 15, RAMP_END = 0.93, PER_RIGHT = 5.5, V0 = 1.2;   // (the ramp: ~15 s, speeding up from V0 m/s all the way down; the questions stop at 93 %; metres per right answer)
+const RAMP_T = 12, RAMP_END = 0.93, PER_RIGHT = 5.5, V0 = 2.2;   // (the ramp: ~12 s, speeding up from V0 m/s all the way down; the questions stop at 93 %; metres per right answer) (2026-11-25, the user: "faster acceleration": 15 s → 12 s, a quicker push off)
 // (2026-11-24, the user: "make there a motion animation of your jump lenght adding up at the top of the screen when you land make it more
 // satysfiing") the metres tick up at the top while he flies; on landing they roll on to the final distance and pop
 let JM = null; function jumpMeter(on) { if (!JM) { const st = document.createElement('style'); st.textContent = `
@@ -109,7 +109,7 @@ export default {
       S.phase = 'inrun'; S.got = 0; S.miss = 0; let qn = 0;
       const head = () => S.a.g.position.clone().setY(S.a.g.position.y + 1.2), END = S.LIN * RAMP_END;
       while (S.s < END - 3) { qn++; S.asking = 'inrun';
-        const r = await Promise.race([E.ask({ who: `RAMP · QUESTION ${qn}`, num: `JUMP ${j + 1}`, size: 0.8, slow: 1, anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.5), out, 1.9, 1.3) }), E.until(() => S.s >= END).then(() => null)]);
+        const r = await Promise.race([E.ask({ who: `RAMP · QUESTION ${qn}`, num: `JUMP ${j + 1}`, size: 0.54, slow: 1, anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.5), out, 1.15, 1.0) })   /* (2026-11-25, the user: "the bubbles a bit smaller and closer to each other": 0.8 → 0.54, spread 1.9 → 1.15) */, E.until(() => S.s >= END).then(() => null)]);
         S.asking = ''; if (!r) { E.cancelAsk(); break; }
         if (r.ok) { S.got++; E.juice(r, head(), `+${PER_RIGHT} m`); } else { S.miss++; E.juice(r, head(), 'no extra'); }
         await E.wait(r.ok ? 0.5 : 1.1); }
