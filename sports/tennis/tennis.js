@@ -369,9 +369,14 @@ function updatePlayers(dt, t) {
 
 // ---------- the ball's flight ----------
 // a flight is a list of arcs {a, b, h, d}: from a to b in d seconds, h metres above the straight line in the middle
+// (2026-11-25, the user: "when you need to answer make it that it will slow down a bit and you have time until it passes by (the ball) which will be
+// equal to the time to answer") the answer time IS the ball's flight: when the question comes, the incoming ball fades into slow motion, its speed
+// worked out every frame from the ball time still to go and the answer time still left, so it reaches the racket just as the time runs out.
+// A ring round the ball counts down with it. A right answer: full speed again and the return; no answer: the ball goes past.
+const ASKT = { w: null, end: 0, secs: 1, on: false }, ALOG = [];
 const B = { arcs: [], i: 0, u: 0, mode: 'hold', to: null, holder: 'a', pending: null, scale: 1, ask: null, bounced: false, spin: new THREE.Vector3() };
 const arcPos = (A, u, out) => out.lerpVectors(A.a, A.b, u).setY(lerp(A.a.y, A.b.y, u) + 4 * A.h * u * (1 - u));
-function launch(arcs, to) { B.arcs = arcs; B.i = 0; B.u = 0; B.mode = 'fly'; B.to = to; B.pending = null; }
+function launch(arcs, to) { B.arcs = arcs; B.i = 0; B.u = 0; B.mode = 'fly'; B.to = to; B.pending = null; B.holdT = 0; }
 // over the net: the apex high enough to clear it
 function netArc(a, b, d) {
   const un = Math.abs(a.z) / (Math.abs(a.z) + Math.abs(b.z)), yl = lerp(a.y, b.y, un);
@@ -386,7 +391,7 @@ function shotTo(from, C, k, serve = false) {
   const Bp = new THREE.Vector3(tx, 0.1, bz);
   const hx = clamp(tx * 1.25 + rand(-0.4, 0.4), -SINGLE_W - 0.3, SINGLE_W + 0.3), H = new THREE.Vector3(hx, 1.0, -s * (HALF_L - 0.3));
   P[to].tx = hx + (to === 'a' ? -0.75 : 0.75); P[to].tz = -s * (HALF_L + 0.6);
-  launch([netArc(C, Bp, serve ? 0.75 : 1.0), { a: Bp, b: H, h: 0.8, d: 0.55 }], to);
+  launch([netArc(C, Bp, serve ? 0.75 : 1.0), { a: Bp, b: H, h: 0.8, d: 0.55 }], to); B.tossW = null;
   B.hit = H; B.missed = false; B.netAt = 0; B.netDone = false;
   // the other player's answer came in before this shot: it is played when the ball gets there
   if (B.queued && B.queued.w === to) { const qd = B.queued; B.queued = null; if (qd.k < 0) B.missed = true; else B.pending = qd; }
@@ -402,7 +407,24 @@ function doHit(w, k, ok, serve = false) {
   else { launch([], null); }
   // (the bubbles were popped already when the answer came in: COURT.hit)
 }
-const _bp = new THREE.Vector3();
+const _bp = new THREE.Vector3(), _rp = new THREE.Vector3();
+// the countdown ring round the slowed ball, and a soft cool vignette while the game is in slow motion
+let RING = null;
+function updateRing(dt) {
+  if (!RING) { const st = document.createElement('style'); st.textContent = `
+#ballRing{position:fixed;left:0;top:0;width:58px;height:58px;margin:-29px 0 0 -29px;pointer-events:none;opacity:0;transition:opacity .25s}
+#ballRing circle{fill:none;stroke-width:5;stroke-linecap:round}#ballRing .bg{stroke:rgba(255,255,255,.28)}#ballRing .fg{stroke:#7cffb0;transform:rotate(-90deg);transform-origin:50% 50%;filter:drop-shadow(0 0 4px rgba(0,0,0,.35))}
+#ballRing.low .fg{stroke:#ff6a7a}
+#slowVig{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(120,160,255,0) 55%,rgba(60,80,170,.55) 100%)}`;
+    document.head.appendChild(st); const v = document.createElement('div'); v.id = 'slowVig'; const under = $('labels');   /* (just over the court, under the bubbles' words and the question card) */ document.body.insertBefore(v, under);
+    RING = document.createElement('div'); RING.id = 'ballRing'; RING.innerHTML = '<svg viewBox="0 0 58 58"><circle class="bg" cx="29" cy="29" r="24"/><circle class="fg" cx="29" cy="29" r="24" stroke-dasharray="150.8" stroke-dashoffset="0"/></svg>'; RING.fg = RING.querySelector('.fg'); RING.vig = v; document.body.insertBefore(RING, under); }
+  const on = ASKT.on && B.mode === 'fly' && B.to === ASKT.w && !B.pending && !B.missed;
+  if (on) { const left = clamp((ASKT.end - performance.now()) / 1000 / ASKT.secs, 0, 1); _rp.copy(ball.position).project(camera);
+    RING.style.transform = `translate(${((_rp.x * 0.5 + 0.5) * innerWidth).toFixed(1)}px, ${((-_rp.y * 0.5 + 0.5) * innerHeight).toFixed(1)}px)`;
+    RING.fg.setAttribute('stroke-dashoffset', (150.8 * (1 - left)).toFixed(1)); RING.classList.toggle('low', left < 0.3); }
+  RING.style.opacity = on ? '1' : '0';
+  RING.vig.style.opacity = (B.mode === 'fly' && B.to && !B.pending && !B.missed ? clamp((1 - B.scale) * 0.7, 0, 0.55) : 0).toFixed(2);
+}
 function updateBall(dt, t) {
   if (B.mode === 'hold') {
     // bouncing the ball before the serve
@@ -415,15 +437,17 @@ function updateBall(dt, t) {
   } else if (B.mode === 'fly') {
     const A = B.arcs[B.i];
     if (!A) { B.mode = 'dead'; return; }
-    // slow motion while the player still has to answer (the ball hangs before the bounce on their side)
-    let sc = 1;
-    if (B.to && !B.pending && !B.missed && B.i === 0 && B.u > 0.66) sc = 0.045;
+    // the slow motion: the ball time still to go (this arc's rest and the arcs after it) over the answer time still left
+    let sc = 1; const waiting = B.to && !B.pending && !B.missed, mine = waiting && ASKT.on && ASKT.w === B.to;
+    if (mine) { let rb = A.d * (1 - B.u); for (let j = B.i + 1; j < B.arcs.length; j++) rb += B.arcs[j].d; sc = clamp(rb / Math.max(0.05, (ASKT.end - performance.now()) / 1000), 0.02, 1); }
+    else if (waiting && (B.i > 0 || B.u > 0.5)) sc = 0.12;   // (the question is on its way, over the network on the other phone: already easing in)
     if (B.to && B.pending) sc = 1.25;
-    B.scale = damp(B.scale, sc, 8, dt);
+    B.scale = damp(B.scale, sc, waiting ? 5 : 8, dt);
     B.u += (dt * B.scale) / A.d;
     // the receiver swings just before the ball reaches the hit point
     if (B.to && B.pending && B.i === B.arcs.length - 1 && (1 - B.u) * A.d < 0.27 && P[B.to].swing < 0 && B.pending.k >= 0) P[B.to].swing = 0;
-    if (B.u >= 1) {
+    if (B.u >= 1 && waiting && B.i === B.arcs.length - 1 && (mine || (B.holdT = (B.holdT || 0) + dt) < 3)) { B.u = 1; if (mine && ASKT.rec && ASKT.rec.arrive == null) ASKT.rec.arrive = +((performance.now() - ASKT.end) / 1000).toFixed(2); }   // (at the racket before the answer: it waits there; a late answer from the other phone)
+    else if (B.u >= 1) {
       const end = A.b.clone(); B.i++; B.u = 0;
       if (end.y < 0.2) { sfx.thud && sfx.thud(); }
       if (B.i >= B.arcs.length) {
@@ -504,12 +528,13 @@ const COURT = {
   ask(w, q, secs, serve) {
     this.q = q; this.who = w;
     if (serve) { this.resetForServe(w); }
+    Object.assign(ASKT, { w, secs, end: performance.now() + secs * 1000, on: !serve, at: 0 }); ALOG.push(ASKT.rec = { w, secs: +secs.toFixed(2), serve: !!serve, arrive: null, ans: null, mode: B.mode, to: B.to, i: B.i, u: +B.u.toFixed(2), pend: !!B.pending, q: !!B.queued, toss: B.tossW || '' });   /* (your own serve: no ball coming, no slow motion) */
     showBubbles(w, q.words.map((x) => x.text));
     card(w, q, secs);
   },
   resetForServe(w) {
     for (const k of ['a', 'b']) { const p = P[k]; p.tx = (k === w ? 0.9 : -0.9) * (COURT.pointN % 2 ? -1 : 1); p.tz = side(k) * (HALF_L + 0.6); p.swing = -1; }
-    B.mode = 'hold'; B.holder = w; B.arcs = []; B.to = null; B.pending = null; B.queued = null; B.missed = false; B.netAt = 0; B.netDone = false; B.hit = null;
+    ASKT.on = false; B.tossW = null; B.mode = 'hold'; B.holder = w; B.arcs = []; B.to = null; B.pending = null; B.queued = null; B.missed = false; B.netAt = 0; B.netDone = false; B.hit = null;
   },
   hit(w, k, ok, right) {
     const q = this.q;
@@ -517,9 +542,11 @@ const COURT = {
     // Before, they popped when the ball reached the racket: after a quick answer the NEXT question's bubbles were already
     // showing by then, and those were popped instead.
     if (BUBW === w && this.who === w && POPPED !== labelGen) { POPPED = labelGen; popBubbles(k, ok); }
+    if (ASKT.w === w) { if (ASKT.on && ASKT.rec) ASKT.rec.ans = +((performance.now() - ASKT.end) / 1000).toFixed(2); ASKT.on = false; }
     if (B.mode === 'hold' && B.holder === w) { tossServe(w, k, ok); }
     else if (B.mode === 'fly' && B.to === w) { if (k < 0) { B.missed = true; B.pending = null; } else B.pending = { w, k, ok }; }
     else if (B.mode === 'fly' && B.to && B.to !== w) B.queued = { w, k, ok };
+    else if (B.mode === 'fly' && !B.to && B.tossW && B.tossW !== w) B.queued = { w, k, ok };   /* (2026-11-25: the return of a serve still being tossed: played when the serve gets there; before, it was hit from nowhere and the serve died at the receiver) */
     else if (k >= 0) doHit(w, k, ok);
     if (q && this.who === w) { const g = labelGen; if (!ok) setTimeout(() => { if (g === labelGen) revealRight(q.correct); }, 350); cardResult(ok, k, q, right); timerStop(); }
   },
@@ -528,7 +555,7 @@ const COURT = {
 };
 COURT.pointN = 0;
 function tossServe(w, k, ok) {
-  B.mode = 'toss'; const p = P[w], at = B.serveAt.clone(), start = ball.position.clone();
+  B.mode = 'toss'; B.tossW = w; const p = P[w], at = B.serveAt.clone(), start = ball.position.clone();
   launch([{ a: start, b: at, h: 0.5, d: 0.45 }], null); B.mode = 'fly';
   setTimeout(() => { P[w].swing = 0.3; }, 250);
   setTimeout(() => { if (k < 0) { B.arcs = []; B.mode = 'dead'; return; } doHit(w, k, ok, true); }, 460);
@@ -768,7 +795,7 @@ const FR = {
     const st = (FR.streak || (FR.streak = { h: 0, g: 0 }))[who] || 0, secs = Math.max(4, 11 - FR.n * 0.15 - FR.rally * 0.25 - Math.min(10, st) * 0.45), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time gets shorter over the match, in a rally and with each player's own streak) */
     FR.turn = { who, q, id, done: false };
     FR.cast({ t: 'ask', who, q, secs, serve, id });
-    clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + (who === 'h' ? 900 : 4000));   /* (the friend's own clock decides; this is only the safety net) */
+    clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + (who === 'h' ? 200 : 4000));   /* (2026-11-25: the host's own time-out 0.9 → 0.2 s after the deadline: the slowed ball reaches the racket at the deadline and goes past at once) */   /* (the friend's own clock decides; this is only the safety net) */
   },
   resolve(who, id, k, ms) {
     const T = FR.turn; if (!T || T.id !== id || T.done || T.who !== who) return;
@@ -942,7 +969,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
   const bdt = FREEZE > 0 ? 0 : dt; FREEZE = Math.max(0, FREEZE - dt);
-  updatePlayers(dt, T); updateBall(bdt, T); updateBubbles(dt, T); updateCrowd(T, dt); BURST.update(dt); placeCamera(dt);
+  updatePlayers(dt, T); updateBall(bdt, T); updateRing(dt); updateBubbles(dt, T); updateCrowd(T, dt); BURST.update(dt); placeCamera(dt);
   if (XM.snow) XM.snow.update(T, camera, pr); for (const l of XM.lights) l.update(T);
   POSTFX.draw(scene, camera, 30);
   updateLabels();
@@ -964,5 +991,5 @@ function frame(now) {
       if (MP.on) FR.viaMP_start();
       else if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
     else if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
-  window.TN = { COURT, SOLO, FR, B, P, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
+  window.TN = { COURT, SOLO, FR, B, P, ASKT, ALOG, ball, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();
