@@ -46,10 +46,13 @@ function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, 
 
 export const _S = S;
 // (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
-const NB = /[?&]nb=1/.test(location.search);   /* (2026-11-25 02:00: the old rider is the default again for the school test: the new Snowboard Foxino read dark and hunched at phone size; ?nb=1 = the new one) */
+const QALL = (() => { let q = location.search; try { if (window.parent !== window) q += '&' + window.parent.location.search.slice(1); } catch (e) {} return q; })();   // (the switch also works on the Sports lobby's address: /sports/?nb=2)
+const NB = /[?&]nb=[12]/.test(QALL), RIDER_URL = /[?&]nb=2/.test(QALL) ? 'models/foxino-snowrider.glb?v=1' : 'models/foxino-snowboard.glb?v=1';   /* (2026-11-25: ?nb=2 = the snowrider: the whole Foxino on his board in a purple jacket and black ski pants (Tripo + Claudee RCC, 19 clips), behind a switch until it is approved) */   /* (2026-11-25 02:00: the old rider is the default again for the school test: the new Snowboard Foxino read dark and hunched at phone size; ?nb=1 = the new one) */
 // the clip for where he is: on the walls he carves, at the lips he pumps, in the air a tuck or the trick's grab, then the landing
 function clipFor(st) {
   if (st.ph === 'menu' || st.ph === 'drop') return ['stance_idle', 1];
+  if (st.fall && st.has && st.has.wipeout) return ['wipeout', 1];   // (the snowrider's own wipeout: down, slide, up)
+  if (st.rail && st.has && st.has.boardslide) return ['boardslide', 1];
   if (st.ph === 'stop' || st.ph === 'out' && st.u > 0.7) return ['cheer', 1];
   if (st.ph === 'air') { if (st.gk && st.gkk > 0.02) return ['grab_' + st.gk, st.gs || 1]; return st.air < 0.32 && !st.tr ? ['takeoff', 1.3] : ['air_tuck', 1]; }
   if (st.landT > 0) return [st.oops ? 'land_wobble' : 'land', st.oops ? 1.2 : 1.4];
@@ -259,8 +262,8 @@ export default {
     let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) E.scene.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
-    S.a = NB ? await E.makeBoarder() : await E.makeActor({ gear: 'board' });
-    if (/[?&]party=1/.test(location.search)) { S.ghost = NB ? await E.makeBoarder({ friend: true }) : await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
+    S.a = NB ? await E.makeBoarder({ url: RIDER_URL }) : await E.makeActor({ gear: 'board' });
+    if (/[?&]party=1/.test(location.search)) { S.ghost = NB ? await E.makeBoarder({ friend: true, url: RIDER_URL }) : await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => gY(x, z) + (z > PIPE_A && z < PIPE_B && Math.abs(x) < W() + DECK ? pipeY(Math.abs(x)) : 0) - 0.2;
     E.drawDist = E.MP.on ? 118 : 155;   /* (2026-11-25: the longer course in deep forest: the far rows are the cheap firs; under 100k a frame) */
     this.reset(E);
@@ -353,7 +356,7 @@ export default {
       E.focusAt = Pp; E.focus = 4; E.hud('0', 'SNOWBOARD'); if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt); return;
     }
     S.s += S.v * dt;
-    if (S.fall > 0) { S.fall = Math.max(0, S.fall - dt); const k = 1 - S.fall / FALL; S.fr = 1.35 * (k < 0.18 ? k / 0.18 : k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); } else S.fr = 0;   // (down, sliding, back up)
+    if (S.fall > 0) { S.fall = Math.max(0, S.fall - dt); const k = 1 - S.fall / FALL; S.fr = a.isClip && (a.clips || []).includes('wipeout') ? 0 : 1.35 * (k < 0.18 ? k / 0.18 : k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); } else S.fr = 0;   // (down, sliding, back up)
     if (S.phase === 'cross' || S.phase === 'out') {
       // from one lip across the flat to the other lip (u: 0 -> 1)
       S.u += dt / 1.55 * (S.fall > 0 ? 0.55 : 1);
@@ -418,7 +421,7 @@ export default {
     const air = !!AIRS[S.phase], gkk = act ? Math.min(1, Math.sin(Math.PI * act.k) * 1.6) : 0;
     if (a.isClip) { S.landClk = air ? 0.75 : Math.max(0, (S.landClk || 0) - dt);
       if (air) S.wasOops = S.phase === 'air' ? S.trick === OOPS : S.bOops; if (S.fall > 0) S.landClk = 0.4;
-      const st = { ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll };
+      const st = { has: a.has || (a.has = Object.fromEntries((a.clips || []).map((c) => [c, 1]))), fall: S.fall > 0, rail: S.phase === 'rail', ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll };
       const [cl, sp] = clipFor(st); if (cl !== S.clip) { S.clip = cl; a.want(cl, cl.startsWith('grab_') ? 0.1 : 0.18, sp); } a.update(dt); S.clipSt = st; }
     else { a.pose(P, 12, rdt); a.update(); }
     E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, pitch: S.pitch, fr: S.fr || 0, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: act ? act.T[0] : S.phase === 'air' && S.trick === OOPS ? 'OOPS' : '', gk: act && act.T[4] ? act.T[4] : '', gkk, pts: S.pts, n: S.airN || 0, cl: S.clip || '', cs: S.clipSt ? clipFor(S.clipSt)[1] : 1 });

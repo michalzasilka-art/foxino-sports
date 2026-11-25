@@ -277,9 +277,9 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
 }
 // (2026-11-25) the Snowboard Foxino (Tripo + Claudee RCC, blender/foxino-snowboard): his own snowboard gear, no tail, the board in the model,
 // 19 animation clips. A.want(name) cross-fades to a clip (once-clips hold their last frame); A.update(dt) runs the clips.
-const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'grab_indy', 'grab_melon', 'grab_tail', 'grab_method', 'grab_stalefish', 'land', 'land_wobble', 'fall_sit', 'sad']);
-export async function makeBoarder({ friend = false } = {}) {
-  const gl = await loadGLB('models/foxino-snowboard.glb?v=1'), inner = gl.scene;
+const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'grab_indy', 'grab_melon', 'grab_tail', 'grab_method', 'grab_stalefish', 'land', 'land_wobble', 'fall_sit', 'sad', 'wipeout']);
+export async function makeBoarder({ friend = false, url = 'models/foxino-snowboard.glb?v=1' } = {}) {   // (2026-11-25: url: models/foxino-snowrider.glb = the whole Foxino on his board, purple jacket, black ski pants, from Tripo + Claudee RCC)
+  const gl = await loadGLB(url), inner = gl.scene;
   inner.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(inner), s = 1.3 / Math.max(0.1, box.max.y - box.min.y);
   inner.scale.setScalar(s); inner.rotation.y = -Math.PI / 2;   // (faces +Z, board nose +X in the file: turned like the old rider, sideways down the slope)
   inner.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = !friend; if (friend) o.userData.noCast = true; const m = o.material = o.material.clone(); if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; m.roughness = 0.75; if (friend) m.color.set(0xffd7b0); } });
