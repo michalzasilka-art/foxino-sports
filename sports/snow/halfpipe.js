@@ -15,6 +15,17 @@ function pipeY(ad) { if (ad <= S.FLAT) return 0; if (ad <= W()) { const x = ad -
 function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, (ad - S.FLAT) / S.R)); }
 
 export const _S = S;
+// (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
+const NB = !/[?&]nb=0/.test(location.search);   /* (?nb=0: the old rider) */
+// the clip for where he is: on the walls he carves, at the lips he pumps, in the air a tuck or the trick's grab, then the landing
+function clipFor(st) {
+  if (st.ph === 'menu' || st.ph === 'drop') return ['stance_idle', 1];
+  if (st.ph === 'stop' || st.ph === 'out' && st.u > 0.7) return ['cheer', 1];
+  if (st.ph === 'air') { if (st.gk && st.gkk > 0.02) return ['grab_' + st.gk, st.gs || 1]; return st.air < 0.32 && !st.tr ? ['takeoff', 1.3] : ['air_tuck', 1]; }
+  if (st.landT > 0) return [st.oops ? 'land_wobble' : 'land', st.oops ? 1.2 : 1.4];
+  if (st.u > 0.86) return ['pump', 1.2];
+  return [st.roll > 0.2 ? 'carve_left' : st.roll < -0.2 ? 'carve_right' : 'ride', 1];
+}
 let FX = null; function fxRoot() { if (FX) return FX; const st = document.createElement('style'); st.textContent = `
 #trickCard{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 84px);transform:translateX(-50%) scale(.5);opacity:0;z-index:31;pointer-events:none;text-align:center;font-family:'Lilita One','Arial Black',sans-serif;white-space:nowrap}
 #trickCard.go{animation:tcIn .35s cubic-bezier(.2,1.7,.4,1) forwards} #trickCard.out{animation:none;transition:opacity .3s,transform .3s;opacity:0;transform:translateX(-50%) translateY(-16px) scale(.9)} body.asking #trickCard{display:none}
@@ -54,8 +65,8 @@ export default {
     for (let i = 0; i < 4; i++) { const pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(i % 2 ? 9 : -9, -((20 + i * 48) * S.SL) + 12, 20 + i * 48); E.scene.add(pl); }
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
-    S.a = await E.makeActor({ gear: 'board' });
-    if (/[?&]party=1/.test(location.search)) { S.ghost = await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
+    S.a = NB ? await E.makeBoarder() : await E.makeActor({ gear: 'board' });
+    if (/[?&]party=1/.test(location.search)) { S.ghost = NB ? await E.makeBoarder({ friend: true }) : await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
     E.groundAt = (x, z) => -z * S.SL + pipeY(Math.abs(x)) - 0.2;
     E.drawDist = E.MP.on ? 140 : 170;   /* (2026-11-24: 260 → 170 m: the bigger airs look further down the pipe; under 100k a frame) */
     this.reset(E);
@@ -103,7 +114,7 @@ export default {
     if (S.phase === 'menu' || S.phase === 'drop') {
       S.s = -3; S.d = -W() - 1.5; y = S.R + S.WALLV;
       a.g.position.set(S.d, -S.s * S.SL + y, S.s); a.g.rotation.set(0, Math.PI * 0.5, 0);
-      a.pose(this.ridePose(t, 0), 8, rdt); a.update();
+      if (a.isClip) { a.want('stance_idle'); a.update(dt || rdt); } else { a.pose(this.ridePose(t, 0), 8, rdt); a.update(); }
       const Pp = a.g.position, ang = t * 0.15 + 0.6;
       E.cam(new THREE.Vector3(Pp.x + 1.5 + Math.cos(ang) * 3.6, Pp.y + 1.5, Pp.z + Math.sin(ang) * 3.6), new THREE.Vector3(Pp.x, Pp.y + 0.8, Pp.z), 3, 50);
       E.focusAt = Pp; E.focus = 4; E.hud('0', 'HALFPIPE'); return;
@@ -142,8 +153,12 @@ export default {
     a.g.rotation.set(0, 0, 0); a.g.rotateX(-S.SL * 0.0); a.g.rotateZ(roll); a.g.rotateY(S.head);
     if (S.phase === 'air') { a.g.rotateY(S.spin); a.g.rotateZ(S.cork || 0); a.g.rotateX(S.flip); }
     void face;
-    a.pose(P, 12, rdt); a.update();
-    E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: S.trick ? S.trick[0] : '', gk: S.trick && S.trick !== OOPS ? S.trick[4] : '', gkk: S.phase === 'air' && S.trick ? Math.min(1, Math.sin(Math.PI * smoothStep((S.air - 0.42 * S.airT) / (0.5 * S.airT))) * 1.6) : 0, pts: S.pts, n: S.airN || 0 });
+    if (a.isClip) { S.landClk = S.phase === 'air' ? 0.75 : Math.max(0, (S.landClk || 0) - dt); const T = S.trick, kk = S.phase === 'air' && T && T !== OOPS ? smoothStep((S.air - 0.42 * S.airT) / (0.5 * S.airT)) : 0;
+      if (S.phase === 'air') S.wasOops = T === OOPS;
+      const st = { ph: S.phase, u: S.u, air: S.air / S.airT, tr: T ? T[0] : '', gk: T && T !== OOPS && kk > 0.02 && kk < 0.99 ? T[4] : '', gkk: kk, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: S.phase === 'cross' && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll };
+      const [cl, sp] = clipFor(st); if (cl !== S.clip) { S.clip = cl; a.want(cl, cl.startsWith('grab_') ? 0.1 : 0.18, sp); } a.update(dt); S.clipSt = st; }
+    else { a.pose(P, 12, rdt); a.update(); }
+    E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: S.trick ? S.trick[0] : '', gk: S.trick && S.trick !== OOPS ? S.trick[4] : '', gkk: S.phase === 'air' && S.trick ? Math.min(1, Math.sin(Math.PI * smoothStep((S.air - 0.42 * S.airT) / (0.5 * S.airT))) * 1.6) : 0, pts: S.pts, n: S.airN || 0, cl: S.clip || '', cs: S.clipSt ? clipFor(S.clipSt)[1] : 1 });
     if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt);
     else if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(-S.d * 0.8, -gs * S.SL + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
     E.hud(`${Math.round(S.shown ?? S.pts)}`, `AIR ${Math.min(HITS, S.hit + (S.phase === 'air' ? 1 : 0))} OF ${HITS}`); E.progress(S.hit / HITS);
@@ -163,8 +178,8 @@ export default {
     if (!G.g.visible || G.g.position.distanceTo(want) > 12) G.g.position.copy(want); else G.g.position.lerp(want, 1 - Math.exp(-rdt * 14));
     G.g.visible = true; G.g.rotation.set(0, 0, 0); G.g.rotateZ(F.roll || 0); G.g.rotateY(F.head || 0);
     if (F.ph === 'air') { G.g.rotateY(F.spin || 0); G.g.rotateZ(F.cork || 0); G.g.rotateX(F.flip || 0); }
-    const P = F.ph === 'air' && F.gk && F.gkk > 0.05 ? this.grabPose(t + 0.5, F.gk, F.gkk) : F.ph === 'stop' ? E.SP.cheer(t) : this.ridePose(t + 0.7, F.ph === 'air' ? 0.6 : 0);
-    G.pose(P, 12, rdt); G.update();
+    if (G.isClip) { if (F.cl && F.cl !== G.cur) G.want(F.cl, F.cl.startsWith('grab_') ? 0.1 : 0.18, F.cs || 1); G.update(rdt); }
+    else { const P = F.ph === 'air' && F.gk && F.gkk > 0.05 ? this.grabPose(t + 0.5, F.gk, F.gkk) : F.ph === 'stop' ? E.SP.cheer(t) : this.ridePose(t + 0.7, F.ph === 'air' ? 0.6 : 0); G.pose(P, 12, rdt); G.update(); }
     if (F.ph === 'air' && F.tr && (F.n !== S.fTrickN) && !document.body.classList.contains('asking')) { S.fTrickN = F.n; E.pop(F.tr === 'OOPS' ? `${E.MP.fname}: OOPS!` : `${E.MP.fname}: ${F.tr}`, G.g.position.clone().setY(G.g.position.y + 1.6), F.tr === 'OOPS' ? 'bad' : 'good'); }
   },
   // the grabs: one hand on the board, the body tucked; k blends from the riding stance into the grab and back

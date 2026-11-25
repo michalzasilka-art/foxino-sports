@@ -217,6 +217,24 @@ export async function makeActor({ kit = WINTER_KIT, gear = 'ski' } = {}) {
   };
   return A;
 }
+// (2026-11-25) the Snowboard Foxino (Tripo + Claudee RCC, blender/foxino-snowboard): his own snowboard gear, no tail, the board in the model,
+// 19 animation clips. A.want(name) cross-fades to a clip (once-clips hold their last frame); A.update(dt) runs the clips.
+const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'grab_indy', 'grab_melon', 'grab_tail', 'grab_method', 'grab_stalefish', 'land', 'land_wobble', 'fall_sit', 'sad']);
+export async function makeBoarder({ friend = false } = {}) {
+  const gl = await loadGLB('models/foxino-snowboard.glb?v=1'), inner = gl.scene;
+  inner.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(inner), s = 1.3 / Math.max(0.1, box.max.y - box.min.y);
+  inner.scale.setScalar(s); inner.rotation.y = -Math.PI / 2;   // (faces +Z, board nose +X in the file: turned like the old rider, sideways down the slope)
+  inner.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = !friend; if (friend) o.userData.noCast = true; const m = o.material = o.material.clone(); if (m.map) m.map.colorSpace = THREE.SRGBColorSpace; m.roughness = 0.75; if (friend) m.color.set(0xffd7b0); } });
+  const g = new THREE.Group(); g.add(inner); scene.add(g);
+  const mixer = new THREE.AnimationMixer(inner), acts = {};
+  for (const c of gl.animations) { const a = mixer.clipAction(c); if (ONCE_CLIPS.has(c.name)) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } acts[c.name] = a; }
+  const A = { g, isClip: true, cur: '', skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts),
+    want(name, fade = 0.18, speed = 1) { const a = acts[name]; if (!a) return; a.timeScale = speed; if (name === A.cur) return; const old = acts[A.cur]; a.reset(); a.enabled = true; a.setEffectiveWeight(1); a.play(); if (old) a.crossFadeFrom(old, fade, false); A.cur = name; },
+    again(name, speed = 1) { A.cur = ''; A.want(name, 0.12, speed); },
+    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); } };
+  A.want('stance_idle', 0);
+  return A;
+}
 // the ski poses (the old rig's joints: legs/arms negative x = forward, knees positive = bend, spine positive = lean forward)
 export const SP = {
   tuck(t, k = 1) { const p = blankPose(), b = 0.01 * Math.sin(t * 7);
@@ -277,7 +295,7 @@ const SPRAY = (() => {
 // ---------- game time: waits run on frames (slow phones never race) ----------
 const E = {
   THREE, scene, camera, renderer, sun, hemi, rim, POSTFX, T: 0, dt: 0, timeScale: 1, slow: 1, sport: SPORT,
-  loadGLB, loadJSON, dressModel, bannerMaterial, instanceField, addMountains, makeActor, prop, SP, clamp, lerp, damp, smooth, spray: SPRAY,
+  loadGLB, loadJSON, dressModel, bannerMaterial, instanceField, addMountains, makeActor, makeBoarder, prop, SP, clamp, lerp, damp, smooth, spray: SPRAY,
   drawDist: 230, sfx, waiters: [], camPos: new THREE.Vector3(0, 5, -10), camLook: new THREE.Vector3(), camFov: 60, camK: 5, shakeA: 0, groundAt: null, focus: 12,
   combo: 0, right: 0, asked: 0, missed: [], running: false, FRIEND_KIT, WINTER_KIT,
 };
@@ -532,7 +550,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 6, skijump: 6, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 6, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
