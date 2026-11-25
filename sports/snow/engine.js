@@ -364,6 +364,8 @@ E.cine = (on) => document.body.classList.toggle('cine', !!on);
 // the camera: the sports set a target (position, look-at, fov); it damps there (k), never goes under the ground
 const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _sh = new THREE.Vector3();
 let camInit = false;
+// (2026-11-25) a sport can add its own far-away pieces (instanced forests): hidden past the draw distance like the props
+E.far = (obj) => obj.traverse((m) => { if (!m.isMesh) return; if (m.isInstancedMesh) { if (!m.boundingSphere) m.computeBoundingSphere(); } else if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); if (!FAR.includes(m)) FAR.push(m); });
 E.cam = (pos, look, k = 5, fov = null) => { E.camTargetPos = pos; E.camTargetLook = look; E.camK = k; if (fov) E.camFov = fov; };
 E.snapCam = () => { camInit = false; };
 // three bubble positions round a point, spread across the screen (the camera's right) and a little up: left, top, right
@@ -608,7 +610,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 6, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 7, skijump: 7, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
