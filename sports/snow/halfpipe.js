@@ -40,7 +40,7 @@ const S = { a: null, ghost: null, L: 190, SL: Math.tan(17 * Math.PI / 180), R: 5
 const W = () => S.FLAT + S.R;
 // (2026-11-25, the user: "make the snowboard on the same angle as the hill itself because rn its 0' and it looks like hes slowing down") the
 // rider, his board and the friend are tilted with the run's slope (nose down the hill), then rolled on the walls, turned, and tipped up on a kicker
-const SLA = () => Math.atan(S.SL), LEAN = 0.09;   // (the slope; Foxino leans a little forward over the board, down the hill)
+const SLA = () => Math.atan(S.SL), LEAN = 0.09, FRONT = /[?&]front=-1/.test(location.search) ? -1 : 1;   // (FRONT: which way his nose (and so his front hand and his look) points)   // (the slope; Foxino leans a little forward over the board, down the hill)
 function pipeY(ad) { if (ad <= S.FLAT) return 0; if (ad <= W()) { const x = ad - S.FLAT; return S.R - Math.sqrt(Math.max(0, S.R * S.R - x * x)); } return S.R + S.WALLV; }
 function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, (ad - S.FLAT) / S.R)); }
 
@@ -429,11 +429,19 @@ export default {
     E.hud(`${Math.round(S.shown ?? S.pts)}`, where); E.progress(Math.min(1, S.s / STOP_Z));
     this.camera(E, rdt);
   },
+  // (2026-11-25, the user: "animate the character when he's driving forward so he has knees bent and looking focused with his hands more from
+  // his body; look up some snowboard poses") a real riding stance (the guides: knees and ankles flexed, low and centred over the board, head up
+  // looking ahead down the hill, shoulders in line with the board, the front hand out over the nose and the back hand out over the tail for
+  // balance). Slow, small breathing and arm sway only: lively, never jittery. crouch 0..1 = how low (deeper into a take-off or a landing).
   ridePose(t, crouch) { const p = { y: 0, tail: 0 }; for (const j of ['hips', 'spine', 'neck', 'head', 'armL', 'elbowL', 'armR', 'elbowR', 'legL', 'kneeL', 'ankleL', 'legR', 'kneeR', 'ankleR']) p[j] = [0, 0, 0];
-    const c = 0.45 + 0.35 * crouch, b = 0.01 * Math.sin(t * 6);
-    p.legL = [-c * 0.6, 0, 0.32]; p.legR = [-c * 0.6, 0, -0.32]; p.kneeL = [c * 1.3, 0, 0]; p.kneeR = [c * 1.3, 0, 0]; p.ankleL = [-c * 0.7, 0, -0.25]; p.ankleR = [-c * 0.7, 0, 0.25];
-    p.spine = [0.25 + crouch * 0.2, 0, 0]; p.head = [-0.2, 0.55, 0]; p.armL = [-0.3, 0, 0.95]; p.armR = [-0.3, 0, -0.95]; p.elbowL = [-0.5, 0, 0]; p.elbowR = [-0.5, 0, 0];
-    p.y = -0.08 - crouch * 0.07 + b; return p; },
+    const c = 0.62 + 0.3 * crouch, br = Math.sin(t * 2.1), sw = Math.sin(t * 1.3 + 0.7);
+    p.legL = [-c * 0.72, 0, 0.36]; p.legR = [-c * 0.72, 0, -0.36]; p.kneeL = [c * 1.5, 0, 0]; p.kneeR = [c * 1.5, 0, 0]; p.ankleL = [-c * 0.78, 0, -0.26]; p.ankleR = [-c * 0.78, 0, 0.26];
+    p.hips = [0, FRONT * 0.12, 0]; p.spine = [0.3 + crouch * 0.16 + 0.015 * br, FRONT * 0.22, 0]; p.neck = [-0.12, FRONT * 0.2, 0]; p.head = [-0.3, FRONT * 0.62, 0];
+    // the arms out from the body: the front one higher, reaching over the nose; the back one lower, out over the tail
+    const fa = [-0.75 + 0.04 * sw, 0, 1.25], ba = [0.25 - 0.04 * sw, 0, 1.05];
+    if (FRONT > 0) { p.armL = fa; p.armR = [ba[0], 0, -ba[2]]; } else { p.armR = [fa[0], 0, -fa[2]]; p.armL = ba; }
+    p.elbowL = [-0.38, 0, 0]; p.elbowR = [-0.38, 0, 0];
+    p.y = -0.12 - crouch * 0.08 + 0.006 * br; return p; },
   // (2026-11-25, the user: "when you go with your friend you are going behind each other like when you land the first jump hes already leaving
   // the ground for that same jump like that far from each other") the friend's run is kept by where they were on the course (metres down the
   // pipe), and shown GAP metres behind us: their own airs, tricks and grabs at the same spots. If they are really further back, they are shown

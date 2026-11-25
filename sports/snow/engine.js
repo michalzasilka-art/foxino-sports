@@ -177,9 +177,9 @@ function bootOf(P, idx, y0, y1) { let x = 0, z = 0, n = 0, top = -1e9; for (cons
 function prepBoard(root) {
   const { geo, mat } = bakedGeo(root), P = geo.attributes.position.array, N = P.length / 3; geo.computeBoundingBox(); const bb = geo.boundingBox;
   const all = [...Array(N).keys()], L = bootOf(P, all.filter((i) => P[i * 3] < 0), bb.min.y, bb.max.y), R = bootOf(P, all.filter((i) => P[i * 3] >= 0), bb.min.y, bb.max.y);
-  const ox = (L.x + R.x) / 2, oz = (L.z + R.z) / 2, oy = Math.max(L.top, R.top) - (bb.max.y - bb.min.y) * 0.12;
-  geo.translate(-ox, -oy, -oz);
-  return { geo, mat, gap: Math.hypot(R.x - L.x, R.z - L.z), bottom: bb.min.y - oy, len: bb.max.x - bb.min.x };
+  const ox = (L.x + R.x) / 2, oz = (L.z + R.z) / 2, oy = Math.max(L.top, R.top) - (bb.max.y - bb.min.y) * 0.12, minY = bb.min.y, len = bb.max.x - bb.min.x;
+  geo.translate(-ox, -oy, -oz);   // (2026-11-25: the base read BEFORE the move: reading it after counted the move twice and the board floated ~12 cm)
+  return { geo, mat, gap: Math.hypot(R.x - L.x, R.z - L.z), bottom: minY - oy - 0.014, len };   // (the base ON the groomed snow, which lies 2 cm over the ground mesh: deeper hides the thin board)
 }
 function prepSkis(root) {
   const { geo, mat } = bakedGeo(root), P = geo.attributes.position.array, N = P.length / 3; geo.computeBoundingBox(); const bb = geo.boundingBox, out = [];
