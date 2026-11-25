@@ -99,14 +99,15 @@ export default {
     this.reset(E);
     for (let j = 0; j < 2; j++) {
       S.jump = j; S.phase = 'bar'; S.s = 0; S.v = 0; S.bonus = 0; S.takeoff = false; S.glide = 0; S.fl = null; E.snapCam();
-      const duo = E.MP.on && E.MP.alive; E.banner(`JUMP ${j + 1}`, duo ? `OF 2 · with ${E.MP.fname}` : 'OF 2', 1200); await E.wait(1.5);
+      // (2026-11-25, the user: "make there no intro just normal start answering make sure there is nothing in the way from the start") no JUMP 1 / GO!
+      // banners and no waiting: the first question comes at once (the question card says which jump it is)
+      const duo = E.MP.on && E.MP.alive; await E.wait(j ? 0.4 : 0.05);
       if (duo) await E.sync('jump' + j, 20000);   /* (2026-11-25: both jumpers start at the same moment) */
       // (2026-11-24, the user: "only answer questions on the ramp ... a bit slower speed around 15 seconds to jump and you need to answer as many
       // questions possible") a steady run down the in-run, about 15 s; question after question at full speed (no slow motion); every right answer
       // is more distance. Nothing to answer at the take-off or in the air.
-      E.banner('GO!', 'ANSWER ALL THE WAY DOWN!', 900); S.phase = 'inrun'; S.got = 0; S.miss = 0; let qn = 0;
+      S.phase = 'inrun'; S.got = 0; S.miss = 0; let qn = 0;
       const head = () => S.a.g.position.clone().setY(S.a.g.position.y + 1.2), END = S.LIN * RAMP_END;
-      await E.wait(0.6);
       while (S.s < END - 3) { qn++; S.asking = 'inrun';
         const r = await Promise.race([E.ask({ who: `RAMP · QUESTION ${qn}`, num: `JUMP ${j + 1}`, size: 0.8, slow: 1, anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.5), out, 1.9, 1.3) }), E.until(() => S.s >= END).then(() => null)]);
         S.asking = ''; if (!r) { E.cancelAsk(); break; }
