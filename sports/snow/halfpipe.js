@@ -289,7 +289,7 @@ export default {
     E.drawDist = E.MP.on ? 118 : 155;   /* (2026-11-25: the longer course in deep forest: the far rows are the cheap firs; under 100k a frame) */
     this.reset(E);
   },
-  // Christmas: lights along the pipe's lips and down both edges of the open slopes, trees, gifts and snowmen beside the course, a big tree at the finish
+  // Christmas: lights along the pipe's lips and down both edges of the open slopes, trees, gifts and snowmen beside the course
   xmas(E, X) {
     if (!X.ok) return; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z), G = (x, z, dy = 0) => new THREE.Vector3(x, gY(x, z) + dy, z);
     for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 32) { const posts = []; for (let z = z0; z <= Math.min(PIPE_B, z0 + 32); z += 6.4) posts.push(P(sd * (W0 + 0.45), z, 1.15)); X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
@@ -299,7 +299,7 @@ export default {
       X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], G(sd * 13, z - 1.5), i); X.put('Gift_B', G(sd * 13.3, z + 1.4), -i);
       if (i % 2 === 0) X.put('Snowman', G(-sd * 13, z - 6), sd * 1.2); }
     for (const sd of [1, -1]) { X.put('Lantern', G(sd * 3.5, -3), sd); X.put('XmasTree_Small', G(sd * 6, -8), sd, 1.6); X.put('XmasTree_Small', P(sd * (W0 + 3), PIPE_A + 3), sd, 1.6); }
-    X.put('XmasTree_Big', G(0, STOP_Z + 22, -0.3), 0.4, 2.4); X.put('Sleigh', G(8, STOP_Z + 2), 2.4);
+    X.put('Sleigh', G(8, STOP_Z + 2), 2.4);   // (2026-11-26, Michal: "Make sure the tree at the finish line is removed": the big tree that stood on the line past the stop is gone; the finish is open)
     for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3(sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
     for (const R of RAILS) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
   },
@@ -369,7 +369,7 @@ export default {
     }
     E.send({ p: 1, v: `${S.pts}` });
     await E.until(() => S.phase === 'stop');
-    E.banner(`${S.pts}`, 'POINTS', 1800); E.cine(true); E.shake(0.3);
+    E.banner(`${S.pts}`, 'POINTS', 1800); { const bn = document.getElementById('banner'); if (bn) bn.classList.add('cm-lift'); }   /* (2026-11-26: the finish is clear: the points call-out sits high, over the sky, so his cheer shows) */ E.cine(true); E.shake(0.3);
     await E.wait(2.4); E.cine(false);
     E.finish({ score: S.pts, shown: `${S.pts}`, unit: 'points', better: 'high', line: `${QN} questions` });
   },
