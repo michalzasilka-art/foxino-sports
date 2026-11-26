@@ -1454,7 +1454,7 @@ function init() {
 }
 
 // ---------- test hooks ----------
-window.PS = {
+window.PS = { showBanner: (...a) => showBanner(...a),
   ready: false, get renderer() { return renderer; },   // (tests: the renderer, so a harness can count the triangles drawn per frame)
   state: () => ({
     phase: S.phase, sub: S.sub, q: S.qi + 1, total: QN, goals: S.goals, results: S.results.slice(),

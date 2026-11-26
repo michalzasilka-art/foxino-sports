@@ -997,5 +997,5 @@ function frame(now) {
       if (MP.on) FR.viaMP_start();
       else if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
     else if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
-  window.TN = { COURT, SOLO, FR, B, P, ASKT, ALOG, ball, renderer, scene, camera, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
+  window.TN = { popText: (...a) => popText(...a), banner: (...a) => banner(...a), COURT, SOLO, FR, B, P, ASKT, ALOG, ball, renderer, scene, camera, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();

@@ -507,14 +507,17 @@ const _pv = new THREE.Vector3();
 E.pop = (text, at, cls = 'perfect', small = '') => {
   _pv.copy(at).project(camera); const x = (_pv.x * 0.5 + 0.5) * innerWidth, y = (-_pv.y * 0.5 + 0.5) * innerHeight;
   const d = document.createElement('div'); d.className = `ptext ${cls}`; d.style.left = `${clamp(x, 80, innerWidth - 80)}px`; d.style.top = `${clamp(y, 140, innerHeight - 80)}px`;
-  d.innerHTML = `${esc(text)}${small ? `<small>${esc(small)}</small>` : ''}`; $('fxText').appendChild(d); setTimeout(() => d.remove(), 1300);
+  d.innerHTML = `${esc(text)}${small ? `<small>${esc(small)}</small>` : ''}`; $('fxText').appendChild(d); setTimeout(() => d.remove(), 1300); E._popUntil = performance.now() + 1000;
+  const bn = $('banner'); if (bn && !bn.hidden && bn.innerHTML) bn.classList.add('cm-lift');   /* (a banner already up moves out of its way) */
 };
 E.flash = (col) => { const f = $('flash'); f.style.transition = 'none'; f.style.boxShadow = `inset 0 0 120px 30px ${col}`; f.style.opacity = '1'; void f.offsetWidth; f.style.transition = 'opacity .6s'; f.style.opacity = '0'; };
 E.juice = (r, at, extra = '') => {
   if (r.ok) { const w = { perfect: 'PERFECT!', great: 'GREAT!', good: 'GOOD!' }[r.grade] || 'GOOD!'; E.pop(w, at, r.grade === 'perfect' ? 'perfect' : 'good', extra); E.flash('rgba(120,255,170,.55)'); E.shake(0.35); sfx.star && sfx.star(Math.min(3, E.combo)); }
   else { E.pop('OOPS!', at, 'bad', extra); E.flash('rgba(255,80,100,.6)'); E.shake(0.6); sfx.thud && sfx.thud(); }
 };
-E.banner = (txt, small = '', ms = 1400) => { const b = $('banner'); b.innerHTML = `${esc(txt)}${small ? `<small>${esc(small)}</small>` : ''}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); b.hidden = false; clearTimeout(b._t); b._t = setTimeout(() => { b.hidden = true; }, ms); };
+E.banner = (txt, small = '', ms = 1400) => { const wait = (E._popUntil || 0) - performance.now(); if (wait > 0 && innerHeight < 560) { setTimeout(() => E.banner(txt, small, ms), wait); return; }   /* (a short landscape screen has no room for both: the call-out waits until the word over Foxino has gone) */
+  const b = $('banner'); b.innerHTML = `${esc(txt)}${small ? `<small>${esc(small)}</small>` : ''}`;
+  b.classList.toggle('cm-bad', /WIPEOUT|OOPS|TOO SLOW|WEAK|LEFT/i.test(`${txt} ${small}`)); b.classList.toggle('cm-lift', $('fxText').children.length > 0);   /* (2026-11-26 night: the comic style; never on top of a word floating over Foxino) */ b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); b.hidden = false; clearTimeout(b._t); b._t = setTimeout(() => { b.hidden = true; }, ms); };
 E.hud = (big, small = '') => { $('hudBig').textContent = big; $('hudSmall').textContent = small; };
 E.progress = (u) => { $('progMe').style.left = `${clamp(u, 0, 1) * 100}%`; };
 E.fmtTime = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(1).padStart(4, '0')}` : r.toFixed(1); };
@@ -638,7 +641,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 8, skijump: 11, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 8, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

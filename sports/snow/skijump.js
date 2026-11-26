@@ -72,7 +72,7 @@ const P0 = { tuck(t) { const p = blank(); p.legL = [-1.25, 0, 0.06]; p.legR = [-
 };
 function blank() { const p = { y: 0, tail: 0 }; for (const j of ['hips', 'spine', 'neck', 'head', 'armL', 'elbowL', 'armR', 'elbowR', 'legL', 'kneeL', 'ankleL', 'legR', 'kneeR', 'ankleR']) p[j] = [0, 0, 0]; return p; }
 
-export const _S = S;
+export const _S = S; export const _fx = { jumpMeter: (...a) => jumpMeter(...a), countUp: (...a) => countUp(...a) };   /* (tests: the pop-up gallery) */
 // (2026-11-25, the user: "this is the intro fix it make it so it doesnt cover the screen") a camera in front of him down the ramp, looking back
 // up at him (ang: the in-run's slope at him), so the start screen and the first metres show Foxino, the ramp and the hill, not the start tower
 function frontCam(P, ang, sway) { const ca = Math.cos(ang), sa = Math.sin(ang), down = { x: 0, y: -sa, z: ca }, up = { x: 0, y: ca, z: sa };
@@ -361,7 +361,7 @@ export default {
         const tKey = Math.max(0.25, (S.LIN - S.s) / Math.max(8, S.v)), h = askSJ(E, { who: 'TAKE-OFF!', num: `JUMP ${j + 1}`, size: 0.54, slow: Math.max(0.05, Math.min(0.5, tKey / SJ_LIMIT)), anchors }, SJ_LIMIT);
         const r = await Promise.race([h.p, E.until(() => S.phase !== 'inrun').then(() => null)]); S.asking = '';
         if (!r) { h.stop(); E.cancelAsk(); }
-        if (r && r.ok) { S.takeoff = true; S.got++; E.juice(r, head(), 'STRONG TAKE-OFF!'); rushFx(E, S.a.g.position); } else { S.weak = true; S.miss++; if (r) E.juice(r, head(), r.timeout ? 'too slow' : 'weak take-off'); } }
+        if (r && r.ok) { S.takeoff = true; S.got++; E.juice(r, head(), '+8 m'); rushFx(E, S.a.g.position); } else { S.weak = true; S.miss++; if (r) E.juice(r, head(), r.timeout ? 'too slow' : '−10 m'); } }
       if (S.got) E.banner(`${S.got} RIGHT!`, S.takeoff ? 'STRONG TAKE-OFF!' : S.weak ? 'WEAK TAKE-OFF' : 'TAKE-OFF!', 1100);
       E.cine(true); await E.until(() => S.phase === 'flight'); jumpMeter(true);
       await E.until(() => S.phase === 'outrun'); E.cine(false);

@@ -1,0 +1,83 @@
+/* FoxSports: points and trick pop-ups in one purple comic style, in every sport.
+   (2026-11-26 night, the user: "Overall change style of text of points and tricks to more purple comics one in every sports")
+   Loaded by sports/snow, sports/tennis and penalty (each page sets <html data-fx="snow|tennis|penalty">). Only the pop-ups change:
+   question cards, menus and the fixed HUD counters keep their look.
+   Font: Luckiest Guy (Astigmatic, Apache License 2.0), self-hosted in /sports/fonts, preloaded by each page. */
+@font-face { font-family: 'FoxComic'; src: url('/sports/fonts/luckiest-guy-latin.woff2') format('woff2'); font-display: block; }
+
+:root {
+  --cm-hi: #f4e8ff; --cm-mid: #b46cff; --cm-lo: #7e34f2; --cm-ink: #2a0b57;   /* good: a purple fill with a lighter band on top, dark-purple ink */
+  --cm-bhi: #ffe3f0; --cm-bmid: #ff6fb1; --cm-blo: #d82f84;                   /* bad: the same style with a pink accent */
+  --cm-burst-a: #fff8d6; --cm-burst-b: #ffd84a;                              /* the comic burst behind the big call-outs */
+  --cm-bburst-a: #ffe3ef; --cm-bburst-b: #ff8fc0;
+}
+
+/* ---- the lettering ---- */
+html[data-fx] .cm, html[data-fx] .ptext, html[data-fx="snow"] #banner, html[data-fx="tennis"] #banner, html[data-fx="snow"] #trickCard b,
+html[data-fx="snow"] .scoreFly, html[data-fx="snow"] #jumpMeter b, html[data-fx="penalty"] #banner .word {
+  font-family: 'FoxComic', 'Lilita One', 'Arial Black', sans-serif !important; font-weight: 400 !important; letter-spacing: .03em;
+  color: var(--cm-mid); -webkit-text-fill-color: transparent;
+  background: linear-gradient(180deg, var(--cm-hi) 0%, var(--cm-hi) 30%, var(--cm-mid) 31%, var(--cm-lo) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-stroke: .075em var(--cm-ink); paint-order: stroke fill;
+  text-shadow: none !important;
+  filter: drop-shadow(0 0 .045em #fff) drop-shadow(0 0 .045em #fff) drop-shadow(0 .08em 0 var(--cm-ink)) drop-shadow(0 .12em .2em rgba(20, 0, 50, .3));
+  rotate: -4deg;
+}
+/* the small line under a word (+5.5 m, STRONG TAKE-OFF!, ...): the same lettering, smaller */
+html[data-fx] .ptext small, html[data-fx="snow"] #banner small, html[data-fx="tennis"] #banner small {
+  font-family: inherit; color: var(--cm-mid); -webkit-text-fill-color: transparent;
+  background: linear-gradient(180deg, var(--cm-hi) 0%, var(--cm-hi) 30%, var(--cm-mid) 31%, var(--cm-lo) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-stroke: .09em var(--cm-ink); paint-order: stroke fill; letter-spacing: .04em;
+}
+/* bad results: OOPS!, WIPEOUT!, SAVED!, TOO SLOW!, a weak take-off ... */
+html[data-fx] .ptext.bad, html[data-fx] .ptext.bad small, html[data-fx="snow"] #trickCard.oops b, html[data-fx="penalty"] #banner .word.saved,
+html[data-fx="snow"] #banner.cm-bad, html[data-fx="snow"] #banner.cm-bad small, html[data-fx="tennis"] #banner.cm-bad {
+  background: linear-gradient(180deg, var(--cm-bhi) 0%, var(--cm-bhi) 30%, var(--cm-bmid) 31%, var(--cm-blo) 100%);
+  -webkit-background-clip: text; background-clip: text; rotate: 3deg;
+}
+
+/* ---- sizes: the comic font is wider, so a little smaller ---- */
+html[data-fx] .ptext { font-size: clamp(26px, 8vw, 42px); }
+html[data-fx="snow"] #banner, html[data-fx="tennis"] #banner { font-size: clamp(40px, 12vw, 88px); }
+html[data-fx="snow"] #trickCard b { font-size: min(clamp(24px, 7vw, 40px), calc(90vw / (var(--n, 10) * .62 + 1.7))); }
+html[data-fx="snow"] #trickCard.lv6 b { font-size: min(clamp(27px, 7.8vw, 45px), calc(90vw / (var(--n, 10) * .62 + 1.7))); }
+html[data-fx="snow"] #trickCard.lv9 b { font-size: min(clamp(29px, 8.4vw, 48px), calc(90vw / (var(--n, 10) * .62 + 1.7))); }
+html[data-fx="snow"] #jumpMeter b { font-size: clamp(42px, 12vw, 70px); }
+html[data-fx="penalty"] #banner .word { font-size: clamp(44px, min(11vw, 15vh), 118px); }
+
+/* ---- the comic burst behind the big call-outs: a second background layer under the lettering (clipped to the box, not the text) ---- */
+html[data-fx="snow"] #banner, html[data-fx="tennis"] #banner, html[data-fx="penalty"] #banner .word, html[data-fx="snow"] #trickCard b {
+  padding: .42em .8em .5em; background-image: linear-gradient(180deg, var(--cm-hi) 0%, var(--cm-hi) 30%, var(--cm-mid) 31%, var(--cm-lo) 100%), url('/sports/fx/burst.svg');
+  background-size: 100% 100%, 100% 100%; background-repeat: no-repeat; -webkit-background-clip: text, border-box; background-clip: text, border-box;
+}
+html[data-fx="snow"] #trickCard b { display: table; margin: 0 auto; padding: .3em .7em .38em; }   /* (its own line, as wide as the name: the chips stay underneath) */
+html[data-fx="snow"] #banner.cm-bad, html[data-fx="tennis"] #banner.cm-bad, html[data-fx="penalty"] #banner .word.saved, html[data-fx="snow"] #trickCard.oops b {
+  background-image: linear-gradient(180deg, var(--cm-bhi) 0%, var(--cm-bhi) 30%, var(--cm-bmid) 31%, var(--cm-blo) 100%), url('/sports/fx/burst-bad.svg');
+  background-size: 100% 100%, 100% 100%; background-repeat: no-repeat; -webkit-background-clip: text, border-box; background-clip: text, border-box;
+}
+html[data-fx="tennis"] #banner:empty, html[data-fx="snow"] #banner:empty { background: none; padding: 0; }
+html[data-fx="snow"] #banner, html[data-fx="tennis"] #banner { max-width: 96vw; box-sizing: border-box; }
+html[data-fx="snow"] #banner small, html[data-fx="tennis"] #banner small { background-size: 100% 100%; }
+
+/* ---- the streak / bonus chips inside the trick card and the K-line tag: purple comic pills ---- */
+html[data-fx="snow"] #trickCard i, html[data-fx="snow"] #jumpMeter span {
+  font-family: 'FoxComic', 'Lilita One', sans-serif; letter-spacing: .04em; background: linear-gradient(180deg, #9b52ff, #6a22d8) !important;
+  color: #fff; -webkit-text-stroke: 0; box-shadow: 0 3px 0 var(--cm-ink), 0 0 0 2px #fff !important; rotate: -3deg;
+}
+html[data-fx="snow"] #trickCard i.x { background: linear-gradient(180deg, #ff7fbd, #d82f84) !important; }
+
+/* ---- the pop-in: a punchy overshoot, then it settles (the pop-ups' own moves stay; this adds the comic punch) ---- */
+html[data-fx="snow"] #banner.pop, html[data-fx="tennis"] #banner.pop { animation: cmPop .8s cubic-bezier(.2, 1.9, .4, 1) both; }
+@keyframes cmPop { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 0; } 55% { transform: translate(-50%, -50%) scale(1.16); opacity: 1; } 78% { transform: translate(-50%, -50%) scale(.95); } 100% { transform: translate(-50%, -50%) scale(1); } }
+html[data-fx="snow"] #jumpMeter.done b { animation: cmMeter .6s cubic-bezier(.2, 1.9, .4, 1); }
+@keyframes cmMeter { 0% { scale: .6; } 60% { scale: 1.18; } 100% { scale: 1; } }
+
+/* ---- two call-outs at once never cover each other (the engine lifts the banner while a word floats over Foxino) ---- */
+html[data-fx="snow"] #banner.cm-lift { top: 25% !important; }
+@media (max-height: 520px) {
+  html[data-fx="snow"] #banner.cm-lift { top: 22% !important; font-size: clamp(30px, 9vh, 52px); }
+  html[data-fx="snow"] #trickCard { top: calc(env(safe-area-inset-top, 0px) + 46px) !important; }   /* (a short screen: higher and smaller, clear of Foxino) */
+  html[data-fx="snow"] #trickCard b { font-size: min(clamp(20px, 7.5vh, 32px), calc(90vw / (var(--n, 10) * .62 + 1.7))) !important; }
+  html[data-fx="snow"] #trickCard i { font-size: 12px !important; }
+}
