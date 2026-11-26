@@ -6,7 +6,17 @@
 // crew's rhythm: every boat's speed AND how in time its paddlers are come from ONE number, its consistency (0..1).
 // P1 (this file now): the boats, the crews, the course and the race with a placeholder rule (steady consistency). P2: the questions, the timing
 // bar (green = the middle 50 % of the answer time) and the rival AI. P3+: polish.
+import { askRhythm, trickCardAfter as trickCard, signPlace, fxRoot } from './askfx.js?v=3';
+import { isMuted } from '/penalty/sound.js';
 const L = 300, LANE = 7, NB = 5;   // (the race length in metres, the lane width, the boats)
+// (P2) ten questions, one every 27 m; each has a 6-second rhythm bar, green from 1.5 s to 4.5 s. How an answer moves the crew's consistency:
+const QN = 10, T_ANS = 6, MARKS = Array.from({ length: QN }, (_, i) => 18 + i * 27);
+const GAIN = { green: 0.16, early: 0.03, late: 0.03, wrong: -0.14, timeout: -0.12 }, C0 = 0.45;
+// the rival crews' consistency along the race (their own progress u = 0..1; no rubber-banding: they never look at Foxino), tuned (pdsim.js) so
+// all-green answers usually win, mixed answers land mid-pack, careless ones are last: ROB-OTS the strong steady rival, BEAR CREW a fast starter
+// that fades, HARE FORCE steady, OWL STARS a slow starter with a late surge
+const ss = (a, b, x) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+const RIV = { rob: (u) => 0.80 + 0.03 * Math.sin(u * 9), bear: (u) => 0.95 - 0.42 * ss(0.2, 0.65, u), hare: (u) => 0.72 + 0.03 * Math.sin(u * 7), owl: (u) => 0.5 + 0.42 * ss(0.4, 0.8, u) };
 const TEAMS = {
   fox: { name: 'FOXINO', hull: 0x7b3fd1, trim: 0xffc23a, vest: 0xff8a1a, crew: 'fox', fur: 0x9a5ae0, flag: ['#7b3fd1', '#ffc23a'] },
   friend: { name: 'FRIEND', hull: 0xff7d22, trim: 0xffffff, vest: 0x2b3a7a, crew: 'fox', fur: 0xf08a3a, flag: ['#ff7d22', '#ffffff'] },
@@ -15,7 +25,7 @@ const TEAMS = {
   hare: { name: 'HARE FORCE', hull: 0x2fbf6a, trim: 0xffffff, vest: 0xff5fa2, crew: 'hare', fur: 0xf4efe6, flag: ['#2fbf6a', '#ffffff'] },
   owl: { name: 'OWL STARS', hull: 0xffa21f, trim: 0x5a3a8a, vest: 0x36b5e0, crew: 'owl', fur: 0xdcc9a6, flag: ['#ffa21f', '#5a3a8a'] } };
 const ROWS = [2.3, 0.6, -1.1];   // (the paddlers' rows along the boat, front to back; two per row, left and right)
-const S = { boats: [], a: null, phase: 'menu', time: 0, done: 0, place: 0, uT: { value: 0 }, shot: 'chase', shotT: 0, crowd: null, crowdN: 0, paddle: null, me: null };
+const S = { boats: [], a: null, phase: 'menu', time: 0, done: 0, place: 0, pc: C0, streak: 0, inR: 0, rock: 0, uT: { value: 0 }, shot: 'chase', shotT: 0, crowd: null, crowdN: 0, paddle: null, me: null };
 export const _S = S;
 const laneX = (i) => (i - 2) * LANE;
 const hsh = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -191,28 +201,69 @@ export default {
     E.groundAt = () => 0.6; E.drawDist = 400;
     this.reset(E);
   },
-  reset(E) { S.time = 0; S.clock = 0; S.done = 0; S.place = 0; S.phase = 'menu'; S.shot = 'start'; S.shotT = 0; S.boats.forEach((B) => Object.assign(B, { z: 0, v: 0, c: 0.6, fin: false, finT: 0, place: 0 })); E.snapCam(); },
+  reset(E) { S.pc = C0; S.streak = 0; S.inR = 0; S.rock = 0; S.time = 0; S.clock = 0; S.done = 0; S.place = 0; S.phase = 'menu'; S.shot = 'start'; S.shotT = 0; S.boats.forEach((B) => Object.assign(B, { z: 0, v: 0, c: 0.6, fin: false, finT: 0, place: 0 })); E.snapCam(); },
   menu() { S.phase = 'menu'; },
   // P1's placeholder rule: every crew keeps a steady consistency with a slow drift (P2 sets Foxino's from the answers, and the rival AI)
-  consistency(B, t) { if (B === S.me) return 0.62 + 0.06 * Math.sin(t * 0.21); const k = B.lane * 1.7; return 0.5 + 0.12 * Math.sin(t * 0.13 + k) + 0.05 * Math.sin(t * 0.47 + k * 2); },
+  consistency(B, E) { if (B === S.me) return S.pc; if (B === S.friendB) return E.friend && E.friend.c != null ? E.friend.c : C0; return (RIV[B.team] || (() => 0.6))(Math.min(1, B.z / L)); },
   async run(E) {
     this.reset(E); S.phase = 'start'; S.shot = 'start';
     E.banner('3', '', 700); await E.wait(0.8); E.banner('2', '', 700); await E.wait(0.8); E.banner('1', '', 700); await E.wait(0.8);
-    E.banner('GO!', 'PADDLE IN TIME WITH THE DRUM!', 900); S.phase = 'race'; S.shot = 'chase'; S.shotT = 0;
+    E.banner('GO!', 'TAP THE RIGHT WORD WHEN THE BAR IS GREEN!', 1100); S.phase = 'race'; S.shot = 'chase'; S.shotT = 0; fxRoot();
+    const seed = this.partySeed();
+    for (let i = 0; i < QN; i++) {
+      await E.until(() => S.me.z >= MARKS[i]);
+      // (2-player: both phones get the same question: the question picker's dice are seeded by the party for this one call)
+      const R = Math.random; if (seed != null) { let a = (seed + i * 7919) >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+      S.asking = true; let pr; try { pr = askRhythm(E, { who: `STROKE ${i + 1} OF ${QN}`, num: '', size: 0.9, slow: 0.5, onQ: (q) => this.botAnswer(q, i), anchors: (out) => { for (let k = 0; k < 3; k++) out[k].set(S.me.x + (k - 1) * 2.2, 2.6, S.me.z + 9); } }, T_ANS); } finally { Math.random = R; }
+      const r = await pr; S.asking = false; this.rhythm(E, r);
+    }
     await E.until(() => S.me.fin); S.phase = 'done'; S.shot = 'finish'; S.shotT = 0; E.snapCam();
-    const pl = S.me.place, sfx = ['ST', 'ND', 'RD', 'TH', 'TH'][pl - 1];
-    E.banner(`${pl}${sfx}!`, `${E.fmtTime(S.me.finT)} s`, 2000); E.cine(true); if (pl === 1) E.shake(0.3);
-    await E.wait(3.2); E.cine(false);
+    const order = this.order(), pl = order.indexOf(S.me) + 1, sfx = ['ST', 'ND', 'RD', 'TH', 'TH'][pl - 1];
+    E.banner(`${pl}${sfx}!`, `${E.fmtTime(S.me.finT)} s`, 2000); E.cine(true); if (pl === 1) { E.shake(0.3); try { E.sfx.cheer && E.sfx.cheer(); } catch (e) {} }
+    await E.wait(2.6); E.cine(false);
+    await this.results(E, order);
     const total = Math.round(S.me.finT * 10) / 10;
-    E.finish({ score: total, shown: total.toFixed(1), unit: 'seconds', better: 'low', line: `${pl}${sfx.toLowerCase()} of ${NB} boats` });
+    E.finish({ score: total, shown: total.toFixed(1), unit: 'seconds', better: 'low', line: `${pl}${sfx.toLowerCase()} of ${NB} boats · ${S.inR} of ${QN} in rhythm` });
   },
+  // an answer → the crew's consistency + the feedback: in the green = the crew locks into the drum; too fast / too late = no rhythm; wrong = out of time
+  rhythm(E, r) {
+    const z = r.ok ? r.zone : r.timeout ? 'timeout' : 'wrong', dc = GAIN[z]; S.pc = Math.max(0.1, Math.min(1, S.pc + dc)); const B = S.me, at = new E.THREE.Vector3(B.x, 1.2, B.z + 4);
+    if (z === 'green') { S.streak++; S.inR++; trickCard('IN RHYTHM!', S.streak, 'good'); E.flash('rgba(120,255,170,.28)'); E.spray.emit(at, 18, 0, 2.6, 0, 1.6, 0.1); this.drum(1.3, 0); }
+    else { S.streak = 0;
+      if (z === 'early') trickCard('TOO FAST!', 0, 'meh', 'wait for the green');
+      else if (z === 'late') trickCard('TOO LATE!', 0, 'meh', 'tap in the green');
+      else { trickCard(z === 'timeout' ? 'TOO SLOW!' : 'OUT OF TIME!', 0, 'oops'); E.flash('rgba(255,80,100,.35)'); E.shake(0.3); S.rock = z === 'timeout' ? 0.6 : 1;
+        for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) E.spray.emit(new E.THREE.Vector3(B.x + sd * 1.1, 0.3, B.z + 3 - k * 1.8), 24, sd * 2.2, 3.4, 0, 2.2, 0.17);   /* (a big messy splash: paddles hitting the water out of time) */ try { E.sfx.thud && E.sfx.thud(); } catch (e) {} } }
+    E.send({ p: Math.min(1, B.z / L), v: E.fmtTime(S.time), c: S.pc });
+  },
+  // the finishing order: boats home by their time, the rest by when they will get there (so the board shows at once, the same on both phones)
+  order() { const eta = (B) => (B.fin ? B.finT : S.clock + (L - B.z) / Math.max(1, B.v)); S.boats.forEach((B) => (B.eta = eta(B))); return S.boats.slice().sort((a, b) => a.eta - b.eta); },
+  async results(E, order) {
+    const stars = S.inR >= 8 ? 3 : S.inR >= 5 ? 2 : S.inR >= 2 ? 1 : 0, name = (B) => B === S.me ? 'TEAM FOXINO (you)' : B === S.friendB ? `${(E.friend && E.friend.name) || 'FRIEND'}'s team` : B.T.name;
+    const el = document.createElement('div'); el.className = 'pdRes';
+    el.innerHTML = `<div class="card"><h3>RACE RESULTS</h3><ol>${order.map((B, i) => `<li class="${B === S.me ? 'me' : ''}"><b>${i + 1}${['st', 'nd', 'rd', 'th', 'th'][i]}</b><i style="background:#${B.T.hull.toString(16).padStart(6, '0')}"></i><span>${name(B)}</span><em>${B.eta.toFixed(1)} s</em></li>`).join('')}</ol>
+      <div class="st"><big>${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</big>In rhythm: <b>${S.inR}</b> of ${QN} strokes</div></div>`;
+    document.body.appendChild(el); await E.wait(4.2); el.remove();
+  },
+  partySeed() { const q = new URLSearchParams(location.search); if (!/^(host|join)$/.test(q.get('mp') || '')) return null; const k = `${q.get('mps') || ''}|${q.get('mpr') || 0}|${q.get('mpi') || 0}`; let h = 2166136261; for (const ch of k) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; },
+  // (tests) ?pbot=good|mixed|bad answers by itself at a chosen moment on the bar
+  botAnswer(q, i) { const m = /[?&]pbot=(\w+)/.exec(location.search); if (!m || !window.MPBOT) return;
+    const P = { good: 'GGGGGGGGGG', mixed: 'GEGWGLGGEW', bad: 'WTEWWLTWEW', fast: 'EEEEEEEEEE' }[m[1]] || 'GGGGGGGGGG', z = P[i % P.length];
+    if (z === 'T') return; const ms = { G: 2800, E: 700, L: 5100, W: 2500 }[z] || 2800;
+    setTimeout(() => { const cq = window.MPBOT.q(); if (cq) window.MPBOT.answer(z === 'W' ? (cq.correct + 1) % cq.n : cq.correct); }, ms); },
+  // the drum: Foxino's drummer beats each stroke; tight and steady when the crew is in rhythm, late, uneven and softer when it is not
+  drum(vol = 1, late = 0) {
+    if (isMuted()) return; try { const A = S.ac || (S.ac = new (window.AudioContext || window.webkitAudioContext)()); if (A.state === 'suspended') { A.resume(); return; }
+      const t = A.currentTime + late, o = A.createOscillator(), g = A.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(118, t); o.frequency.exponentialRampToValueAtTime(52, t + 0.2);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32 * vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28); o.connect(g).connect(A.destination); o.start(t); o.stop(t + 0.3); } catch (e) {} },
   update(E, dt, rdt) {
-    const t = E.T; S.uT.value = t; if (!S.boats.length) return;
+    const t = E.T; S.uT.value = t; if (!S.boats.length) return; signPlace(E); S.rock = Math.max(0, S.rock - rdt * 0.8);
+    if (!S.unlockA) { S.unlockA = true; addEventListener('pointerdown', () => { try { if (S.ac && S.ac.state === 'suspended') S.ac.resume(); } catch (e) {} }); }
     if (S.phase === 'race') S.time += dt; if (S.phase === 'race' || S.phase === 'done') S.clock += dt;   // (the race clock runs on until every boat is home)
     for (const B of S.boats) {
       const friendDriven = B === S.friendB && E.friend && E.friend.p != null;
       if (S.phase === 'race' || (S.phase === 'done' && !B.fin) || B.fin) {
-        if (!B.fin && S.phase !== 'menu' && S.phase !== 'start') B.c = B === S.friendB ? 0.6 : this.consistency(B, t);
+        if (!B.fin && S.phase !== 'menu' && S.phase !== 'start') B.c = this.consistency(B, E);
         const tv = B.fin ? 1.2 : S.phase === 'race' || S.phase === 'done' ? 2.6 + 3.8 * B.c : 0;
         B.v = E.damp(B.v, tv, B.fin ? 0.6 : 1.1, dt);
         if (friendDriven) { const zf = E.friend.p * L; B.z = E.damp(B.z, zf, 4, dt); B.v = Math.max(0, (zf - B.z) * 0 + (E.friend.done ? 1.2 : 4.6)); }
@@ -222,7 +273,8 @@ export default {
       // the strokes: the crew's rhythm comes from its consistency: faster strokes, and the lower it is the more out of time the paddlers are
       const rate = S.phase === 'menu' || S.phase === 'start' ? 0.18 : B.fin ? 0.25 : 0.55 + 0.9 * B.c, ph0 = B.ph; B.ph += rate * dt;
       const sync = 1 - B.c, bob = 0.06 * Math.sin(t * 1.7 + B.lane), pitch = 0.02 * Math.sin(B.ph * Math.PI * 2) + 0.012 * Math.sin(t * 1.1 + B.lane);
-      B.g.position.set(B.x, bob, B.z); B.g.rotation.set(-pitch, 0, 0.018 * Math.sin(t * 1.3 + B.lane * 2));
+      const rk = B === S.me ? S.rock : 0; B.g.position.set(B.x, bob, B.z); B.g.rotation.set(-pitch, 0, 0.018 * Math.sin(t * 1.3 + B.lane * 2) + 0.09 * rk * Math.sin(t * 11));
+      if (B === S.me && S.phase === 'race' && Math.floor(B.ph * 2) !== Math.floor(ph0 * 2)) this.drum(Math.floor(B.ph * 2) % 2 ? 0.45 + 0.2 * B.c : 0.7 + 0.3 * B.c, (1 - B.c) * 0.14 * Math.random());   // (two beats a stroke)
       for (const P of B.pad) { const a = (B.ph + P.j * sync * 0.42) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
         P.body.rotation.x = 0.22 + 0.22 * c; P.arms.rotation.x = 0.75 * c - 0.1; P.arms.rotation.z = P.sd * -0.18 * Math.max(0, s); }
       B.sticks.rotation.x = -0.9 * Math.max(0, Math.sin(B.ph * Math.PI * 4));   // (the drummer: two beats a stroke)
@@ -230,13 +282,13 @@ export default {
       if (Math.floor(B.ph) !== Math.floor(ph0) && B.v > 1 && dt > 0.002 && (B === S.me || Math.abs(B.z - S.me.z) < 25)) for (const sd of [-1, 1]) E.spray.emit(new THREE_V(B.x + sd * 1.05, 0.15, B.z + 0.8), 3, sd * 0.6, 1.6, -0.6, 1.0, 0.09);
     }
     // places on the go (for the HUD); Foxino's own stroke + his paddle through his hands
-    const ahead = S.boats.filter((B) => B !== S.me && (B.fin ? !S.me.fin || B.finT < S.me.finT : B.z > S.me.z)).length + 1;
+    const ahead = S.phase === 'done' ? this.order().indexOf(S.me) + 1 : S.boats.filter((B) => B !== S.me && (B.fin ? !S.me.fin || B.finT < S.me.finT : B.z > S.me.z)).length + 1;
     const A = S.a, B = S.me, a = B.ph * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
     A.pose(B.fin ? this.cheerPose(t) : this.paddlePose(t, c, s), B.fin ? 8 : 14, rdt); A.update(); this.placePaddle(E);
     if (S.crowd) { const m = S.cm || (S.cm = new E.THREE.Matrix4()), q = S.cq || (S.cq = new E.THREE.Quaternion().setFromEuler(new E.THREE.Euler(0, -Math.PI / 2, 0))), v3 = S.cv || (S.cv = new E.THREE.Vector3()), one = S.c1 || (S.c1 = new E.THREE.Vector3(1, 1, 1)), near = S.boats.some((b) => b.z > L - 60);
       if (near || (S.crowdT = (S.crowdT || 0) + rdt) > 0.2) { S.crowdT = 0; S.fans.forEach(([x, y, z], k) => { m.compose(v3.set(x, y + (near ? Math.max(0, Math.sin(t * 9 + k)) * 0.25 : 0), z), q, one); S.crowd.setMatrixAt(k, m); }); S.crowd.instanceMatrix.needsUpdate = true; } }
     E.hud(E.fmtTime(S.phase === 'done' ? S.me.finT : S.time), S.phase === 'menu' || S.phase === 'start' ? 'PADDLING' : `PADDLING · ${ahead}${['ST', 'ND', 'RD', 'TH', 'TH'][ahead - 1]} PLACE`);
-    E.progress(Math.min(1, S.me.z / L)); if (S.phase === 'race') E.send({ p: Math.min(1, S.me.z / L), v: E.fmtTime(S.time) });
+    E.progress(Math.min(1, S.me.z / L)); if (S.phase === 'race') E.send({ p: Math.min(1, S.me.z / L), v: E.fmtTime(S.time), c: S.pc });
     this.camera(E, rdt);
   },
   // Foxino sitting, paddling on the boat's left: he leans forward to reach (the catch), pulls back, lifts the paddle out and swings it forward
@@ -263,10 +315,11 @@ export default {
     } else if (S.phase === 'done') {   // the finish: from the side of the line, the boats coming through
       pos = P.clone().add(new THREE.Vector3(-4.5, 2.2, 16)); look = P.clone().add(new THREE.Vector3(0, 1.4, -3)); k = 6; fov = 50;   /* (in front of his boat, looking back at him and the crew, the FINISH arch behind them) */
     } else {
+      if (S.asking) { S.shot = 'chase'; S.shotT = 0; }   // (a question = the steady chase camera)
       if (S.shotT > 9) { S.shot = { chase: 'side', side: 'front', front: 'chase' }[S.shot] || 'chase'; S.shotT = 0; }
       if (S.shot === 'side') { pos = P.clone().add(new THREE.Vector3(-4.6, 3.3, 5.0));   /* (over the buoy line, never in the next lane; ahead and to the side: the crew in profile) */ look = P.clone().add(new THREE.Vector3(0, 0.4, 0.5)); k = 5; fov = 54; }
       else if (S.shot === 'front') { pos = P.clone().add(new THREE.Vector3(3.5, 3.2, 15)); look = P.clone().add(new THREE.Vector3(0, 0.5, 0)); k = 5; fov = 56; }
-      else { pos = P.clone().add(new THREE.Vector3(3.2, 4.4, -11.5)); look = P.clone().add(new THREE.Vector3(0, 0.6, 9)); k = 5; fov = innerWidth < innerHeight ? 62 : 56; }
+      else { const pr = innerWidth < innerHeight; pos = P.clone().add(pr ? new THREE.Vector3(1.1, 4.0, -9.5) : new THREE.Vector3(3.2, 4.4, -11.5)); look = P.clone().add(pr ? new THREE.Vector3(0, 0.6, 7) : new THREE.Vector3(0, 0.6, 9)); k = 5; fov = pr ? 64 : 56; }   /* (a portrait phone: closer and centred on his boat) */
     }
     E.cam(pos, look, k, fov); E.focusAt = P; E.focus = P.distanceTo(E.camera.position);
   },
