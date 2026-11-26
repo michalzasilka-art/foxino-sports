@@ -288,7 +288,7 @@ const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'windup_spin', 'windup_flip', 
 // Eyes: rest 0.15; a blink (0.12-0.2 s) every 2-6 s at random (real time), sometimes a double; never on the money shots (take-off, early flight, the cheer's first 2 s).
 const MOUTH = { closed: { MouthClosed: 1 }, smile: { MouthClosed: 1, MouthSmile: 1 }, open: { MouthOpen: 1 } };
 const MOUTH_OPEN_CLIPS = new Set(['cheer']);
-const NO_BLINK = (clip, t) => clip === 'takeoff' || (clip === 'cheer' && t < 2) || (clip === 'fly' && t < 1.2);   // (the cheer's pose for 2 s; then he blinks again while the results show)
+const NO_BLINK = (clip, t) => clip === 'takeoff' || (clip === 'cheer' && t < 2) || (clip === 'fly' && t < 1.2) || /^windup/.test(clip) || (/^grab_/.test(clip) && t < 0.7) || (clip === 'land' && t < 0.5);   // (+ the snowboarder (F4): the pop, the wind-up and the first part of the trick, the landing)   // (the cheer's pose for 2 s; then he blinks again while the results show)
 const EYE_REST = 0.15, rnd = (a, b) => a + Math.random() * (b - a);
 function faceRig(root) {
   const ms = []; root.traverse((o) => { if (o.isMesh && o.morphTargetDictionary && Object.keys(o.morphTargetDictionary).some((n) => /^(Mouth|Eye)/.test(n))) ms.push(o); });
@@ -347,7 +347,8 @@ export async function makeBoarder({ friend = false, url = 'models/foxino-snowboa
   const A = { g, isClip: true, cur: '', skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts), dur: Object.fromEntries(gl.animations.map((c) => [c.name, c.duration])),
     want(name, fade = 0.18, speed = 1) { const a = acts[name]; if (!a) return; a.timeScale = speed; if (name === A.cur) return; const old = acts[A.cur]; a.reset(); a.enabled = true; a.setEffectiveWeight(1); a.play(); if (old) a.crossFadeFrom(old, fade, false); A.cur = name; },
     again(name, speed = 1) { A.cur = ''; A.want(name, 0.12, speed); },
-    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); } };
+    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); A.face.auto(A.cur); A.face.update(E.freeze ? 0 : Math.min(0.1, dt)); } };   // (F3/F4: the same face as the skier)
+  A.face = faceRig(inner); A.mouth = (st) => { A.face.hold = st || null; };
   A.want('stance_idle', 0);
   return A;
 }
