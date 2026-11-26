@@ -1,6 +1,6 @@
 // Foxino Tennis (Foxino Sports). One 3D court for two uses:
 //  · solo (a phone, the Student library): Foxino against Rob the robot. When the ball comes, three word bubbles float on
-//    Foxino's side; tap the right word and he hits the ball through that bubble; a wrong word goes into the net. Rob misses
+//    Foxino's side; tap the right word and he hits the ball through that bubble; a wrong word: he swings and misses. Rob misses
 //    some of his shots (more after a fast answer). Tennis scoring: 15, 30, 40, game.
 //  · ?remote=1 (inside the teacher's screen): two students on their phones; the teacher's page sends {ft: 'match' | 'ask' |
 //    'hit' | 'point' | 'end' | 'idle'} and this court only plays what it is told.
@@ -335,13 +335,22 @@ function updatePlayers(dt, t) {
     const moving = Math.min(1, Math.hypot(vx, vz) * 1.4);
     p.ch.root.position.set(p.x, 0, p.z);
     if (p.swing >= 0) p.swing += dt / 0.5;
-    if (p.swing > 1) p.swing = -1;
+    if (p.swing > 1) { p.swing = -1; p.aim = 0; }
+    // (2026-11-26, the user: "when youre waiting for answer it is like doing stuff slow mo so in tennis hes aiming") while his question is up
+    // and the ball floats in, he gets ready: shoulders turn, racket back, eyes on the ball, fully coiled at the deadline; he stays coiled
+    // until the swing, which starts from there
+    const asking = ASKT.on && ASKT.w === w && B.mode === 'fly' && B.to === w, hold = B.to === w && (B.pending || (B.u > 0.6 && B.i === B.arcs.length - 1));
+    const aimT = asking ? smooth(clamp(1 - (ASKT.end - performance.now()) / 1000 / Math.max(0.5, ASKT.secs), 0, 1) * 1.15) : p.swing < 0 && hold ? (p.aim || 0) : 0;
+    p.aim = damp(p.aim || 0, aimT, asking ? 6 : 3, dt);
     p.moodT += dt; if (p.moodT > 1.8) p.mood = '';
     if (p.kind === 'fox') {
       let pose;
       if (p.mood === 'cheer') pose = POSES.celebrate(p.moodT);
       else if (p.mood === 'sad') pose = POSES.sad(p.moodT);
       else if (p.swing >= 0) { pose = POSES.ready(t); Object.assign(pose, keyPose(FK, p.swing)); }
+      else if (p.aim > 0.02) { pose = moving > 0.15 ? POSES.run(t * 13, 0.55 * moving) : POSES.ready(t); Object.assign(pose, keyPose(FK, 0.38 * p.aim));
+        _bp.copy(ball.position).sub(p.ch.root.position); const yaw = clamp(Math.atan2(_bp.x, -side(w) * _bp.z), -0.9, 0.9) * side(w);   /* (eyes on the ball) */
+        pose.neck = [0.05 * p.aim, yaw * 0.35 * p.aim, 0]; pose.head = [-0.08 * p.aim, yaw * 0.45 * p.aim, 0]; pose.kneeL = [0.24 + 0.22 * p.aim, 0, 0]; pose.kneeR = [0.24 + 0.22 * p.aim, 0, 0]; pose.y = -0.02 - 0.05 * p.aim; }
       else if (moving > 0.15) { pose = POSES.run(t * 13, 0.55 * moving); pose.armR = [-0.4, 0, -0.5]; pose.elbowR = [-0.8, 0, 0]; }
       else pose = POSES.ready(t);
       p.ch.apply(pose, p.swing >= 0 ? 22 : 12, dt);
@@ -350,6 +359,7 @@ function updatePlayers(dt, t) {
       if (p.mood === 'cheer') pose = RPOSES.hold ? RPOSES.hold(p.moodT) : RPOSES.ready(t);
       else if (p.mood === 'sad') pose = RPOSES.oops ? RPOSES.oops(p.moodT) : RPOSES.ready(t);
       else if (p.swing >= 0) pose = robSwing(t, p.swing);
+      else if (p.aim > 0.02) pose = robSwing(t, 0.38 * p.aim);
       else if (moving > 0.15) pose = robRun(t, moving);
       else pose = RPOSES.ready(t);
       p.ch.apply(pose, p.swing >= 0 ? 22 : 12, dt); p.ch.update(dt, t);
@@ -397,13 +407,14 @@ function shotTo(from, C, k, serve = false) {
   if (B.queued && B.queued.w === to) { const qd = B.queued; B.queued = null; if (qd.k < 0) B.missed = true; else B.pending = qd; }
 }
 function contactPoint(w) { const p = P[w]; return new THREE.Vector3(p.x + (w === 'a' ? 0.7 : -0.7), 1.0, p.z - side(w) * 0.4); }
-// the hitter's decision has arrived: ok → over the net (through the chosen bubble's side), wrong → into the net, k < 0 → missed
+// the hitter's decision has arrived: ok → over the net (through the chosen bubble's side), wrong → he swings and misses, k < 0 → too slow (a late whiff)
 function doHit(w, k, ok, serve = false) {
   const C = serve ? B.serveAt.clone() : B.hit ? B.hit.clone() : contactPoint(w);
-  if (P[w].swing < 0) P[w].swing = 0.45;
-  sfx.kick && sfx.kick();
+  if (P[w].swing < 0) P[w].swing = ok ? 0.45 : 0.5;
+  if (ok) sfx.kick && sfx.kick();
   if (ok) shotTo(w, C, k, serve);
-  else if (k >= 0) { const N = new THREE.Vector3(clamp(C.x * 0.6 + (k - 1) * 1.5, -5, 5), 0.55, side(w) * 0.25); launch([{ a: C, b: N, h: 0.5, d: 0.55 }, { a: N, b: new THREE.Vector3(N.x, 0.1, side(w) * 0.9), h: 0.1, d: 0.35 }], null); B.netAt = 0.55; }
+  else if (k >= 0 && serve) { launch([{ a: C, b: new THREE.Vector3(C.x + 0.15, 0.1, C.z - side(w) * 0.2), h: 0.05, d: 0.6 }], null); }   /* (2026-11-26, the user: "if incorrect then he misses": a whiffed serve, the ball drops) */
+  else if (k >= 0) { const X = new THREE.Vector3(C.x * 1.15 + side(w) * 0.6, 0.1, side(w) * 17.5); launch([{ a: C, b: X, h: 0.5, d: 0.75 }], null); }   /* (a wrong word: the racket swings past it and the ball goes on behind him to the fence) */
   else { launch([], null); }
   // (the bubbles were popped already when the answer came in: COURT.hit)
 }
@@ -445,7 +456,8 @@ function updateBall(dt, t) {
     B.scale = damp(B.scale, sc, waiting ? 5 : 8, dt);
     B.u += (dt * B.scale) / A.d;
     // the receiver swings just before the ball reaches the hit point
-    if (B.to && B.pending && B.i === B.arcs.length - 1 && (1 - B.u) * A.d < 0.27 && P[B.to].swing < 0 && B.pending.k >= 0) P[B.to].swing = 0;
+    if (B.to && B.pending && B.i === B.arcs.length - 1 && P[B.to].swing < 0 && B.pending.k >= 0) { const R = P[B.to], u0 = 0.38 * clamp(R.aim || 0, 0, 1), lead = (0.5 - u0) * 0.5 + (B.pending.ok ? 0.02 : 0.16);
+      if ((1 - B.u) * A.d / Math.max(0.3, B.scale) < lead) R.swing = u0; }
     if (B.u >= 1 && waiting && B.i === B.arcs.length - 1 && (mine || (B.holdT = (B.holdT || 0) + dt) < 3)) { B.u = 1; if (mine && ASKT.rec && ASKT.rec.arrive == null) ASKT.rec.arrive = +((performance.now() - ASKT.end) / 1000).toFixed(2); }   // (at the racket before the answer: it waits there; a late answer from the other phone)
     else if (B.u >= 1) {
       const end = A.b.clone(); B.i++; B.u = 0;
@@ -544,7 +556,7 @@ const COURT = {
     if (BUBW === w && this.who === w && POPPED !== labelGen) { POPPED = labelGen; popBubbles(k, ok); }
     if (ASKT.w === w) { if (ASKT.on && ASKT.rec) ASKT.rec.ans = +((performance.now() - ASKT.end) / 1000).toFixed(2); ASKT.on = false; }
     if (B.mode === 'hold' && B.holder === w) { tossServe(w, k, ok); }
-    else if (B.mode === 'fly' && B.to === w) { if (k < 0) { B.missed = true; B.pending = null; } else B.pending = { w, k, ok }; }
+    else if (B.mode === 'fly' && B.to === w) { if (k < 0) { B.missed = true; B.pending = null; if (P[w] && P[w].swing < 0) P[w].swing = 0.38 * clamp(P[w].aim || 0, 0, 1); } else B.pending = { w, k, ok }; }
     else if (B.mode === 'fly' && B.to && B.to !== w) B.queued = { w, k, ok };
     else if (B.mode === 'fly' && !B.to && B.tossW && B.tossW !== w) B.queued = { w, k, ok };   /* (2026-11-25: the return of a serve still being tossed: played when the serve gets there; before, it was hit from nowhere and the serve died at the receiver) */
     else if (k >= 0) doHit(w, k, ok);
@@ -578,7 +590,7 @@ function cardResult(ok, k, q, right) {
   const r = right || q.right;
   $('sentence').innerHTML = `${hints(q.before)}<span class="gap ok">${esc(r)}</span>${hints(q.after)}`;
   $('note').className = ok ? 'good' : 'bad';
-  $('note').innerHTML = ok ? ['Great shot!', 'Super!', 'Yes! ✓', 'Brilliant!'][Math.floor(Math.random() * 4)] : k < 0 ? `Too slow! The right word is <b>${esc(r)}</b>` : `Into the net! The right word is <b>${esc(r)}</b>`;
+  $('note').innerHTML = ok ? ['Great shot!', 'Super!', 'Yes! ✓', 'Brilliant!'][Math.floor(Math.random() * 4)] : k < 0 ? `Too slow! The right word is <b>${esc(r)}</b>` : `Missed it! The right word is <b>${esc(r)}</b>`;
 }
 function banner(text, sub) { const b = $('banner'); b.innerHTML = `${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); clearTimeout(b._t); b._t = setTimeout(() => { b.innerHTML = ''; }, 1700); }
 function setScore(html) { $('score').innerHTML = html; }
@@ -614,7 +626,7 @@ const SOLO = {
     const q = FSQ.make(PACKS, packIds, { n: 3, count: SOLO.asked }); if (!q) return;
     SOLO.q = q; SOLO.t0 = performance.now(); SOLO.waiting = true;
     // (2026-11-25, the user: "more time pressure: a better streak = shorter time to answer") the longer your streak and the rally, the less time
-    const secs = Math.max(4, 10.5 - SOLO.rally * 0.6 - Math.min(10, combo) * 0.45); SOLO.secs = secs;
+    const secs = Math.max(3, (10.5 - SOLO.rally * 0.6 - Math.min(10, combo) * 0.45) * 2 / 3);   /* (2026-11-26, the user: "decrease the time to answer in every discipline": a third shorter, at least 3 s) */ SOLO.secs = secs;
     COURT.ask('a', q, secs, serve);
     clearTimeout(SOLO.tmo); SOLO.tmo = setTimeout(() => SOLO.answer(-1), secs * 1000);
   },
@@ -792,7 +804,7 @@ const FR = {
   askTurn(who, serve) {
     if (!FR.on) return;
     const q = FSQ.make(PACKS, packIds, { n: 3, count: FR.n++ }); if (!q) return;
-    const st = (FR.streak || (FR.streak = { h: 0, g: 0 }))[who] || 0, secs = Math.max(4, 11 - FR.n * 0.15 - FR.rally * 0.25 - Math.min(10, st) * 0.45), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time gets shorter over the match, in a rally and with each player's own streak) */
+    const st = (FR.streak || (FR.streak = { h: 0, g: 0 }))[who] || 0, secs = Math.max(3, (11 - FR.n * 0.15 - FR.rally * 0.25 - Math.min(10, st) * 0.45) * 2 / 3), id = (FR.turn ? FR.turn.id : 0) + 1;   /* (2026-11-25: the answer time gets shorter over the match, in a rally and with each player's own streak) */
     FR.turn = { who, q, id, done: false };
     FR.cast({ t: 'ask', who, q, secs, serve, id });
     clearTimeout(FR.tmo); FR.tmo = setTimeout(() => FR.resolve(who, id, -1, Infinity), secs * 1000 + (who === 'h' ? 200 : 4000));   /* (2026-11-25: the host's own time-out 0.9 → 0.2 s after the deadline: the slowed ball reaches the racket at the deadline and goes past at once) */   /* (the friend's own clock decides; this is only the safety net) */

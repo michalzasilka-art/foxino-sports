@@ -17,7 +17,15 @@ import { MP } from '/sports/mp.js?v=3';
 // nobody scores. The roles swap every penalty. The answer time shrinks from 14 s to 7 s by the last penalty. The party's host is the referee:
 // it sends the questions, collects both answers and says what happens; the friend shows as Rob (the other player) with the friend's name.
 const MPG = { on: MP.on && /[?&]list=1/.test(location.search), picks: {}, done: {}, waitT: 0, tmr: 0, safety: 0 };
-const mpSecs = (qi) => 14 - 7 * qi / 9;
+// (2026-11-26 night, the user: "decrease the time to answer in every discipline": about a third shorter) 9.3 s on the first penalty down to
+// 4.7 s on the last, never under 3 s; solo now has the same clock as the party game (a time-out = a miss)
+const ansSecs = (qi) => Math.max(3, (14 - 7 * qi / 9) * 2 / 3), mpSecs = ansSecs;
+// (2026-11-26 night, the user: "when youre waiting for answer it is like doing stuff slow mo") while the question is up the taker (Foxino, or Rob in
+// the keeper rounds) runs in at the ball in slow motion: u along the run-up goes 0 → AIM_U by the deadline; the answer snaps the real speed back
+// on and the shot carries on from there (the run-up is not started again)
+const AIM_U = 0.82;
+function aimU() { if (S.phase !== 'aim' || !S.aimAt) return 0; const a = (performance.now() - S.aimAt) / (ansSecs(S.qi) * 1000); return AIM_U * Math.max(0, Math.min(1, (a - 0.1) / 0.9)); }
+function fromAim() { const u = S.aimU || 0; S.aimU = 0; if (u > 0) S.st = SHOT.tRun + u * T_RUN; }
 import { makeSnowfall, snowCover, stringLights, loadXmasKit, placeKit } from '/sports/xmas.js?v=3';   // (2026-11-24, the user: snow and a Christmas atmosphere in every sport)
 
 const $ = (id) => document.getElementById(id);
@@ -425,7 +433,7 @@ function flash(cb, hold = 120) {
 function setCard(q) {
   if (REMOTE) return remoteCard(q);
   ui.kick.innerHTML = `PENALTY ${S.qi + 1} / ${QN} <em class="role ${S.gk ? 'gk' : 'gs'}">${S.gk ? 'KEEPER' : 'STRIKER'}</em>${MPG.on && MP.alive ? ` <em class="mpvs">vs ${esc(MP.fname.toUpperCase())}</em>` : ''}`;
-  if (MPG.on) mpClock(true);
+  mpClock(true);
   ui.sentence.innerHTML = `${hints(q.before)}<span class="gap">&nbsp;</span>${hints(q.after)}`;
   ui.note.className = ''; ui.note.innerHTML = MPG.on && MP.alive ? (S.gk ? `You are in goal! ${esc(MP.fname)} shoots: tap the right word to dive there!` : `You shoot! ${esc(MP.fname)} is in goal: tap the right word!`) : S.qi < 2 ? (S.gk ? 'You are in goal! Rob shoots at the right word: tap it to dive there!' : 'Your turn to shoot: tap the bubble with the right word!') : '&nbsp;';
   ui.next.classList.add('hidden');
@@ -670,7 +678,7 @@ function nextQuestion() {
   S.q = S.questions[S.qi]; MPG.mine = null; S.mpNote = null; S.timedOut = false; S.shotK = null; S.diveK = null;
   resetRound();
   if (MPG.later && MPG.later.qi === S.qi) { const m = MPG.later; MPG.later = null; setTimeout(() => mpKick(m), 0); }
-  setPhase('aim');
+  setPhase('aim'); S.aimAt = performance.now(); S.aimU = 0;
   setCard(S.q);
   measureSafe(); fitPlay(); camSnap = true;
   S.q.opts.forEach((o, k) => {
@@ -695,13 +703,14 @@ function choose(k) {
   // the POWER SHOT: a striker's right answer after three right answers in a row (counting the keeper's saves too)
   S.power = !S.gk && S.isGoal && S.streak - S.lastPower >= 3; if (S.power) S.lastPower = S.streak;
   S.picks[S.qi] = q.opts[k].text;
+  mpClock(false);
   setPhase('shot'); S.st = 0; S.sub = 'wait'; S.ev = {};
-  labelEls[k].classList.add('picked');
-  bubbles[k].hot = 1;
-  sfx.pick();
+  if (!S.timedOut) { labelEls[k].classList.add('picked'); bubbles[k].hot = 1; sfx.pick(); }
   sfx.whistle(false, 0.12);
-  planShot();
+  planShot(); fromAim();
 }
+// solo: the clock ran out = a miss (he shoots at a wrong word and it is saved; in goal he dives the wrong way)
+function tooSlow() { if (S.phase !== 'aim' || !S.q) return; S.timedOut = true; choose((S.q.correct + 1) % S.q.opts.length); S.picks[S.qi] = ''; }
 
 // work out the ball's flight and Rob's dive before the run-up starts
 function planShot() {
@@ -760,7 +769,7 @@ function foxKeeper(dt) {
   const t = S.time, st = S.st;
   if (FOX_REACH == null) { const save = fox.root.position.clone(); fox.root.position.set(0, 0, 0); fox.root.rotation.set(0, 0, 0); fox.apply(KPOSE.reach(), Infinity, 0); FOX_REACH = Math.max(0.9, foxHands(_v2).y); fox.root.position.copy(save); fox.apply(KPOSE.ready(t), Infinity, 0); }
   fox.root.rotation.y = 0;
-  if (S.phase === 'aim' || st < SHOT.fdive.t0) { fox.root.position.set(KEEPER.x + Math.sin(t * 1.3) * 0.25, 0, KEEPER.z); fox.root.rotation.z = 0; fox.apply(KPOSE.ready(t), 8, dt); return; }
+  if (S.phase === 'aim' || st < SHOT.fdive.t0) { const set = S.phase === 'aim' ? smooth((S.aimU || 0) / AIM_U) : 1; fox.root.position.set(KEEPER.x + Math.sin(t * 1.3) * 0.25 * (1 - 0.6 * set), 0.05 * Math.abs(Math.sin(t * 4.4)) * (1 - 0.5 * set), KEEPER.z); fox.root.rotation.z = 0; fox.apply(KPOSE.ready(t), 8, dt); return; }   /* (bouncing on the line, settling as the taker gets close) */
   const D = SHOT.fdive, T = D.target, start = D.start || (D.start = fox.root.position.clone());
   const dx = T.x - start.x, ty = T.y;
   const th = clamp(Math.atan2(-dx, Math.max(ty, 0.2)), -1.45, 1.45), L = FOX_REACH;
@@ -787,15 +796,14 @@ function robShooter(dt) {
   const t = S.time, st = S.phase === 'shot' ? S.st : 0;
   rob.dive.rotation.set(0, 0, 0);
   const bob = (h) => rob.dive.position.set(0, ROB_BODY_Y + h, 0);
-  if (S.phase === 'aim' || st < SHOT.tRun) { rob.root.position.copy(ROB_START); rob.apply(RPOSES.ready(t), 6, dt); bob(0.02 * Math.abs(Math.sin(t * 2.6))); rob.face('focus'); return; }
-  if (st < SHOT.tKick) {
-    const u = (st - SHOT.tRun) / T_RUN, e = u * u * (1.6 - 0.6 * u);
+  const run = (u, bx, k) => { const e = u * u * (1.6 - 0.6 * u);
     rob.root.position.set(lerp(ROB_START.x, KICK_AT.x, e) - Math.sin(Math.PI * e) * 0.25, 0, lerp(ROB_START.z, KICK_AT.z, e));
-    rob.root.rotation.y = angDamp(rob.root.rotation.y, Math.atan2(SHOT.B.x * 0.3 - KICK_AT.x, -KICK_AT.z), 8, dt);
-    const ph = e * Math.PI * 4.2; rob.apply(RRUN(ph), 16, dt); bob(0.06 * Math.abs(Math.sin(ph)));
-    const step = Math.floor(ph / Math.PI); if (step !== S.ev.rstep) { S.ev.rstep = step; sfx.step(); }
-    return;
-  }
+    rob.root.rotation.y = angDamp(rob.root.rotation.y, Math.atan2(bx * 0.3 - KICK_AT.x, -KICK_AT.z), 8, dt);
+    const ph = e * Math.PI * 4.2; rob.apply(RRUN(ph), k, dt); bob(0.06 * Math.abs(Math.sin(ph)));
+    const step = Math.floor(ph / Math.PI); if (step !== S.ev.rstep) { S.ev.rstep = step; sfx.step(); } };
+  if (S.phase === 'aim') { S.aimU = aimU(); rob.face('focus'); if (S.aimU > 0) run(S.aimU, 0, 6); else { rob.root.position.copy(ROB_START); rob.apply(RPOSES.ready(t), 6, dt); bob(0.02 * Math.abs(Math.sin(t * 2.6))); } return; }   // (the question is up: his slow-motion run-up)
+  if (st < SHOT.tRun) { rob.root.position.copy(ROB_START); rob.apply(RPOSES.ready(t), 6, dt); bob(0.02 * Math.abs(Math.sin(t * 2.6))); rob.face('focus'); return; }
+  if (st < SHOT.tKick) { run((st - SHOT.tRun) / T_RUN, SHOT.B.x, 16); return; }
   const u = (st - SHOT.tKick) / T_KICK;
   if (u < 1.2) { rob.root.position.copy(KICK_AT); rob.apply(RKICK(Math.min(u, 1)), u < 0.1 ? 18 : 40, dt); bob(0); return; }
   { const k = smooth((u - 1.2) / 1.1); rob.root.position.set(lerp(KICK_AT.x, KICK_AT.x - 2.1, k), 0, lerp(KICK_AT.z, KICK_AT.z + 0.9, k)); }   // (he steps aside so the keeper can be seen)
@@ -1026,23 +1034,14 @@ function animateFox(dt) {
   } else if (S.gk && (p === 'aim' || p === 'shot')) {
     foxKeeper(dt);
   } else if (p === 'aim') {
-    fox.apply(POSES.ready(t), 8, dt);
+    S.aimU = aimU();   // (the question is up: the slow-motion run-up toward the ball)
+    if (S.aimU > 0) foxRun(S.aimU, dt, 0, 6); else fox.apply(POSES.ready(t), 8, dt);
   } else if (p === 'shot') {
     const st = S.st;
     if (st < SHOT.tRun) {
       fox.apply(POSES.ready(t), 8, dt);
     } else if (st < SHOT.tKick) {
-      const u = (st - SHOT.tRun) / T_RUN;
-      const e = u * u * (1.6 - 0.6 * u); // accelerate from a standstill
-      const x = lerp(FOX_START.x, KICK_AT.x, e) - Math.sin(Math.PI * e) * 0.25, z = lerp(FOX_START.z, KICK_AT.z, e);
-      const px = fox.root.position.x, pz = fox.root.position.z;
-      fox.root.position.set(x, 0, z);
-      const yaw = Math.abs(x - px) + Math.abs(z - pz) > 1e-4 ? faceYaw(px, pz, x, z) : fox.root.rotation.y;
-      fox.root.rotation.y = angDamp(fox.root.rotation.y, angLerp(yaw, faceYaw(KICK_AT.x, KICK_AT.z, SHOT.B.x * 0.3, 0), smooth((u - 0.6) / 0.4)), 10, dt);
-      const ph = e * Math.PI * 4.2;
-      fox.apply(POSES.run(ph, 1), 16, dt);
-      const step = Math.floor(ph / Math.PI);
-      if (step !== S.ev.step) { S.ev.step = step; sfx.step(); }
+      foxRun((st - SHOT.tRun) / T_RUN, dt, SHOT.B.x, 16);
     } else {
       const u = (st - SHOT.tKick) / T_KICK;
       if (!S.tRes || st < SHOT.tKick + T_KICK) {
@@ -1060,6 +1059,19 @@ function animateFox(dt) {
     else fox.apply(S.pt < 2.2 ? POSES.stand(t) : POSES.wave(t), 6, dt);
   }
   fox.update(dt, t);
+}
+// Foxino's run-up at u (0 = waiting, 1 = the plant beside the ball): accelerating from a standstill, curving in, turning to the shot at the end
+function foxRun(u, dt, bx, k) {
+  const e = u * u * (1.6 - 0.6 * u);
+  const x = lerp(FOX_START.x, KICK_AT.x, e) - Math.sin(Math.PI * e) * 0.25, z = lerp(FOX_START.z, KICK_AT.z, e);
+  const px = fox.root.position.x, pz = fox.root.position.z;
+  fox.root.position.set(x, 0, z);
+  const yaw = Math.abs(x - px) + Math.abs(z - pz) > 1e-5 ? faceYaw(px, pz, x, z) : fox.root.rotation.y;
+  fox.root.rotation.y = angDamp(fox.root.rotation.y, angLerp(yaw, faceYaw(KICK_AT.x, KICK_AT.z, bx * 0.3, 0), smooth((u - 0.6) / 0.4)), 10, dt);
+  const ph = e * Math.PI * 4.2;
+  fox.apply(POSES.run(ph, 1), k, dt);
+  const step = Math.floor(ph / Math.PI);
+  if (step !== S.ev.step) { S.ev.step = step; sfx.step(); }
 }
 // after a goal: turn to the camera, run, knee slide, then jump about
 function celebrateFox(dt) {
@@ -1103,7 +1115,7 @@ function animateRob(dt) {
     const sway = Math.sin(t * 1.3) * 0.35;
     const pose = p === 'menu' && Math.sin(t * 0.4) > 0.6 ? RPOSES.wave(t) : RPOSES.ready(t);
     rob.apply(pose, 6, dt);
-    rob.dive.position.set(p === 'aim' || p === 'shot' ? sway : sway * 0.5, ROB_BODY_Y - 0.04 + 0.02 * Math.abs(Math.sin(t * 2.6)), 0);
+    rob.dive.position.set(p === 'aim' || p === 'shot' ? sway : sway * 0.5, ROB_BODY_Y - 0.04 + (p === 'aim' ? 0.05 * Math.abs(Math.sin(t * 4.4)) : 0.02 * Math.abs(Math.sin(t * 2.6))), 0);   /* (bouncing on the line while the question is up) */
     rob.dive.rotation.set(0, 0, 0);
     rob.root.rotation.y = 0;
     if (p !== 'shot') rob.face(p === 'aim' ? 'focus' : 'happy');
@@ -1337,7 +1349,7 @@ function remoteKick(m) {
   S.questions = []; S.questions[S.qi] = S.q;
   bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; l.className = 'blabel'; });
   ui.start.classList.add('hidden'); ui.end.classList.add('hidden'); $('locker').classList.add('hidden'); ui.hud.classList.remove('hidden');
-  resetRound(); setPhase('aim'); setCard(S.q);
+  resetRound(); setPhase('aim'); S.aimAt = 0; S.aimU = 0; setCard(S.q);
   measureSafe(); fitPlay(); camSnap = true;
   opts.forEach((o, k) => {
     const b = bubbles[k];
@@ -1378,7 +1390,7 @@ function mpClock(on) { let el = document.getElementById('mpClock'); if (!el) { e
   cancelAnimationFrame(MPG.raf); el.style.visibility = on ? '' : 'hidden'; if (!on) return;
   const T = mpSecs(S.qi) * 1000, t0 = performance.now(), qi = S.qi, bar = el.firstChild;
   const f = () => { const left = T - (performance.now() - t0); bar.style.width = Math.max(0, left / T * 100) + '%'; el.classList.toggle('hot', left < 3000);
-    if (left <= 0) { if (S.qi === qi && S.phase === 'aim' && MPG.mine == null) mpChoose(-1); return; } if (S.qi === qi && S.phase === 'aim') MPG.raf = requestAnimationFrame(f); }; MPG.raf = requestAnimationFrame(f); }
+    if (left <= 0) { if (S.qi === qi && S.phase === 'aim' && MPG.mine == null) { if (MPG.on) mpChoose(-1); else tooSlow(); } return; } if (S.qi === qi && S.phase === 'aim') MPG.raf = requestAnimationFrame(f); }; MPG.raf = requestAnimationFrame(f); }
 function mpBot(qi) { const q = S.questions[qi]; return Math.random() < 0.65 ? q.correct : (q.correct + 1 + Math.floor(Math.random() * (q.opts.length - 1))) % q.opts.length; }
 function mpChoose(k) {
   if (S.phase !== 'aim' || MPG.mine != null) return; if (k >= 0 && (k >= NB || !S.q.opts[k])) return;
@@ -1408,7 +1420,7 @@ function mpResolve(qi, h, g) {
     S.diveK = !they ? S.shotK : S.chosen;
     S.mpNote = !they ? `${fn} missed the right word! It was <b>${esc(q.right)}</b>` : me ? null : null;
   }
-  setPhase('shot'); S.st = 0; S.sub = 'wait'; S.ev = {}; sfx.whistle(false, 0.12); planShot();
+  setPhase('shot'); S.st = 0; S.sub = 'wait'; S.ev = {}; sfx.whistle(false, 0.12); planShot(); fromAim();
 }
 async function mpStart() {
   window.MPBOT = { q: () => (S.phase === 'aim' && S.q && MPG.mine == null ? { id: 'p' + S.qi, correct: S.q.correct, n: S.q.opts.length } : null), answer: (k) => choose(k), state: () => ({ qi: S.qi, gk: S.gk, goals: S.goals, phase: S.phase }) };
@@ -1443,7 +1455,7 @@ function init() {
 
 // ---------- test hooks ----------
 window.PS = {
-  ready: false,
+  ready: false, get renderer() { return renderer; },   // (tests: the renderer, so a harness can count the triangles drawn per frame)
   state: () => ({
     phase: S.phase, sub: S.sub, q: S.qi + 1, total: QN, goals: S.goals, results: S.results.slice(),
     sentence: S.q ? `${S.q.before}___${S.q.after}` : null, right: S.q && S.q.right,

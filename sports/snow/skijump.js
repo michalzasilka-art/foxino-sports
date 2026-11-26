@@ -39,6 +39,19 @@ function inrunAt(s, out) {
 // Foxino with his own clips and the straight skis on his ski mounts (Tripo + Claudee RCC); the old jumper stays the default until it is approved
 const QALL = (() => { let q = location.search; try { if (window.parent !== window) q += '&' + window.parent.location.search.slice(1); } catch (e) {} return q; })();
 const SK = !/[?&]sk=0/.test(QALL);   /* (2026-11-25 night: the new skier is the default jumper (the user asked for the remake); ?sk=0 = the old one) */
+// (2026-11-26 night, the user: "when youre waiting for answer it is like doing stuff slow mo ... also decrease the time to answer in every
+// discipline") every ramp question has a clock (SJ_LIMIT) and the in-run runs in slow motion while it is up (SJ_SLOW); the last one is the
+// TAKE-OFF: slowed so he reaches the lip as the clock runs out; right = a strong take-off, wrong or too slow = a weak, short jump
+const SJ_LIMIT = 4.7, SJ_SLOW = 0.5;
+function askSJ(E, opts, secs) {
+  if (!document.getElementById('sjTimeCss')) { const st = document.createElement('style'); st.id = 'sjTimeCss'; st.textContent = '.sjTime{position:absolute;left:14px;right:14px;bottom:5px;height:6px;border-radius:3px;background:rgba(42,30,92,.14);overflow:hidden;pointer-events:none}.sjTime i{position:absolute;inset:0;border-radius:3px;background:linear-gradient(90deg,#ff5f6d,#ffb020,#2fbf6a);transform-origin:left;animation:sjT var(--t) linear forwards}@keyframes sjT{from{transform:scaleX(1)}to{transform:scaleX(0)}}'; document.head.appendChild(st); }
+  const card = document.getElementById('card'); let to = 0, bar = null, live = true;
+  const stop = () => { live = false; clearTimeout(to); if (bar) bar.remove(); bar = null; };
+  setTimeout(() => { if (!live || !card) return; if (getComputedStyle(card).position === 'static') card.style.position = 'relative'; bar = document.createElement('div'); bar.className = 'sjTime'; bar.innerHTML = '<i></i>'; bar.style.setProperty('--t', secs + 's'); card.appendChild(bar); }, 0);
+  const p = Promise.race([E.ask(opts), new Promise((res) => { to = setTimeout(() => res({ ok: false, timeout: true, grade: 'bad' }), secs * 1000); })])
+    .then((r) => { const wasLive = live; stop(); if (r && r.timeout && wasLive) { E.cancelAsk(); E.combo = 0; } return r; });
+  return { p, stop };
+}
 function skiClip(ph, s, z, D) {
   if (ph === 'inrun') return s > S.LIN - 4 ? 'takeoff' : s < 2.5 ? 'start_push' : 'tuck';
   if (ph === 'flight') return 'fly';
@@ -335,13 +348,21 @@ export default {
       // is more distance. Nothing to answer at the take-off or in the air.
       S.phase = 'inrun'; S.got = 0; S.miss = 0; let qn = 0;
       const head = () => S.a.g.position.clone().setY(S.a.g.position.y + 1.2), END = S.LIN * RAMP_END;
+      S.weak = false; const anchors = (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.5), out, 1.15, 1.0);
       while (S.s < END - 3) { qn++; S.asking = 'inrun';
-        const r = await Promise.race([E.ask({ who: `RAMP · QUESTION ${qn}`, num: `JUMP ${j + 1}`, size: 0.54, slow: 1, anchors: (out) => E.around(S.a.g.position.clone().setY(S.a.g.position.y + 0.5), out, 1.15, 1.0) })   /* (2026-11-25, the user: "the bubbles a bit smaller and closer to each other": 0.8 → 0.54, spread 1.9 → 1.15) */, E.until(() => S.s >= END).then(() => null)]);
-        S.asking = ''; if (!r) { E.cancelAsk(); break; }
-        if (r.ok) { S.got++; E.juice(r, head(), `+${PER_RIGHT} m`); rushFx(E, S.a.g.position); } else { S.miss++; E.juice(r, head(), 'no extra'); }
+        const h = askSJ(E, { who: `RAMP · QUESTION ${qn}`, num: `JUMP ${j + 1}`, size: 0.54, slow: SJ_SLOW, anchors }, SJ_LIMIT);   /* (2026-11-25, the user: "the bubbles a bit smaller and closer to each other": 0.8 → 0.54, spread 1.9 → 1.15) */
+        const r = await Promise.race([h.p, E.until(() => S.s >= END - 3).then(() => null)]);
+        S.asking = ''; if (!r) { h.stop(); E.cancelAsk(); break; }
+        if (r.ok) { S.got++; E.juice(r, head(), `+${PER_RIGHT} m`); rushFx(E, S.a.g.position); } else { S.miss++; E.juice(r, head(), r.timeout ? 'too slow' : 'no extra'); }
         await E.wait(r.ok ? 0.5 : 1.1); }
-      E.cancelAsk(); S.asking = ''; S.takeoff = S.got >= 3 && S.miss === 0;
-      if (S.got) E.banner(`${S.got} RIGHT!`, S.takeoff ? 'PERFECT RAMP · TAKE-OFF!' : 'TAKE-OFF!', 1100);
+      E.cancelAsk(); S.asking = '';
+      // the TAKE-OFF question: the last metres to the lip in slow motion, the lip exactly as the clock runs out
+      if (S.phase === 'inrun' && S.s < S.LIN - 1) { S.asking = 'takeoff'; qn++;
+        const tKey = Math.max(0.25, (S.LIN - S.s) / Math.max(8, S.v)), h = askSJ(E, { who: 'TAKE-OFF!', num: `JUMP ${j + 1}`, size: 0.54, slow: Math.max(0.05, Math.min(0.5, tKey / SJ_LIMIT)), anchors }, SJ_LIMIT);
+        const r = await Promise.race([h.p, E.until(() => S.phase !== 'inrun').then(() => null)]); S.asking = '';
+        if (!r) { h.stop(); E.cancelAsk(); }
+        if (r && r.ok) { S.takeoff = true; S.got++; E.juice(r, head(), 'STRONG TAKE-OFF!'); rushFx(E, S.a.g.position); } else { S.weak = true; S.miss++; if (r) E.juice(r, head(), r.timeout ? 'too slow' : 'weak take-off'); } }
+      if (S.got) E.banner(`${S.got} RIGHT!`, S.takeoff ? 'STRONG TAKE-OFF!' : S.weak ? 'WEAK TAKE-OFF' : 'TAKE-OFF!', 1100);
       E.cine(true); await E.until(() => S.phase === 'flight'); jumpMeter(true);
       await E.until(() => S.phase === 'outrun'); E.cine(false);
       const d = Math.round(S.fl.D * 2) / 2; S.dist.push(d); S.lines.last.set(d);
@@ -349,7 +370,7 @@ export default {
       await countUp(E, d, d >= S.J.K ? 'OVER THE K LINE!' : `JUMP ${j + 1}`); E.shake(0.45);
       if (E.MP.on && E.MP.alive) {   // (2026-11-25: once both have jumped, who jumped further)
         const got = () => E.mpMsgs.find((m) => m.t === 'land' && m.j === j);
-        for (let w = 0; w < 30 && !got() && E.MP.alive; w++) { if (w === 2) E.banner(`WAITING FOR ${E.MP.fname.toUpperCase()}…`, '', 1400); await E.wait(0.5); }
+        for (let w = 0; w < 60 && !got() && E.MP.alive; w++) { if (w === 2) E.banner(`WAITING FOR ${E.MP.fname.toUpperCase()}…`, '', 1400); await E.wait(0.5); }
         const fm = got(); if (fm) { const fd = fm.d, win = d > fd, draw = d === fd; E.banner(draw ? 'A DRAW!' : win ? 'YOU WIN!' : `${E.MP.fname.toUpperCase()} WINS!`, `jump ${j + 1}: you ${d.toFixed(1)} m · ${E.MP.fname} ${fd.toFixed(1)} m`, 2600); if (win) { E.sfx.cheer && E.sfx.cheer(); } await E.wait(2.8); } }
       E.send({ p: (j + 1) / 2, v: `${S.dist.reduce((a, b) => a + b, 0).toFixed(1)} m`, best: Math.max(...S.dist) });
       try { const b = JSON.parse(localStorage.getItem('snow-jump-best1') || '0'); if (d > b) { localStorage.setItem('snow-jump-best1', JSON.stringify(d)); S.lines.best.set(d); } } catch (e) {}
@@ -391,8 +412,8 @@ export default {
       a.g.position.copy(c.p); pitch = c.ang; P = S.s > S.LIN - 4 ? P0.pop(t) : P0.tuck(t);
       if (S.s >= S.LIN) { // take-off: the target distance from the answers
         S.phase = 'flight';
-        const D = 58 + Math.min(10, S.got || 0) * 5.5 + (S.takeoff ? 8 : 0) + Math.random() * 2;   /* (every right answer on the ramp = 5.5 m) */
-        const b = -Math.tan(11 * Math.PI / 180) + (S.takeoff ? 0.06 : -0.02);
+        const D = 58 + Math.min(10, S.got || 0) * 5.5 + (S.takeoff ? 8 : 0) - (S.weak ? 10 : 0) + Math.random() * 2;   /* (every right answer on the ramp = 5.5 m) */
+        const b = -Math.tan(11 * Math.PI / 180) + (S.takeoff ? 0.06 : S.weak ? -0.07 : -0.02);   /* (a weak take-off: lower and shorter) */
         S.fl = { z: 0, y: 0, z0: 0, y0: 0, b, a: 0, D: Math.min(128, D), slope: b, vz: Math.max(20, S.v) * 0.96 }; this.retarget(0);
         E.spray.emit(a.g.position, 16, 0, 2, 3, 1.2);
       }
@@ -427,9 +448,8 @@ export default {
   camera(E, rdt) {
     const { THREE } = E, P = S.a.g.position; let pos, look, k = 5, fov = 60;
     if (S.phase === 'inrun') {
-      if (S.asking === 'takeoff') { pos = new THREE.Vector3(7, P.y + 1.5, P.z + 4); look = P.clone().setY(P.y + 0.4).add(new THREE.Vector3(0, 0, 3)); k = 4; fov = 52; }
-      else { const c = inrunAt(S.s, { p: new THREE.Vector3(), ang: 0 }), ca = Math.cos(c.ang), sa = Math.sin(c.ang);
-        pos = P.clone().add(new THREE.Vector3(0.5, sa * 5.5 + ca * 2.0, -ca * 5.5 + sa * 2.0)); look = P.clone().add(new THREE.Vector3(0, -sa * 7 + 0.4, ca * 7)); k = 7; fov = 62;
+      { const c = inrunAt(S.s, { p: new THREE.Vector3(), ang: 0 }), ca = Math.cos(c.ang), sa = Math.sin(c.ang);
+        pos = P.clone().add(new THREE.Vector3(0.5, sa * 5.5 + ca * 2.0, -ca * 5.5 + sa * 2.0)); look = P.clone().add(new THREE.Vector3(0, -sa * 7 + 0.4, ca * 7)); k = 7; fov = S.asking === 'takeoff' ? 54 : 62;   /* (the take-off question: the same camera behind him, a little closer in: the old side camera stood outside the ramp's walls) */
         // (2026-11-25) the first metres: 5.5 m behind him is still inside the start tower (a pink/orange screen while he speeds up), so the
         // camera starts in front of him looking back up (as on the start screen), then cranes up over his head to behind him once he is clear
         const out = Math.max(0, Math.min(1, (S.s - 7) / 20)), b = out * out * (3 - 2 * out);
