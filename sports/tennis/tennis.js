@@ -944,15 +944,15 @@ let SHAKE = 0, FREEZE = 0;
 function fitCamera() {
   const a = camera.aspect;
   // (2026-11-17, the user: "make the tennis camera more up close")
-  if (a < 0.8) { camera.fov = 60; CAMV.pos.set(0, 4.5, 18.3); CAMV.look.set(0, 0.45, 1.0); CAMV.follow = 0.82; }
-  else if (a < 1.25) { camera.fov = 54; CAMV.pos.set(0, 4.5, 18.8); CAMV.look.set(0, 0.6, 0.5); CAMV.follow = 0.72; }
-  else { camera.fov = 46; CAMV.pos.set(0, 4.3, 19.2); CAMV.look.set(0, 0.7, 0.0); CAMV.follow = 0.62; }
+  if (a < 0.8) { camera.fov = 60; CAMV.pos.set(0, 4.5, 18.3); CAMV.look.set(0, 0.45, 1.0); CAMV.follow = 1; CAMV.lf = 0.75; CAMV.k = 7; }   /* (2026-11-26 night: a portrait phone follows him fully and quicker: he stays in frame while he moves in and aims) */
+  else if (a < 1.25) { camera.fov = 54; CAMV.pos.set(0, 4.5, 18.8); CAMV.look.set(0, 0.6, 0.5); CAMV.follow = 0.72; CAMV.lf = 0.5; CAMV.k = 2.2; }
+  else { camera.fov = 46; CAMV.pos.set(0, 4.3, 19.2); CAMV.look.set(0, 0.7, 0.0); CAMV.follow = 0.62; CAMV.lf = 0.5; CAMV.k = 2.2; }
   camera.updateProjectionMatrix(); placeCamera(0);
 }
 function placeCamera(dt) {
-  const fx = P.a ? clamp(P.a.x, -6, 6) : 0; CAMV.x = dt ? damp(CAMV.x, fx, 2.2, dt) : fx;
+  const fx = P.a ? clamp(CAMV.lf === 0.75 ? (P.a.x + (P.a.tx ?? P.a.x)) / 2 : P.a.x, -6, 6) : 0; CAMV.x = dt ? damp(CAMV.x, fx, CAMV.k || 2.2, dt) : fx;   /* (portrait: half-way to where he is running, so a quick dash to the ball never leaves the frame) */
   SHAKE = Math.max(0, SHAKE - (dt || 0) * 1.6); const sh = SHAKE * SHAKE * 0.35;
-  camera.position.set(CAMV.pos.x + CAMV.x * (CAMV.follow || 0.5) + (Math.random() - 0.5) * sh, CAMV.pos.y + (Math.random() - 0.5) * sh, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * (CAMV.follow || 0.5) * 0.5, CAMV.look.y, CAMV.look.z);
+  camera.position.set(CAMV.pos.x + CAMV.x * (CAMV.follow || 0.5) + (Math.random() - 0.5) * sh, CAMV.pos.y + (Math.random() - 0.5) * sh, CAMV.pos.z); camera.lookAt(CAMV.look.x + CAMV.x * (CAMV.lf ?? (CAMV.follow || 0.5) * 0.5), CAMV.look.y, CAMV.look.z);
 }
 function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; fitCamera(); BURST.scale(h * pr); }
 addEventListener('resize', resize);
@@ -1003,5 +1003,5 @@ function frame(now) {
       if (MP.on) FR.viaMP_start();
       else if (fm && room) { try { await FR.libsReady(); } catch (e) {} if (fm === 'host') FR.create(room); else FR.join(room); } else SOLO.start(); }
     else if (jc.length === 6) FR.open(jc); else $('start').classList.remove('hidden'); }
-  window.TN = { COURT, SOLO, FR, B, P, ASKT, ALOG, ball, renderer, scene, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
+  window.TN = { COURT, SOLO, FR, B, P, ASKT, ALOG, ball, renderer, scene, camera, THREE, POSTFX, info: () => ({ tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();
