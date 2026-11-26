@@ -526,28 +526,31 @@ export default {
   camera(E, rdt) {
     const { THREE } = E, P = S.a.g.position; S.shotT += rdt;
     let pos, look, k = 4, fov = 60;
-    if (S.phase === 'air') {
-      // from the bottom of the pipe, looking up at him over the lip
-      const up = Math.max(0, (S.airH || 3.2) - 3.2);   /* (bigger airs on a long streak: the camera backs off a little and keeps up) */
-      const nar = innerWidth < innerHeight;   /* (2026-11-25: on a portrait phone the camera starts nearer his wall and keeps up faster, so he never slips off the narrow screen) */
-      pos = new THREE.Vector3(S.side * ((nar ? 5.6 : 3.5) + up * 0.4), -(S.s - 7.5) * S.SL + S.R * 0.9 + up * 0.6, S.s - (nar ? 8.5 : 7.5) - up * 0.6); look = new THREE.Vector3(P.x, P.y + 0.9, P.z); k = nar ? 11 : 6; fov = 60 + up * 2;
-    } else if ((S.phase === 'kair' && S.kick) || (S.phase === 'line' && KICKS.some((K) => S.s > K.s - 4 && S.s < K.s + K.len + K.T * 8.5 + 2))) {
-      // the kicker from below its landing, looking back up the hill: he flies at us, the friend behind him leaves the same lip
-      const KK = S.phase === 'kair' ? S.kick : KICKS.find((K) => S.s > K.s - 4 && S.s < K.s + K.len + K.T * 8.5 + 2), zc = KK.s + KK.len + (KK.table || 0) * 0.3 + KK.T * 8.5 + 5; pos = new THREE.Vector3(3.2, -zc * S.SL + 2.4, zc); look = new THREE.Vector3(P.x * 0.5, P.y + 0.4, P.z - 1.5); k = 4; fov = 58;
-    } else if (S.phase === 'bair' || S.phase === 'end') {
-      // the big air: ahead of him and to the side, looking back up at the jump (the friend comes over the kicker behind)
-      const air = S.phase === 'bair', zc = S.s + (air ? 8 : 10); pos = new THREE.Vector3(air ? 6 : 5, air ? Math.max(-zc * S.SL + 2, P.y - 0.6) : P.y + 1.8, zc); look = new THREE.Vector3(P.x * 0.5, P.y + (air ? (innerWidth > innerHeight ? 2.4 : 0.6) : 0.8), P.z - (air ? 0 : 3));   /* (a wide screen: aim above him, so he sits under the answer bubbles) */ k = S.asking ? 3 : 5; fov = air ? 62 : 58;   // (in the air: just ahead and a little below him, so he flies big over the huge kicker)
-    }
+    // (2026-11-26, Michal: "Make it that its from bhind like always roght now hes too on the left or right but i want him centered":
+    // the camera is always behind him; the older side cameras for the air, the kicker and the big air are gone)
     if (S.fall > 0 && (S.phase === 'end' || S.phase === 'line') && !(S.phase === 'line' && KICKS.some((K) => S.s > K.s - 4 && S.s < K.s + K.len + K.T * 8.5 + 2))) {   // (2026-11-26: a crash after the big air or on the run: framed on him, never off the edge)
-      pos = new THREE.Vector3(P.x + 3.2, P.y + 2.0, P.z + 5.2); look = P.clone().setY(P.y + 0.5); k = 6; fov = 52;
+      pos = new THREE.Vector3(P.x * 0.9 + 1.6, P.y + 2.1, P.z - 4.8); look = P.clone().setY(P.y + 0.5); k = 6; fov = 54;   // (from behind and a little to the side, close)
     } else if (S.phase === 'stop') {
-      pos = new THREE.Vector3(P.x + 2.5, P.y + 1.5, P.z + 4.5); look = P.clone().setY(P.y + 0.8); k = 2; fov = 50;
+      pos = new THREE.Vector3(P.x - 2.6, P.y + 1.6, P.z - 3.6); look = P.clone().setY(P.y + 0.8); k = 3; fov = 50;   // (behind him on the side he faces: his cheer and face still show)
     } else {
       // following down the course, a little above (higher and further back on the run-in to the huge kicker, so it towers ahead)
       const big = S.pN >= HITS && S.phase === 'line' && S.s > PIPE_B;
-      const nar = innerWidth < innerHeight, inPipe = S.phase === 'cross';
-      pos = new THREE.Vector3(P.x * (nar && inPipe ? 0.85 : 0.7), P.y + (big ? 3.4 : 2.6), S.s - (big ? 8.5 : 6.2)); look = new THREE.Vector3(P.x * (nar && inPipe ? 1 : 0.85), P.y + (big ? 1.6 : 0.7), P.z + (big ? 8 : 4)); k = nar && inPipe ? 8 : 5; fov = 60;
+      const inPipe = S.phase === 'cross';
+      // behind him, following his line across the pipe (a little less than he moves, so the walls still read), and aimed THROUGH him:
+      // the look point is on the line from the camera through Foxino, so he sits in the horizontal centre on the walls, in the air,
+      // on landings, the run-ins and the big air. (From where the camera is now, so a quick move across the pipe never leaves him off-centre.)
+      const wide = S.phase === 'air' || inPipe || Math.abs(P.x) > 2, air = S.phase === 'air', back = big ? 8.5 : air ? 8.4 : 6.2, ahead = big ? 8 : 4;
+      const lim = wide ? W() * 0.7 : 99;   // (never out over the lip among the trees: inside the pipe)
+      pos = new THREE.Vector3(Math.max(-lim, Math.min(lim, P.x * (wide ? 0.82 : 0.9))), air ? Math.max(S.R * 0.55 - S.s * S.SL, P.y - 1.6) : P.y + (big ? 3.4 : 2.6), S.s - back);   /* (in the air: from behind and a little below, so he flies against the sky, not the trees) */
+      look = new THREE.Vector3(P.x, P.y + (big ? 1.6 : 0.7), P.z + ahead); k = wide ? (innerWidth < innerHeight ? 11 : 7) : 5; fov = air && innerWidth > innerHeight ? 50 : 60;   /* (a portrait phone: a narrow screen shows any lag, so it keeps up faster) */
     }
+    // every shot aims THROUGH him, seen from where the camera is now (so he stays in the horizontal centre even while the camera moves)
+    const C = E.camera.position, dx = P.x - C.x, dz = P.z - C.z, dl = Math.hypot(dx, dz);
+    // (the aim point is put at his own distance, the height scaled to keep the same tilt: it moves exactly with him, never swings wider)
+    if (dl > 0.5) { const L = Math.max(0.5, Math.hypot(look.x - C.x, look.z - C.z)), f = dl / L; look.y = C.y + (look.y - C.y) * f; look.x = P.x; look.z = P.z; }
+    // (the camera smooths its aim, which trails a fast rider by speed / rate: aim that far ahead along his sideways motion, so he stays centred)
+    const V = S.camV || (S.camV = { x: 0, px: P.x, ok: false }); if (rdt > 0) { const vx = V.ok ? (P.x - V.px) / rdt : 0; V.x = E.damp(V.x, Math.max(-25, Math.min(25, vx)), 12, rdt); V.px = P.x; V.ok = true; }
+    look.x += V.x / (k * 1.6);
     E.cam(pos, look, k, fov); E.focusAt = P; E.focus = P.distanceTo(E.camera.position);
   },
 };
