@@ -42,6 +42,19 @@ const W = () => S.FLAT + S.R;
 const SLA = () => Math.atan(S.SL), LEAN = 0.09, FRONT = /[?&]front=-1/.test(location.search) ? -1 : 1;   // (FRONT: which way his nose (and so his front hand and his look) points)   // (the slope; Foxino leans a little forward over the board, down the hill)
 function pipeY(ad) { if (ad <= S.FLAT) return 0; if (ad <= W()) { const x = ad - S.FLAT; return S.R - Math.sqrt(Math.max(0, S.R * S.R - x * x)); } return S.R + S.WALLV; }
 function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, (ad - S.FLAT) / S.R)); }
+// (2026-11-26, S1, Michal: "Make the turn to jump on the U-ramp more natural") the ride across the U-ramp is physical: along the pipe's curve
+// (the flat, the round transition, the short vertical at the top), with the speed of a body under gravity, so he carves fast across the bottom,
+// slows as he climbs and still goes UP at the lip; the air is the matching parabola (its height and time give the gravity and the lip speed).
+// His heading follows where he is really going (across + down the pipe), so at the top of each air it turns smoothly through "down the pipe"
+// and he lands already facing down the same wall: no snap. The lean eases from the wall's angle to upright at the air's top and back.
+const PIPE = { a: (lat) => 0 };
+function pipeArc() { const F = S.FLAT, R = S.R, La = F + R * Math.PI / 2 + S.WALLV; return { La, at: (a) => { const s = Math.sign(a) || 1, x = Math.abs(a); if (x <= F) return [a, 0, 0];
+  if (x <= F + R * Math.PI / 2) { const ph = (x - F) / R; return [s * (F + R * Math.sin(ph)), R * (1 - Math.cos(ph)), s * ph]; } return [s * (F + R), R + (x - F - R * Math.PI / 2), s * Math.PI / 2]; } }; }
+function pipeRun(H, T) {   // one crossing for an air of height H and time T: the time table u -> arc position, its duration, the lip speed
+  const g = 8 * H / (T * T), vL = g * T / 2, A = pipeArc(), hLip = A.at(A.La)[1], N = 160, ts = [0];
+  for (let i = 1; i <= N; i++) { const a0 = -A.La + 2 * A.La * (i - 1) / N, a1 = -A.La + 2 * A.La * i / N, am = (a0 + a1) / 2, v = Math.sqrt(vL * vL + 2 * g * (hLip - A.at(am)[1])); ts.push(ts[i - 1] + (a1 - a0) / v); }
+  const Tc = ts[N]; return { A, g, vL, Tc, hLip, aAt: (u) => { const t = Math.max(0, Math.min(1, u)) * Tc; let lo = 0, hi = N; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ts[m] <= t) lo = m; else hi = m; } const k = (t - ts[lo]) / Math.max(1e-6, ts[hi] - ts[lo]); return -A.La + 2 * A.La * (lo + k) / N; },
+    vAt: (a) => Math.sqrt(vL * vL + 2 * g * (hLip - A.at(a)[1])) }; }
 // (2026-11-26, R2, Michal: "make the map randomly generated every time that one time you can have uramp first and one time the big jump
 // first and really random") every run lays the 9 sections out in a new order: the 4 kickers, the rail, the box, the rainbow rail, the
 // halfpipe (3 airs) and the BIG AIR (2 questions) = always 12 questions. Never 3 kickers or 3 rails in a row; never the same order twice
@@ -188,7 +201,7 @@ function clipFor(st) {
   if (st.ph === 'air' && st.has && st.has.windup_spin) return st.air < 0.3 ? ['takeoff', 1] : ['air_tuck', 1];
   if (st.ph === 'air') { if (st.gk && st.gkk > 0.02) return ['grab_' + st.gk, st.gs || 1]; return st.air < 0.32 && !st.tr ? ['takeoff', 1.3] : ['air_tuck', 1]; }
   if (st.landT > 0) return [st.oops && (!st.has || st.has.land_wobble) ? 'land_wobble' : 'land', st.oops ? 1.2 : 1.4];
-  if (st.u > 0.86) return ['pump', 1.2];
+  if (st.pump) return ['pump', st.pump];   // (S1: compress into the transition, extend up the wall to the lip)
   return [st.roll > 0.2 ? 'carve_left' : st.roll < -0.2 ? 'carve_right' : 'ride', 1];
 }
 let FX = null; function fxRoot() { if (FX) return FX; const st = document.createElement('style'); st.textContent = `
@@ -498,7 +511,7 @@ export default {
     for (const R of RAILS) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
     if (S.cg) for (const o of E.scene.children.slice(n0)) S.cg.add(o);   // (R2: the kit joins this run's course group: a new run rebuilds it)
   },
-  reset(E) { SIGN.on = false; if (SIGN.m) SIGN.m.visible = false; Object.assign(S, { pend: null, nextTrick: null, airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, done: {}, kick: null, rail: null, fall: 0, fr: 0, railFall: false, railSide: 1, head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false, fin: false }); E.snapCam(); },
+  reset(E) { SIGN.on = false; if (SIGN.m) SIGN.m.visible = false; Object.assign(S, { pend: null, nextTrick: null, airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, done: {}, kick: null, rail: null, fall: 0, fr: 0, railFall: false, railSide: 1, head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false, fin: false, pr: null, pHead: null, pRoll: 0, pRoll0: null }); E.snapCam(); },
   menu() { S.phase = 'menu'; },
   async run(E) {
     if (S.ran) { S.runN = (S.runN || 0) + 1; this.course(E); } S.ran = true;   // (R2: PLAY AGAIN = a new order)
@@ -538,7 +551,7 @@ export default {
       } else if (F.k === 'pipe') {   // the U-ramp: a question while he rides up the wall to each of the 3 airs (slow motion, knees loading at the lip)
         for (let i = 0; i < HITS; i++) {
           await E.until(() => (S.phase === 'cross' && S.pN === i && S.u >= (i === 0 ? 0.6 : 0.4)) || (S.phase === 'air' && S.pN > i));
-          const tKey = S.phase === 'cross' ? (1 - S.u) * 1.55 / (S.fall > 0 ? 0.55 : 1) : 0.3;
+          const tKey = S.phase === 'cross' ? (1 - S.u) * (S.pr ? S.pr.Tc : 1.55) / (S.fall > 0 ? 0.55 : 1) : 0.3;
           const c0 = E.combo; S.asking = true; const r = await ask(`HALFPIPE AIR ${i + 1}`, slowTo(tKey)); S.asking = false; S.hit++;
           const T = r.ok ? ladder(r) : S.a.isClip ? failTrick(c0) : OOPS;
           if (r.ok) { const sc = score(r, T[5]); S.due = sc.pts; trickCard(T[0], E.combo, false, sc.chip); } else { S.due = 0; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
@@ -590,27 +603,29 @@ export default {
     if (S.fall > 0) { S.fall = Math.max(0, S.fall - dt); const k = 1 - S.fall / FALL; S.fr = a.isClip && (a.clips || []).includes('wipeout') ? 0 : 1.35 * (k < 0.18 ? k / 0.18 : k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); } else S.fr = 0;   // (down, sliding, back up)
     if (S.phase === 'cross' || S.phase === 'out') {
       // from one lip across the flat to the other lip (u: 0 -> 1)
-      S.u += dt / 1.55 * (S.fall > 0 ? 0.55 : 1); S.v = E.damp(S.v, 6.5 * (1 + Math.min(6, E.combo) * 0.025), 2.5, dt);   /* (R2: a fast entry (after the big air) settles to the pipe's speed) */
-      const u = Math.min(1, S.u);
-      S.d = -S.side * W() * Math.cos(Math.PI * u);
-      y = pipeY(Math.abs(S.d)); roll = Math.sign(S.d) * wallAng(Math.abs(S.d));
+      if (!S.pr) { const lv = Math.min(11, E.combo); S.pr = pipeRun(3.2 + lv * 0.16, 1.15 + lv * 0.06); }   // (S1: this crossing's physics, for the air it leads to)
+      S.u += dt / S.pr.Tc * (S.fall > 0 ? 0.55 : 1); S.v = E.damp(S.v, 6.5 * (1 + Math.min(6, E.combo) * 0.025), 2.5, dt);   /* (R2: a fast entry (after the big air) settles to the pipe's speed) */
+      const u = Math.min(1, S.u), aa = S.pr.aAt(u), [lat, hh, wa] = S.pr.A.at(aa);
+      S.d = S.side * lat; y = hh; roll = Math.sign(S.d) * Math.abs(wa) * (1 - 0.28 * smoothStep(Math.abs(wa) / (Math.PI / 2)));   // (he leans with the wall, a little less near the top)
+      S.pHead = S.side * Math.atan2(S.pr.vAt(aa), Math.max(2, S.v)); S.pRoll = roll;   // (his heading: where he really goes, across and down the pipe)
       S.wob = Math.max(0, S.wob - dt);
       P = S.fall > 0 ? this.ridePose(t, 1) : S.wob > 0 ? E.SP.wobble(t) : this.ridePose(t, Math.sin(Math.PI * u));
       if (Math.abs(S.d) < S.FLAT && dt > 0.002) E.spray.emit(a.g.position, 1, 0, 0.8, 0, 0.8, 0.09);
       if (S.pN >= HITS && S.u >= 0.5) { S.phase = 'line'; S.d = 0; }   // (the 3 pipe airs done: straight down the middle to the big air)
-      else if (S.u >= 1) { const lv = Math.min(11, E.combo); S.phase = 'air'; S.airN = (S.airN || 0) + 1; S.pN++; S.air = 0; S.airT = 1.15 + lv * 0.06; S.airH = 3.2 + lv * 0.16; S.trick = S.nextTrick || null; S.nextTrick = null; S.tw0 = S.trick ? 0.1 : null; S.tc = null; E.spray.emit(a.g.position, 14, 0, 3, 0, 1.6); }
+      else if (S.u >= 1) { const lv = Math.min(11, E.combo); S.pRoll0 = S.pRoll; S.phase = 'air'; S.airN = (S.airN || 0) + 1; S.pN++; S.air = 0; S.airT = 1.15 + lv * 0.06; S.airH = 3.2 + lv * 0.16; S.trick = S.nextTrick || null; S.nextTrick = null; S.tw0 = S.trick ? 0.1 : null; S.tc = null; E.spray.emit(a.g.position, 14, 0, 3, 0, 1.6); }
     } else if (S.phase === 'air') {
       const T = S.trick, TA = T && T !== OOPS && a.isClip, t0 = S.tw0 ?? 0.42, t1 = T && T.fail ? 0.995 : 0.95, w0 = (S.air / S.airT - t0) / (t1 - t0), sl = TA && w0 >= 0 && w0 < 1 ? slowFor(t1 - t0) : 1;
       S.air += dt * sl; const f = Math.min(1, S.air / S.airT);   // (a trick on: the air in gentle slow motion)
       S.d = S.side * (W() + 0.25 * Math.sin(Math.PI * f));
-      y = S.R + S.WALLV * 0.5 + 4 * S.airH * f * (1 - f) * (S.trick === OOPS ? 0.55 : 1);
+      y = S.R + S.WALLV + 4 * S.airH * f * (1 - f) * (S.trick === OOPS ? 0.55 : 1);   // (S1: from the lip's top, no drop)
+      { const vL = S.pr ? S.pr.vL : 11, r0 = S.pRoll0 ?? S.side * 1.13; S.pHead = S.side * Math.atan2(vL * (1 - 2 * f), Math.max(2, S.v)); roll = r0 * (1 - Math.sin(Math.PI * f)); }   // (S1: up, over the top facing down the pipe, down: one smooth turn; upright at the top)
       // the trick: spins round the vertical, flips; a grab in the middle (the new rider: wind-up, turn + grab, spot the landing)
       const w = (f - t0) / (t1 - t0), TT = TA ? trickAt(T, w, !!T.fail) : null; if (TT) S.tc = [TT.clip, (a.dur && a.dur[TT.clip] || 1) / Math.max(0.12, TT.frac * (t1 - t0) * S.airT / slowFor(t1 - t0))]; else S.tc = null;
       const k = TT ? TT.k : T ? smoothStep(w) : 0;
       S.spin = T ? T[1] * Math.PI * 2 * k : 0; S.flip = T ? (T[2] + (a.isClip ? T[3] : 0)) * Math.PI * 2 * k : 0;   /* (a cork = an off-axis flip with the spin) */ S.cork = T ? T[3] * 0.55 * Math.sin(Math.PI * k) : 0;
       if (T && T !== OOPS && !T.fail && k > 0.02 && k < 0.99) act = { T, k };
       P = T && T !== OOPS && k > 0.08 && k < 0.93 ? this.grabPose(t, T[4], Math.min(1, Math.sin(Math.PI * k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
-      if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS || (S.trick && S.trick.fail)) { S.fallBack = !S.trick[1]; this.wipe(E); } S.tc = null; }
+      if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.pr = null; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS || (S.trick && S.trick.fail)) { S.fallBack = !S.trick[1]; this.wipe(E); } S.tc = null; }
     } else if (S.phase === 'line' || S.phase === 'rail' || S.phase === 'end') {
       // the course down the middle: speed up for the kickers, steady over the rail, slower into the pipe, flat out to the big air
       const z = S.s, late = !S.b1 && z > BIG.s - 32 && z < BIG.s + BIG.len; let tv = late ? 15 : z >= PIPE_A - 4 && S.pN < HITS ? 6.5 : 8.5; if (S.phase === 'end') tv = 0;   /* (R2: flat out on the big air's run-in, slower into the pipe, wherever they are) */
@@ -629,7 +644,7 @@ export default {
         const K = KICKS.find((k) => !S.done[k.id] && z >= k.s + k.len), R = RAILS.find((r) => !S.done[r.id] && z >= r.a - 1.4);
         if (K) { S.done[K.id] = 1; S.kick = K; this.takeoff(E, 'kair', K); }
         else if (R) { S.done[R.id] = 1; S.rail = R; S.phase = 'rail'; }
-        else if (!S.p1 && z >= PIPE_A) { S.p1 = 1; S.phase = 'cross'; S.u = 0.5; S.side = 1; }
+        else if (!S.p1 && z >= PIPE_A) { S.p1 = 1; S.phase = 'cross'; S.u = 0.5; S.side = 1; S.pT = 0; }
         else if (!S.b1 && z >= BIG.s + BIG.len) { S.b1 = 1; this.takeoff(E, 'bair', BIG); }
         else if (S.fin && z >= STOP_Z - 12) S.phase = 'end';   // (R2: past the last section: slow down to the finish)
         if (S.phase === 'kair' || S.phase === 'bair') y = pipeY(0) + S.lip;
@@ -654,7 +669,7 @@ export default {
     if (S.gap && dt > 0 && inGap(S.s + 10) && Math.random() < dt * 1.6) { const z = S.s + 6 + Math.random() * 16, k = gapClose(z); if (k > 0.4) { const sd = Math.random() < 0.5 ? -1 : 1, hw = gapHW(z), x = X(z) + sd * (hw + 1.4); E.spray.emit(new THREE.Vector3(x, gY(x, z) + 1.2 + 11 * k * 0.95, z), 10, -sd * 1.1, -0.4, 0, 1.4, 0.18); } }   // (R4: snow drifting off the rock tops)
     const wx = X(S.s) + S.d; a.g.position.set(wx, -S.s * S.SL + y + V(S.s), S.s);   // (R3: on the route: its swing sideways, its rolls)
     const dd = dt > 1e-5 ? (wx - (S.dPrev ?? wx)) / dt : 0; S.dPrev = wx;   // (he faces where he goes: down the route's turns too)
-    S.head = E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railSide === 0 ? 0.05 : Math.PI / 2) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
+    S.pT = (S.pT ?? 9) + rdt; S.head = (S.phase === 'cross' || S.phase === 'air') && S.pHead != null && S.fall <= 0 ? E.damp(S.head || 0, S.pHead, S.pT < 0.7 ? 6 : 30, rdt) :   /* (S1: a gentle carve into the first crossing) */ E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railSide === 0 ? 0.05 : Math.PI / 2) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
     S.pitch = E.damp(S.pitch || 0, pitch, 12, rdt);
     a.g.rotation.set(0, 0, 0); a.g.rotateX(SLA()); a.g.rotateZ(roll); a.g.rotateY(S.head); a.g.rotateX(-S.pitch); if (S.fr) a.g.rotateZ(S.fr);
     if (a.fox) a.fox.root.rotation.x = E.damp(a.fox.root.rotation.x, AIRS[S.phase] || S.phase === 'stop' || S.phase === 'menu' || S.phase === 'drop' ? 0 : LEAN, 6, rdt);   // (riding: his body a little forward over the board, the board stays flush)
@@ -662,7 +677,7 @@ export default {
     const air = !!AIRS[S.phase], gkk = act ? Math.min(1, Math.sin(Math.PI * act.k) * 1.6) : 0;
     if (a.isClip) { S.landClk = air ? 0.75 : Math.max(0, (S.landClk || 0) - dt);
       if (air) S.wasOops = S.phase === 'air' ? S.trick === OOPS : S.bOops; if (S.fall > 0) S.landClk = 0.4;
-      const st = { has: a.has || (a.has = Object.fromEntries((a.clips || []).map((c) => [c, 1]))), fall: S.fall > 0, rail: S.phase === 'rail', ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll, tc: S.tc, fallBack: !!S.fallBack };
+      const pumpOn = S.phase === 'cross' && S.pr && S.u > 0.5 && Math.abs(S.d) > S.FLAT - 0.6, st = { pump: pumpOn ? Math.max(0.7, Math.min(2, ((a.dur && a.dur.pump) || 1) / Math.max(0.2, (1 - S.u) * S.pr.Tc))) : 0, has: a.has || (a.has = Object.fromEntries((a.clips || []).map((c) => [c, 1]))), fall: S.fall > 0, rail: S.phase === 'rail', ph: air ? 'air' : S.phase === 'stop' ? 'stop' : 'cross', u: S.phase === 'cross' ? S.u : 0.5, air: S.air / S.airT, tr: act ? act.T[0] : '', gk: act && act.T[4] ? act.T[4] : '', gkk: act ? act.k : 0, gs: 1.2 / Math.max(0.3, 0.5 * S.airT), landT: !air && S.landClk > 0 && S.landClk < 0.75 ? S.landClk : 0, oops: S.wasOops, roll, tc: S.tc, fallBack: !!S.fallBack };
       const [cl, sp] = clipFor(st); if (cl !== S.clip) { S.clip = cl; a.want(cl, cl.startsWith('grab_') ? 0.1 : 0.18, sp); } a.update(dt); S.clipSt = st; }
     else { a.pose(P, 12, rdt); a.update(); }
     E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL - V(S.s), roll, head: S.head, pitch: S.pitch, fr: S.fr || 0, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: act ? act.T[0] : S.phase === 'air' && S.trick === OOPS ? 'OOPS' : '', gk: act && act.T[4] ? act.T[4] : '', gkk, pts: S.pts, n: S.airN || 0, cl: S.clip || '', cs: S.clipSt ? clipFor(S.clipSt)[1] : 1 });
