@@ -607,7 +607,7 @@ const MEDALS = ['', '🥉', '🥈', '🥇'];
 E.medalFor = () => { const f = E.asked ? E.right / E.asked : 1; return f >= 0.9 ? 3 : f >= 0.7 ? 2 : f >= 0.4 ? 1 : 0; };
 E.finish = async ({ score, shown, unit, better = 'high', line = '' }) => {
   E.running = false;
-  const medal = E.medalFor(), key = `snow-best-${SPORT}`, best = store.get(key, null);
+  const medal = E.medalFor(), key = `snow-best-${(MOD && MOD.bestKey) || SPORT}`, best = store.get(key, null);   // (a sport can keep a new best when its run changes)
   const isBest = best == null || (better === 'high' ? score > best : score < best);
   if (isBest) store.set(key, score);
   E.send({ done: true, score, v: shown, medal });
@@ -666,7 +666,7 @@ function frame(now) {
 // ---------- start ----------
 function renderStart() {
   $('startTitle').textContent = NAMES[SPORT]; $('startSub').textContent = (MOD && MOD.blurb) || '';
-  const best = store.get(`snow-best-${SPORT}`, null); $('bestLine').textContent = best != null ? `Your best: ${MOD && MOD.bestShown ? MOD.bestShown(best) : best}` : '';
+  const best = store.get(`snow-best-${(MOD && MOD.bestKey) || SPORT}`, null); $('bestLine').textContent = best != null ? `Your best: ${MOD && MOD.bestShown ? MOD.bestShown(best) : best}` : '';
   const ps = packIds.map((id) => PACKS.find((p) => p.id === id)).filter(Boolean);
   const label = (p) => (window.FugioPacks && FugioPacks.label ? FugioPacks.label(p) : p.level);
   $('packBtn').innerHTML = ps.length ? `${esc(ps.length > 1 ? `${ps.length} packages` : ps[0].title)}<small>${esc(ps.map(label).join(' · '))} · change the words ›</small>` : 'Choose the words ›';
@@ -691,7 +691,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 19, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 20, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

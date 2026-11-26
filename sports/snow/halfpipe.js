@@ -7,13 +7,14 @@
 // With a friend: each phone shows the friend one kicker-length behind (when you land the first jump, they are just leaving its lip).
 // (2026-11-25, the user: "longer map surrounded by deep forest, with more unique jumps, so one run equals 12 questions") the course, top to
 // bottom: kicker · candy-cane rail · box · table-top · the halfpipe (3 airs) · rainbow rail · gap jump · step-up · the BIG AIR (2 questions)
-const HITS = 3, QN = 12;   // (the pipe airs; all the questions)
+const HITS = 5, QN = 15;   // (the pipe airs; all the questions)   (2026-11-27, S3, Michal: "Make each now 15 questions long": 3 → 5 pipe airs + the FUN BOX = 15)
 const FEAT = [   // the open-slope features in order (s/a: metres down the hill). kick = a kicker (a question in the air), rail = a rail or box (a question on it)
   { k: 'kick', id: 'k1', name: 'KICKER', s: 16, len: 4, lip: 1.0, w: 3.6, back: 1.4, T: 1.05, H: 1.4, lipC: 0x36b5e0 },
   { k: 'rail', id: 'r1', name: 'RAIL', a: 44, b: 57, h: 0.5, look: 'cane' },
   { k: 'rail', id: 'r2', name: 'BOX', a: 72, b: 85, h: 0.42, look: 'box' },
   { k: 'kick', id: 'k2', name: 'TABLE TOP', s: 100, len: 4.5, lip: 1.3, w: 5, table: 6, back: 1.8, T: 1.45, H: 1.9, lipC: 0xffb020, spon: 'face' },
   { k: 'pipe', id: 'p', name: 'HALFPIPE' },
+  { k: 'rail', id: 'r4', name: 'FUN BOX', a: 0, b: 12, h: 0.5, look: 'box' },   // (S3: a 4th rail section)
   { k: 'rail', id: 'r3', name: 'RAINBOW RAIL', a: 236, b: 250, h: 0.45, arch: 1.0, look: 'rainbow' },
   { k: 'kick', id: 'k3', name: 'GAP JUMP', s: 268, len: 5, lip: 1.5, w: 4.4, back: 1.6, T: 1.35, H: 1.9, lipC: 0x9a5cf0, spon: 'red', gap: true },
   { k: 'kick', id: 'k4', name: 'STEP-UP', s: 298, len: 4, lip: 1.15, w: 4, back: 1.4, T: 1.15, H: 1.6, lipC: 0x2fbf6a, spon: 'face' },
@@ -65,7 +66,7 @@ function pipeRun(H, T) {   // one crossing for an air of height H and time T: th
     vAt: (a) => Math.sqrt(vL * vL + 2 * g * (hLip - A.at(a)[1])) }; }
 // (2026-11-26, R2, Michal: "make the map randomly generated every time that one time you can have uramp first and one time the big jump
 // first and really random") every run lays the 9 sections out in a new order: the 4 kickers, the rail, the box, the rainbow rail, the
-// halfpipe (3 airs) and the BIG AIR (2 questions) = always 12 questions. Never 3 kickers or 3 rails in a row; never the same order twice
+// halfpipe (3 airs; 5 since S3) and the BIG AIR (2 questions) = always 12 questions (15 since S3, with the FUN BOX). Never 3 kickers or 3 rails in a row; never the same order twice
 // in a row (solo: remembered on this phone; a party: both phones build the SAME course from the party code + round; ?seed=123 repeats one).
 // Each section gets the room its airs need (the run-in for the question, the air in slow motion, the landing), so the joins are always rideable.
 const SECT = FEAT.slice(), RLEN = Object.fromEntries(RAILS.map((r) => [r.id, r.b - r.a]));
@@ -190,7 +191,7 @@ function layout(o, route, seed) {
     if (i === i0) { Z.a = z; z += TURN; Z.b = z; }
     if (F.k === 'kick') { F.s = z + 12; z = F.s + F.len + (F.table || 0) + F.back + F.T * 11 + 4; }
     else if (F.k === 'rail') { F.a = z + 6; F.b = F.a + RLEN[F.id]; z = F.b + 12; }
-    else if (F.k === 'pipe') { PIPE_A = z + 14; PIPE_B = PIPE_A + 80; z = PIPE_B + 12; }
+    else if (F.k === 'pipe') { PIPE_A = z + 14; PIPE_B = PIPE_A + 125; z = PIPE_B + 12; }   // (S3: 5 airs need 125 m)
     else { BIG.s = z + 32; z = BIG.s + BIG.len + 96 + (last ? 20 : 22); }   /* (the big air: up to ~95 m of flight at full speed with slow-motion tricks) */
     if (i0 >= 0 && i === i0 + n - 1) { Z.c = z; z += TURN; Z.d = z; } });
   STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
@@ -479,7 +480,7 @@ async function askT(E, opts) { let bar = null, to = null;
 export default {
   id: 'halfpipe', blurb: 'A kicker, a rail, the halfpipe and a HUGE big air. Right words make big tricks!',
   light: { sky: 'alpine-night', skyYaw: 0.1, skyBase: 0.3, skySpan: 1.0, sunDir: [0.3, 0.85, -0.35], sun: 0xf2f4ff, sunI: 2.3, hemiSky: 0x7f96ff, hemiGround: 0x34307a, hemi: 0.65, rim: 0x8fd6ff, rimI: 1.4, exposure: 1.05, fog: [60, 330], fogColor: 0x3a3f9a, env: 0.25, flakes: 500, flakeA: 0.8 },
-  bestShown: (s) => `${s} points`,
+  bestShown: (s) => `${s} points`, bestKey: 'halfpipe15',   // (S3: 15-question runs score more: their own best, not compared with the 12-question ones)
   async build(E, prog) {
     const { THREE } = E;
     const [g, J] = await Promise.all([E.loadGLB('models/halfpipe.glb?v=1'), E.loadJSON('models/halfpipe.json?v=1')]);
