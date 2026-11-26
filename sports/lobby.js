@@ -351,7 +351,7 @@ addEventListener('message', (e) => {
   const i = RUN.i, id = RUN.list[i];
   if (m.mpHello) { MPB.ready = i; const keep = []; for (const q of MPB.q) { if (q.r === RUN.round && q.i === i) mpToFrame(q.d); else keep.push(q); } MPB.q = keep; if (!inParty()) mpLostToFrame(); return; }
   if ('mp' in m) { if (inParty()) send({ t: 'mp', r: RUN.round, i, d: m.mp }); return; }
-  if (m.fs === 'finished' && id === 'penalty') { const r = { goals: m.goals, of: m.of || 10, stars: m.stars }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
+  if (m.fs === 'finished' && id === 'penalty') { const r = { goals: m.goals, of: m.of || 10, stars: m.stars, shootout: !!m.shootout, vs: m.vs, won: !!m.won, how: m.how };   /* (2026-11-26: Penalties is a real shootout: my side's goals, theirs, who won) */ RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   if (m.fb === 'finished' && id === 'streetball') { const r = { goals: m.score[0], vs: m.score[1], won: !!m.won }; RUN.mine[i] = r; if (inParty()) send({ t: 'score', i, r }); setTimeout(() => showResult(i), 2600); }
   // the snow sports: the result, and the live state for the friend (relayed over the party link)
   if (m.snow === 'state' && isSnow(id) && m.sport === id) { if (inParty()) send({ t: 'snow', i, sport: m.sport, st: m.st }); return; }
@@ -362,7 +362,10 @@ function showResult(i) {
   if (!RUN || RUN.i !== i) return;
   const id = RUN.list[i], r = RUN.mine[i] || {}, last = i >= RUN.list.length - 1, fname = PT.friend ? PT.friend.name : PT.lastFriend || 'Friend';
   let body = '';
-  if (id === 'penalty') {
+  if (id === 'penalty' && r.shootout) {   // (2026-11-26: a real shootout: the result is the same on both phones, no waiting)
+    const them = inParty() ? esc(fname) : 'Rob', tb = r.how === 'right' ? ' on right answers' : r.how === 'time' ? ' on faster answers' : '';
+    body = `<p class="kick">PENALTIES · SHOOTOUT</p><h2>${r.won ? 'You win!' : `${them} wins!`}</h2><div class="vs"><div class="who${r.won ? ' win' : ''}"><b>${r.goals}</b><span>YOU</span></div><b>–</b><div class="who${!r.won ? ' win' : ''}"><b>${r.vs}</b><span>${them.toUpperCase()}</span></div></div><p class="line">${r.goals}–${r.vs} on penalties${tb} · ${'⭐'.repeat(r.stars || 1)}</p>`;
+  } else if (id === 'penalty') {
     const th = RUN.their[i];
     if (inParty() && !th) { RUN.waitTheirs = i; body = `<p class="kick">PENALTIES</p><h2>${r.goals} / ${r.of}</h2><p class="line">Waiting for ${esc(fname)} to finish…</p>`; }
     else if (th) { const win = r.goals > th.goals, draw = r.goals === th.goals;
@@ -389,13 +392,13 @@ function showResult(i) {
   if (RUN.waitTheirs === i && !(inParty() && !RUN.their[i])) RUN.waitTheirs = -1;
   let btns;
   if (last) {
-    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? `${x.goals ?? '–'} points` : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : isSnow(sid) ? `${x.shown ?? '–'} ${x.unit || ''}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
+    const sum = RUN.list.map((sid, k) => { const x = RUN.mine[k] || {}; return `<li><span>${ACTS.find((a) => a.id === sid).name}</span><em>${sid === 'penalty' ? (x.shootout ? `${x.goals ?? '–'}–${x.vs ?? '–'} ${x.won ? 'won' : 'lost'}` : `${x.goals ?? '–'} points`) : sid === 'streetball' ? `${x.goals ?? '–'}–${x.vs ?? '–'}` : isSnow(sid) ? `${x.shown ?? '–'} ${x.unit || ''}` : x.won ? 'WON' : 'lost'}</em></li>`; }).join('');
     btns = `${RUN.list.length > 1 ? `<ul class="list">${sum}</ul>` : ''}<div class="btns"><button class="big" type="button" id="rDone">BACK TO THE STADIUM</button></div>`;
   } else if (inParty() && PT.host && id !== 'tennis' && !RUN.their[i] && !RUN.waitOver) { btns = `<p class="line">NEXT comes when ${esc(fname)} has finished…</p>`; clearTimeout(RUN.waitT); RUN.waitT = setTimeout(() => { if (RUN && RUN.i === i && !RUN.their[i]) { RUN.waitOver = true; showResult(i); } }, 45000); }   /* (2026-11-25: never pull the friend out of a sport they are still playing) */
   else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
   else btns = `<p class="line">Waiting for ${esc(fname)}…</p>`;
   $('rcard').innerHTML = body + btns; $('result').hidden = false;
-  if ((id === 'penalty' && (r.stars || 0) >= 2) || r.won || (r.medal || 0) >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
+  if ((id === 'penalty' && !r.shootout && (r.stars || 0) >= 2) || r.won || (r.medal || 0) >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
   const n = $('rNext'); if (n) n.onclick = () => { sfx.click && sfx.click(); send({ t: 'next', i: RUN.i }); nextSport(); };
   const d = $('rDone'); if (d) d.onclick = () => { sfx.click && sfx.click(); stopList(); ME.cheerT = 0; };
 }
