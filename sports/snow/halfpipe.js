@@ -196,7 +196,11 @@ function makeIgloo(E, g, Z) {
   // embers floating up, the warm light flickering by the same formula; all ×2 (the Adventures camp is at a smaller scale). New here only: a
   // little smoke that rises and fades well under the roof.
   const SC = 2, base = 0.15; IG.flames = []; IG.embers = []; IG.smoke = [];
-  if (S.firepit) { const fp = S.firepit.clone(true); fp.scale.setScalar(SC); fp.position.set(fx, base + 0.006, fz); fp.rotation.y = 0.3; fp.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.userData.noCast = true; } }); grp.add(fp); }
+  // (as Adventures' inst() dresses a model: glow parts unlit and bright, the rest matte and flat-shaded; the tripod with its pot over the fire)
+  const dressKit = (o) => o.traverse((m) => { if (!m.isMesh) return; m.castShadow = false; m.userData.noCast = true; const ms = Array.isArray(m.material) ? m.material : [m.material];
+    m.material = ms.map((mt) => { mt = mt.clone(); if (/glow/i.test(mt.name)) return new THREE.MeshBasicMaterial({ color: mt.color, vertexColors: mt.vertexColors, toneMapped: false }); if (mt.isMeshStandardMaterial) { mt.roughness = Math.max(0.75, mt.roughness ?? 1); mt.metalness = Math.min(0.15, mt.metalness ?? 0); mt.flatShading = true; } return mt; }); if (m.material.length === 1) m.material = m.material[0]; });
+  if (S.firepit) { const fp = S.firepit.clone(true); dressKit(fp); fp.scale.set(SC, SC * 1.35, SC); fp.position.set(fx, base + 0.006, fz); fp.rotation.y = 0.3; grp.add(fp); }   // (a little taller: it reads from the game's higher camera)
+  if (S.tripod) { const tp = S.tripod.clone(true); dressKit(tp); tp.scale.setScalar(0.86 * SC); tp.position.set(fx, base + 0.006, fz); tp.rotation.y = 0.3; grp.add(tp); }
   else { const stoneM = new THREE.MeshStandardMaterial({ color: 0x55586a, roughness: 1, flatShading: true }); for (let i = 0; i < 8; i++) { const a2 = i * Math.PI / 4, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneM); st.position.set(fx + Math.cos(a2) * 0.75, 0.25, fz + Math.sin(a2) * 0.75); grp.add(st); } }
   for (const [dx, dy, dz, sc, seed, map] of [[0, 0.08, 0, 1.25, 1, 0], [0.14, 0.06, -0.08, 0.85, 2, 1], [-0.13, 0.06, 0.07, 0.75, 3, 0]]) {
     const fk = makeFlame({ height: 0.5, width: 1, seed, map }), fg = new THREE.Group(); fk.object.position.y = -0.04; fg.add(fk.object); fg.position.set(fx + dx * SC, base + dy * SC, fz + dz * SC); fg.scale.setScalar(sc * SC); grp.add(fg); IG.flames.push(fk); }
@@ -234,9 +238,25 @@ const ROUTES = [
   { id: 'igloo', name: 'THE IGLOO', side: -1, n: 0, len: 34, ready: true, host: () => false, dress: (E, g, Z) => makeIgloo(E, g, Z) },   // (R6: an empty zone: the igloo, in and smash out)
   { id: 'right', name: 'DETOUR RIGHT', side: -1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' },
   { id: 'left', name: 'DETOUR LEFT', side: 1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' }];
-function pickRoute(sd) {
+// (2026-11-27, S4, Michal: "Make 3 different locations for it: Austria (current one), Norway, Alaska ... Before each game, let there be a little
+// cutscene of the cart rotating and zooming on that location, the lighting, and you're riding") the LOCATION is picked first (the same seed:
+// the same on both phones; never twice in a row once several are ready; ?loc=<id> for tests), then its routes and the order. Austria = the course
+// as it was; Norway (S5) and Alaska (S6) get their own terrain, sky, light, scenery, parts and routes: set ready and fill them in.
+const LOCS = [
+  { id: 'austria', name: 'AUSTRIA', sub: 'The Tyrol Alps · night run', flag: ['#ef3340', '#ffffff', '#ef3340'], ready: true, routes: ['straight', 'rockgap', 'tunnel', 'igloo'] },
+  { id: 'norway', name: 'NORWAY', sub: 'Forest freeride · the frozen river', flag: 'norway', ready: false, routes: ['straight'] },
+  { id: 'alaska', name: 'ALASKA', sub: 'Big mountain freeride · the ice cave', flag: 'alaska', ready: false, routes: ['straight'] }];
+function pickLoc(sd) {
+  const want = new URLSearchParams(QALL).get('loc'), forced = want && LOCS.find((l) => l.id === want && l.ready); if (forced) return forced;
+  const can = LOCS.filter((l) => l.ready); if (can.length === 1) return can[0];
+  const at = (seed) => can[Math.floor(rng32(seed ^ 0x1b873593)() * can.length)];
+  if (sd.fixed) return at(sd.cur);
+  if (sd.party) { const prev = at(sd.prev); let l = at(sd.cur); for (let k = 1; l === prev && k < 9; k++) l = at(sd.cur + k); return l; }
+  const last = lsGet('hp-loc'); let l = at(sd.cur); for (let k = 1; l.id === last && k < 12; k++) l = at(sd.cur + k * 7919); return l;
+}
+function pickRoute(sd, loc = LOCS[0]) {
   const want = new URLSearchParams(QALL).get('route'),   /* (also on the lobby's address: /sports/?route=right) */ forced = want && ROUTES.find((r) => r.id === want); if (forced) return forced;
-  const can = ROUTES.filter((r) => r.ready && !r.test); if (can.length === 1) return can[0];
+  const can = ROUTES.filter((r) => r.ready && !r.test && (!loc || loc.routes.includes(r.id))); if (can.length === 1) return can[0];
   const at = (seed) => can[Math.floor(rng32(seed ^ 0x5bd1e995)() * can.length)];
   if (sd.fixed) return at(sd.cur);
   if (sd.party) { const prev = at(sd.prev); let r = at(sd.cur); for (let k = 1; r === prev && k < 9; k++) r = at(sd.cur + k); return r; }   // (never the same route twice in a row)
@@ -563,7 +583,7 @@ export default {
     snowM = snowM || new THREE.MeshStandardMaterial({ color: 0xeef2fd, roughness: 0.88 }); pisteM = pisteM || new THREE.MeshStandardMaterial({ color: 0xe4ebfb, roughness: 0.8 });
     const wallM = pisteM.clone(); wallM.side = THREE.DoubleSide; wallM.onBeforeCompile = pisteM.onBeforeCompile;
     prog(30, 'Planting the trees…');
-    S.firepit = await E.loadGLB('models/camp-firepit.glb?v=1').then((gl) => gl.scene).catch(() => null);   // (R8: the Adventures fire pit)
+    [S.firepit, S.tripod] = await Promise.all(['camp-firepit', 'camp-tripod'].map((n) => E.loadGLB(`models/${n}.glb?v=1`).then((gl) => gl.scene).catch(() => null)));   // (R8: the Adventures fire pit and its tripod with the pot)
     S.wallM = wallM; S.snowM = snowM; S.pisteM = pisteM; this.course(E);   // (R2/R3: the ground, the pipe, the features and everything round them, for this run's order and route)   // (R2: the pipe, the features and everything round them, for this run's order)
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
@@ -578,7 +598,7 @@ export default {
   // group, so PLAY AGAIN gets a new course without reloading. The ground, the rocks (all outside the pipe's decks) and the mountains stay.
   course(E) {
     const { THREE } = E; if (S.cg) E.scene.remove(S.cg);
-    const sd = runSeeds(S.runN || 0); layout(pickOrder(sd), pickRoute(sd), sd.cur); S.L = COURSE_END;
+    const sd = runSeeds(S.runN || 0); S.loc = pickLoc(sd); lsSet('hp-loc', S.loc.id); layout(pickOrder(sd), pickRoute(sd, S.loc), sd.cur); S.L = COURSE_END;   // (S4: the location first)
     const g = new THREE.Group(); S.cg = g; const ground = makeGround(THREE, S.snowM, S.pisteM); g.add(ground, makePipe(THREE, S.wallM));
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const trees = [], lights = [], inPipe = (z) => z > PIPE_A - 3 && z < PIPE_B + 3;
@@ -620,12 +640,43 @@ export default {
     for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3((BIG.x || 0) + sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
     for (const R of RAILS) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
     if (S.cg) for (const o of E.scene.children.slice(n0)) S.cg.add(o);   // (R2: the kit joins this run's course group: a new run rebuilds it)
+    E.scene.updateMatrixWorld();   // (S4: the kit's world positions before the first far-cull: else the first intro frame drew every tree and snowman, ~105k)
   },
   reset(E) { SIGN.on = false; if (SIGN.m) SIGN.m.visible = false; Object.assign(S, { pend: null, nextTrick: null, airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, done: {}, kick: null, rail: null, fall: 0, fr: 0, railFall: false, rt: null, railWob: false, railYaw: 0, railClip: "", head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false, fin: false, pr: null, pHead: null, pRoll: 0, pRoll0: null }); E.snapCam(); },
   menu() { S.phase = 'menu'; },
+  // (S4) the intro: a location card (its flag, its name) spins in and zooms into the place (~1.3 s; a tap skips it: alone you go straight on, in a
+  // party it only hides it, so nobody starts earlier); then the camera sweeps from a high, wide look at the slope and the sky down to behind him,
+  // while the 3-2-1 runs, and lands there on GO. ?nointro=1 for tests.
+  async intro(E) {
+    if (/[?&]nointro=1/.test(QALL)) { S.intro = null; return; }
+    const L = S.loc || LOCS[0], party = !!(E.MP && E.MP.on), CARD = (S.runN || 0) > 0 ? 1000 : 1300;
+    S.intro = { t0: performance.now(), card: CARD, sweep: CARD + 2400, skip: false }; E.snapCam(); E.camFov = 52; E.camera.fov = 52; E.camera.updateProjectionMatrix();   /* (the intro lens from the first frame: the wider 60° first frame drew ~105k) */
+    const flag = L.flag === 'norway' ? '<i class="nor"></i>' : L.flag === 'alaska' ? '<i class="ak"></i>' : L.flag.map((c) => `<i style="background:${c}"></i>`).join('');
+    const ov = document.createElement('div'); ov.id = 'hpIntro'; ov.innerHTML = `<div class="hpCard" style="--d:${CARD}ms"><div class="hpFlag">${flag}</div><b>${L.name}</b><small>${L.sub}</small></div><div class="hpSkip">tap to skip</div>`;
+    if (!document.getElementById('hpIntroCss')) { const st = document.createElement('style'); st.id = 'hpIntroCss'; st.textContent = `
+#hpIntro{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;perspective:900px;background:radial-gradient(circle,rgba(26,12,70,.55),rgba(26,12,70,.15) 70%);animation:hpFade var(--d,1300ms) linear forwards;pointer-events:auto}
+.hpCard{width:min(72vw,330px);padding:16px 16px 14px;border-radius:24px;background:#fff;text-align:center;box-shadow:0 9px 0 #2a0b57,0 0 0 5px #7e34f2,0 18px 40px rgba(0,0,0,.35);animation:hpCard var(--d,1300ms) cubic-bezier(.25,.8,.25,1) forwards;transform-style:preserve-3d}
+.hpFlag{display:flex;flex-direction:column;height:clamp(70px,20vw,96px);border-radius:12px;overflow:hidden;margin-bottom:10px;box-shadow:inset 0 0 0 3px rgba(42,11,87,.15)} .hpFlag i{flex:1;display:block}
+.hpFlag i.nor{background:linear-gradient(90deg,transparent 28%,#fff 28%,#fff 31%,#00205b 31%,#00205b 39%,#fff 39%,#fff 42%,transparent 42%),linear-gradient(0deg,transparent 40%,#fff 40%,#fff 44%,#00205b 44%,#00205b 56%,#fff 56%,#fff 60%,transparent 60%),#ba0c2f}
+.hpFlag i.ak{background:radial-gradient(circle at 82% 18%,#ffd200 0 6%,transparent 7%),#0f204b}
+.hpCard b{display:block;font:400 clamp(32px,10vw,50px)/1 'FoxComic','Lilita One',sans-serif;color:#7e34f2;letter-spacing:.04em;-webkit-text-stroke:.05em #2a0b57;paint-order:stroke fill}
+.hpCard small{display:block;margin-top:6px;font:700 clamp(12px,3.4vw,15px)/1.2 'Lilita One',sans-serif;color:#6a5aa0}
+.hpSkip{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 54px);left:0;right:0;text-align:center;font:700 13px 'Lilita One',sans-serif;color:rgba(255,255,255,.75)}
+@keyframes hpCard{0%{transform:rotateY(-540deg) scale(.3);opacity:0}52%{transform:rotateY(0) scale(1);opacity:1}76%{transform:rotateY(0) scale(1.04);opacity:1}100%{transform:rotateY(0) scale(6);opacity:0}}
+@keyframes hpFade{0%,70%{opacity:1}100%{opacity:0}}`; document.head.appendChild(st); }
+    document.body.appendChild(ov); ov.addEventListener('pointerdown', () => { S.intro.skip = true; ov.remove(); });
+    await new Promise((res) => { const tick = () => { if (!S.intro) return res(); const t = performance.now() - S.intro.t0; if (t >= CARD || (S.intro.skip && !party)) return res(); requestAnimationFrame(tick); }; tick(); });
+    ov.remove(); if (S.intro && S.intro.skip && !party) S.intro.t0 = performance.now() - CARD;   // (alone: the sweep starts now)
+  },
+  introCam(E, THREE, Pp) {   // the sweep: high and wide, looking back up the slope at the sky; round behind him; his riding view (where the follow camera starts)
+    const I = S.intro, t = performance.now() - I.t0, u = ss5((t - I.card * 0.75) / (I.sweep - I.card * 0.75)), sl = Math.atan(S.SL);
+    const P = (dx, dy, dz) => new THREE.Vector3(Pp.x + dx, Pp.y + dy, Pp.z + dz), b2 = (a, b, c, k) => a.clone().multiplyScalar((1 - k) * (1 - k)).add(b.clone().multiplyScalar(2 * k * (1 - k))).add(c.clone().multiplyScalar(k * k));
+    const pos = b2(P(9, 4, -2), P(-9, 7, -9), P(0, 2.6, -6.2), u), look = b2(P(-14, -5, 70), P(0, 0, 14), P(0, 0.7, 4), u);   // (first out over the valley: the night sky, the mountains, the lit slope; then round behind him)
+    E.cam(pos, look, u >= 1 ? 8 : 40, 60 - 8 * (1 - u)); if (u >= 1) I.done = true; },
   async run(E) {
     if (S.ran) { S.runN = (S.runN || 0) + 1; this.course(E); } S.ran = true;   // (R2: PLAY AGAIN = a new order)
     this.reset(E); S.phase = 'drop'; fxRoot();   // (H33: the answer-button styles are there from the first question)
+    await this.intro(E);   // (S4: the location card spins in and zooms into the place; the camera sweeps down to him during the count)
     E.banner('3', '', 700); await E.wait(0.8); E.banner('2', '', 700); await E.wait(0.8); E.banner('1', '', 700); await E.wait(0.8);
     E.banner('GO!', `${QN} QUESTIONS · KICKERS · RAILS · PIPE · BIG AIR`, 900); S.phase = 'line';
     const at = (dy = 1.5) => S.a.g.position.clone().setY(S.a.g.position.y + dy);
@@ -708,7 +759,7 @@ export default {
       a.g.position.set(0, -S.s * S.SL, S.s); a.g.rotation.set(0, 0, 0); a.g.rotateX(SLA());
       if (a.isClip) { a.want('stance_idle'); a.update(dt || rdt); } else { a.pose(this.ridePose(t, 0), 8, rdt); a.update(); }
       const Pp = a.g.position, ang = t * 0.15 + 0.6;
-      E.cam(new THREE.Vector3(Pp.x + Math.cos(ang) * 3.6, Pp.y + 1.5, Pp.z + Math.sin(ang) * 3.6), new THREE.Vector3(Pp.x, Pp.y + 0.8, Pp.z), 3, 50);
+      if (S.phase === 'drop' && S.intro) this.introCam(E, THREE, Pp); else E.cam(new THREE.Vector3(Pp.x + Math.cos(ang) * 3.6, Pp.y + 1.5, Pp.z + Math.sin(ang) * 3.6), new THREE.Vector3(Pp.x, Pp.y + 0.8, Pp.z), 3, 50);
       E.focusAt = Pp; E.focus = 4; E.hud('0', 'SNOWBOARD'); if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt); return;
     }
     S.s += S.v * dt;
