@@ -57,7 +57,7 @@ function shuffleOrder(seed) { const r = rng32(seed); for (let n = 0; n < 400; n+
 function runSeeds(runN) {
   const q = new URLSearchParams(location.search), fixed = q.get('seed');
   if (fixed != null) return { fixed: true, cur: hashStr('seed:' + fixed), prev: null };
-  if (/^(host|join)$/.test(q.get('mp') || '')) { const party = q.get('mps') || [q.get('name') || '', q.get('fname') || ''].map((x) => x.slice(0, 12)).sort().join('|'), sd = (r) => hashStr(`${party}|${r}|${q.get('mpi') || 0}|${runN}`), r0 = +(q.get('mpr') || 0); return { party: true, cur: sd(r0), prev: sd(r0 - 1) }; }
+  if (/^(host|join)$/.test(q.get('mp') || '')) { const party = q.get('mps') || [q.get('name') || '', q.get('fname') || ''].map((x) => x.slice(0, 12)).sort().join('|'), sd = (r, i) => hashStr(`${party}|${r}|${i}|${runN}`), r0 = +(q.get('mpr') || 0), i0 = +(q.get('mpi') || 0); return { party: true, cur: sd(r0, i0), prev: i0 > 0 ? sd(r0, i0 - 1) : sd(r0 - 1, i0) }; }   // (prev = the game before: the one before in this list, else the last round's)
   return { cur: (Math.random() * 4294967296) >>> 0, prev: null };
 }
 const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }, lsSet = (k, v) => { try { if (!new URLSearchParams(location.search).has('seed')) localStorage.setItem(k, v); } catch (e) {} };
@@ -73,9 +73,43 @@ function pickOrder(sd) {
 // Only the READY routes are picked; ?route=<id> forces one (tests; 'right' / 'left' = a detour with an empty zone). The zones plug in here:
 // R4 the rock gap (right), R5 the snow tunnel with rails (left), R6–R8 the igloo (right): set ready, host (which sections can be inside), dress().
 // ("right" = to the right on the screen, behind him looking down the hill = -x)
+// (2026-11-26, R4, Michal: "one time it can be to the right through some rock gap") THE ROCK GAP: on the right detour the path runs into a narrow
+// passage between two low-poly rock walls with snowy tops (made in code, flat-shaded, vertex colours: the course's look); they close in to ~8 m
+// either side of the line in the middle and open again; boulders at their feet (the snow-props rocks, instanced), icicles under the overhangs,
+// warm lanterns on the walls and two of the floodlights' glows moved into the gap so it reads at night; snow puffs drift off the tops as he passes.
+// The ride line stays clear (nothing to dodge): any kicker or rail inside works as everywhere (questions, slow motion, tricks).
+const inGap = (z) => !!S.gap && z > S.gap.zA - 4 && z < S.gap.zB + 4;
+const gapClose = (z) => { const G = S.gap; if (!G) return 0; const u = (z - G.zA) / (G.zB - G.zA); return u <= 0 || u >= 1 ? 0 : Math.pow(Math.sin(Math.PI * u), 0.55); };
+const gapHW = (z) => 14 - 8 * gapClose(z);   // (the half-width between the walls: 14 at the mouths, ~6 in the middle: a narrow passage, the ride line clear)
+const hsh = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+function makeRockGap(E, g, Z) {
+  const { THREE } = E, G = S.gap, pos = [], col = [], rows = [], C = new THREE.Color(), snow = new THREE.Color(0xeef3ff), rockA = new THREE.Color(0x7a77a6), rockB = new THREE.Color(0x5b587f);
+  for (let z = G.zA; z <= G.zB + 0.01; z += 3) { const k = gapClose(z), hw = gapHW(z), H = 1.2 + 11 * k * (0.85 + 0.3 * hsh(z, 1)), cx = X(z);
+    rows.push([-1, 1].map((sd) => { const gy = (lx) => gY(cx + sd * lx, z), n = (i) => (hsh(z, i + (sd > 0 ? 7 : 0)) - 0.5);
+      return [[hw - 0.3, gy(hw) - 0.6], [hw + 0.5 + n(1) * 0.8, gy(hw) + H * 0.45], [hw - 0.5 + n(2) * 0.6, gy(hw) + H * 0.82], [hw + 1.8 + n(3), gy(hw) + H], [hw + 5 + n(4) * 2, gy(hw) + H * 0.7], [hw + 9, gy(hw + 9) - 0.4]]
+        .map(([lx, y]) => [cx + sd * lx, y, z]); })); }
+  const tri = (a, b, c) => { pos.push(...a, ...b, ...c); const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]; let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; ny /= l;
+    if (Math.abs(ny) > 0.62) C.copy(snow); else C.copy(rockA).lerp(rockB, hsh(a[0], a[2])); for (let i = 0; i < 3; i++) col.push(C.r, C.g, C.b); };
+  for (let r = 0; r < rows.length - 1; r++) for (let sd = 0; sd < 2; sd++) { const A = rows[r][sd], B = rows[r + 1][sd];
+    for (let i = 0; i < A.length - 1; i++) { if (sd === 0) { tri(A[i], B[i], B[i + 1]); tri(A[i], B[i + 1], A[i + 1]); } else { tri(A[i], A[i + 1], B[i + 1]); tri(A[i], B[i + 1], B[i]); } } }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const walls = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true, side: THREE.DoubleSide, emissive: 0x1c1838 })); walls.castShadow = false; walls.receiveShadow = true; walls.userData.noCast = true; g.add(walls);
+  // boulders at the walls' feet (never on the ride line), icicles under the overhangs, lanterns on the walls
+  const rocks = [], ice = [], lamps = [];
+  for (let z = G.zA + 6; z < G.zB - 4; z += 7) for (const sd of [-1, 1]) { const k = gapClose(z); if (k < 0.15) continue; const hw = gapHW(z), cx = X(z);
+    if (hsh(z, sd + 3) < 0.7) { const lx = hw - 0.6 - hsh(z, sd + 4) * 0.8, x = cx + sd * lx; rocks.push([1 + (hsh(z, sd) < 0.5 ? 0 : 1), x, gY(x, z) - 0.25, z, hsh(z, sd + 5) * 6.28, 0.55 + 0.6 * hsh(z, sd + 6)]); } }
+  for (let z = G.zA + 4; z < G.zB - 4; z += 2.2) for (const sd of [-1, 1]) { const k = gapClose(z); if (k < 0.3 || hsh(z, sd + 9) < 0.35) continue; const r = rows[Math.min(rows.length - 1, Math.round((z - G.zA) / 3))][sd < 0 ? 0 : 1][2]; ice.push([r[0] - sd * 0.15, r[1] - 0.1, z, 0.6 + hsh(z, sd + 10) * 1.1]); }
+  for (let z = G.zA + 14; z < G.zB - 10; z += 16) for (const sd of [-1, 1]) { const r = rows[Math.min(rows.length - 1, Math.round((z - G.zA) / 3))][sd < 0 ? 0 : 1][1]; lamps.push([r[0] - sd * 0.35, r[1] - 0.6, z]); }
+  if (rocks.length) g.add(E.instanceField(rocks, (t) => `Rock${t}`));
+  const icg = new THREE.ConeGeometry(0.13, 1, 5); icg.translate(0, -0.5, 0); const icm = new THREE.InstancedMesh(icg, new THREE.MeshStandardMaterial({ color: 0xcfe9ff, roughness: 0.2, metalness: 0.1, emissive: 0x2a4a6a }), ice.length), M4 = new THREE.Matrix4();
+  ice.forEach(([x, y, z, l], i) => { icm.setMatrixAt(i, M4.makeScale(1, l, 1).setPosition(x, y, z)); }); icm.userData.noCast = true; g.add(icm);
+  const lg = new THREE.SphereGeometry(0.22, 8, 6), lm = new THREE.InstancedMesh(lg, new THREE.MeshBasicMaterial({ color: 0xffc46b, toneMapped: false }), lamps.length); lamps.forEach(([x, y, z], i) => lm.setMatrixAt(i, M4.makeTranslation(x, y, z))); lm.userData.noCast = true; g.add(lm);
+  E.far(walls); E.far(icm); E.far(lm);
+  S.gapTris = pos.length / 9 + ice.length * 10 + lamps.length * 80;
+}
 const ROUTES = [
   { id: 'straight', name: 'STRAIGHT DOWN', ready: true },
-  { id: 'rockgap', name: 'THE ROCK GAP', side: -1, n: 2, ready: false, host: (F) => F.k === 'kick' || F.k === 'rail' },
+  { id: 'rockgap', name: 'THE ROCK GAP', side: -1, n: 2, ready: true, host: (F) => F.k === 'kick' || F.k === 'rail', dress: (E, g, Z) => makeRockGap(E, g, Z) },   // (R4)
   { id: 'tunnel', name: 'THE SNOW TUNNEL', side: 1, n: 2, ready: false, host: (F) => F.k === 'rail' || F.k === 'kick' },
   { id: 'igloo', name: 'THE IGLOO', side: -1, n: 1, ready: false, host: (F) => F.k === 'kick' || F.k === 'rail' },
   { id: 'right', name: 'DETOUR RIGHT', side: -1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' },
@@ -109,7 +143,7 @@ function layout(o, route, seed) {
     else { BIG.s = z + 32; z = BIG.s + BIG.len + 96 + (last ? 20 : 22); }   /* (the big air: up to ~95 m of flight at full speed with slow-motion tricks) */
     if (i0 >= 0 && i === i0 + n - 1) { Z.c = z; z += TURN; Z.d = z; } });
   STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
-  S.route = route; S.zone = i0 >= 0 ? Z : null; S.inZone = i0 >= 0 ? o.slice(i0, i0 + n).map((F) => F.id) : [];
+  S.route = route; S.zone = i0 >= 0 ? Z : null; S.gap = route.id === 'rockgap' && i0 >= 0 ? { zA: Z.b - 14, zB: Z.c + 14 } : null; S.inZone = i0 >= 0 ? o.slice(i0, i0 + n).map((F) => F.id) : [];
   // X: 0 on the main slope; in a detour it bends out over TURN metres (a smooth S), holds SWING metres to the side through the zone, bends back
   for (let i = 0; i < PN; i++) { const zz = PZ0 + i * PST; let x = 0; if (S.zone) { const D = Z.side * SWING; x = zz < Z.a ? 0 : zz < Z.b ? D * ss5((zz - Z.a) / TURN) : zz < Z.c ? D : zz < Z.d ? D * (1 - ss5((zz - Z.c) / TURN)) : 0; } PX[i] = x; }
   // V: gentle rolls (whoops) in the free stretches between the sections; flat on every feature, its run-in and landing, the pipe, the turns
@@ -241,7 +275,7 @@ function makeRail(THREE, R) {
 function makeBlueLines(THREE) {
   const pos = [], q = (x0, z0, x1, z1, w) => { x0 += X(z0); x1 += X(z1); const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2, Y = (x, z) => gY(x, z) + 0.035;
     const a = [x0 + nx, Y(x0 + nx, z0 + nz), z0 + nz], b = [x1 + nx, Y(x1 + nx, z1 + nz), z1 + nz], c = [x1 - nx, Y(x1 - nx, z1 - nz), z1 - nz], d = [x0 - nx, Y(x0 - nx, z0 - nz), z0 - nz]; pos.push(...a, ...b, ...c, ...a, ...c, ...d); };
-  for (const [a, b] of [[-4, PIPE_A - 4], [PIPE_B + 4, STOP_Z + 4]]) for (const sd of [-1, 1]) for (let z = a; z < b; z += 5) q(sd * 9.5, z, sd * 9.5, z + 2.6, 0.2);   // (the dashed edges)
+  for (const [a, b] of [[-4, PIPE_A - 4], [PIPE_B + 4, STOP_Z + 4]]) for (const sd of [-1, 1]) for (let z = a; z < b; z += 5) if (!inGap(z)) q(sd * 9.5, z, sd * 9.5, z + 2.6, 0.2);   // (the dashed edges)
   for (const K of [...KICKS, BIG]) { const hw = K.w / 2 + 0.35, e = K.s + K.len + 0.35 + (K.table || 0) + K.back, land = K.s + K.len + K.T * (K === BIG ? 15 : 8.5);
     q(-hw - 0.6, K.s - 3, hw + 0.6, K.s - 3, 0.28); for (const sd of [-1, 1]) q(sd * hw, K.s - 3, sd * hw, e, 0.2);   // (the approach line, the kicker framed)
     q(-hw - 1.2, land - 2, hw + 1.2, land - 2, 0.3); q(-hw - 1.2, land + 2, hw + 1.2, land + 2, 0.3); }   // (the landing zone)
@@ -429,10 +463,11 @@ export default {
     // (the detailed pines: one row along the course; behind them the deep forest of cheap low-poly firs, see makeForest)
     for (let z = -80; z < COURSE_END + 70; z += 12) for (const sd of [-1, 1]) { const near = (inPipe(z) ? W() + DECK + 4 : 16.5), rx = sd * (near + rnd() * 5), zz = z + rnd() * 4, x = X(zz) + rx; trees.push([1 + Math.floor(rnd() * 3), x, gY(x, zz) - 0.15, zz, rnd() * 6.28, 0.85 + rnd() * 0.6]); }
     g.add(makeForest(THREE, rnd));
-    for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { const x = X(z) + sd * (inPipe(z) ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
+    for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { if (inGap(z)) continue; const x = X(z) + sd * (inPipe(z) ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
     g.add(E.instanceField(trees, (t) => `Pine${t}`), E.instanceField(lights, () => 'Floodlight', 400));
     // the floodlights' glow on the snow: 7 warm point lights spread down the course (no shadows; always 7, so no shader rebuild)
-    for (let i = 0; i < 7; i++) { const z = 14 + i * (STOP_Z - 14) / 6, pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(X(z) + (i % 2 ? 9 : -9), -z * S.SL + 12, z); g.add(pl); }
+    const gz = S.gap ? [S.gap.zA + (S.gap.zB - S.gap.zA) * 0.3, S.gap.zA + (S.gap.zB - S.gap.zA) * 0.72] : [];   // (R4: two of the glows light the rock gap)
+    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, pl = new THREE.PointLight(0xffe2b0, inG ? 70 : 60, 55, 1.6); pl.position.set(X(z) + (inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -z * S.SL + (inG ? 8 : 12), z); g.add(pl); }
     const rocks = []; for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, z = -50 + rnd() * (COURSE_END + 60), x = X(z) + sd * (17 + rnd() * 60); rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
     g.add(E.instanceField(rocks, (t) => `Rock${t}`));
     // the features: the kickers, the rails, the BIG kicker; arches over the pipe's entrance, the big air and the finish
@@ -442,7 +477,7 @@ export default {
     g.add(makeBlueLines(THREE));
     g.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), makeArch(E, 'RED FOX BIG AIR', '#ff5a1f', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#0f3d44', STOP_Z + 8, 9, 6.5));
     // the sponsor boards down both edges of the open slopes (the parody brands, taking turns)
-    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) g.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
+    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) if (!inGap(z)) g.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
     E.scene.add(g); E.far(ground);
     if (S.route && S.route.dress && S.zone) S.route.dress(E, g, S.zone);   // (R4+: the route's zone: the rock gap, the snow tunnel, the igloo)
     if (S.X) this.xmas(E, S.X);   // (a new run: the Christmas kit again, round the new course)
@@ -451,8 +486,8 @@ export default {
   xmas(E, X) {
     S.X = X; if (!X.ok) return; const n0 = E.scene.children.length; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3((S.pipeX || 0) + x, deckY(z) + dy, z), G = (x, z, dy = 0) => new THREE.Vector3(routeX(z) + x, gY(routeX(z) + x, z) + dy, z);   // (R3: x along the route; X here is the kit)
     for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 32) { const posts = []; for (let z = z0; z <= Math.min(PIPE_B, z0 + 32); z += 6.4) posts.push(P(sd * (W0 + 0.45), z, 1.15)); if (posts.length > 1) X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
-    for (const [a, b] of [[-6, PIPE_A - 6], [PIPE_B + 4, STOP_Z + 6]]) for (const sd of [1, -1]) for (let z0 = a; z0 < b - 3; z0 += 30)   /* (R2: never a string with one post: the stretches have any length now) */ { const posts = []; for (let z = z0; z <= Math.min(b, z0 + 30); z += 6) posts.push(G(sd * 11, z, 1.0)); if (posts.length > 1) X.lights(posts, { sag: 0.25, per: 6, size: 0.13, glow: 1.1 }); }
-    const spots = []; for (let z = 8, i = 0; z < STOP_Z - 10; z += 31) if (z < PIPE_A - 14 || z > PIPE_B + 6) spots.push([z, i++]);   /* (R2: beside the open slopes of this run's course, never on the pipe's decks) */
+    for (const [a, b] of [[-6, PIPE_A - 6], [PIPE_B + 4, STOP_Z + 6]]) for (const sd of [1, -1]) for (let z0 = a; z0 < b - 3; z0 += 30)   /* (R2: never a string with one post: the stretches have any length now) */ { if (inGap(z0) || inGap(Math.min(b, z0 + 30))) continue; const posts = []; for (let z = z0; z <= Math.min(b, z0 + 30); z += 6) posts.push(G(sd * 11, z, 1.0)); if (posts.length > 1) X.lights(posts, { sag: 0.25, per: 6, size: 0.13, glow: 1.1 }); }
+    const spots = []; for (let z = 8, i = 0; z < STOP_Z - 10; z += 31) if ((z < PIPE_A - 14 || z > PIPE_B + 6) && !inGap(z) && !inGap(z + 10)) spots.push([z, i++]);   /* (R2: beside the open slopes of this run's course, never on the pipe's decks) */
     for (const [z, i] of spots) { const sd = i % 2 ? 1 : -1;
       X.put(i % 2 ? 'XmasTree_Small' : 'XmasTree_Big', G(sd * 15, z), i, i % 2 ? 1.9 : 1.3); X.put('XmasTree_Small', G(-sd * 14, z + 10), -i, 1.8);
       X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], G(sd * 13, z - 1.5), i); X.put('Gift_B', G(sd * 13.3, z + 1.4), -i);
@@ -616,6 +651,7 @@ export default {
       if (f >= 1) { const big = S.phase === 'bair'; S.phase = big && S.lastF && S.lastF.k === 'big' ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
     // place: on the wall the board stands on the wall (roll), on a kicker it tips up, in the air the trick turns him
+    if (S.gap && dt > 0 && inGap(S.s + 10) && Math.random() < dt * 1.6) { const z = S.s + 6 + Math.random() * 16, k = gapClose(z); if (k > 0.4) { const sd = Math.random() < 0.5 ? -1 : 1, hw = gapHW(z), x = X(z) + sd * (hw + 1.4); E.spray.emit(new THREE.Vector3(x, gY(x, z) + 1.2 + 11 * k * 0.95, z), 10, -sd * 1.1, -0.4, 0, 1.4, 0.18); } }   // (R4: snow drifting off the rock tops)
     const wx = X(S.s) + S.d; a.g.position.set(wx, -S.s * S.SL + y + V(S.s), S.s);   // (R3: on the route: its swing sideways, its rolls)
     const dd = dt > 1e-5 ? (wx - (S.dPrev ?? wx)) / dt : 0; S.dPrev = wx;   // (he faces where he goes: down the route's turns too)
     S.head = E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railSide === 0 ? 0.05 : Math.PI / 2) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
@@ -709,6 +745,7 @@ export default {
       { const cz = pos.z, R = RAILS.find((r) => cz > r.a - 1 && cz < r.b + 1); if (R) { const top = -cz * S.SL + V(cz) + railH(R, Math.max(R.a, Math.min(R.b, cz))) + 0.2; pos.y = Math.max(pos.y, top + 2.2); } }   // (never sitting on a rail (the rainbow arch passed just under the lens): over it)
       look = new THREE.Vector3(P.x, P.y + (big ? 1.6 : 0.7), P.z + ahead); k = wide ? (innerWidth < innerHeight ? 11 : 7) : 5; fov = air && innerWidth > innerHeight ? 50 : 60;   /* (a portrait phone: a narrow screen shows any lag, so it keeps up faster) */
     }
+    if (inGap(pos.z)) { const cx = X(pos.z), lim2 = gapHW(pos.z) - 2; pos.x = cx + Math.max(-lim2, Math.min(lim2, pos.x - cx)); }   // (R4: never inside the rock walls)
     // every shot aims THROUGH him, seen from where the camera is now (so he stays in the horizontal centre even while the camera moves)
     const C = E.camera.position, dx = P.x - C.x, dz = P.z - C.z, dl = Math.hypot(dx, dz);
     // (the aim point is put at his own distance, the height scaled to keep the same tilt: it moves exactly with him, never swings wider)
