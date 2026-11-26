@@ -71,11 +71,24 @@ function pipeRun(H, T) {   // one crossing for an air of height H and time T: th
 // in a row (solo: remembered on this phone; a party: both phones build the SAME course from the party code + round; ?seed=123 repeats one).
 // Each section gets the room its airs need (the run-in for the question, the air in slow motion, the landing), so the joins are always rideable.
 const SECT = FEAT.slice(), RLEN = Object.fromEntries(RAILS.map((r) => [r.id, r.b - r.a]));
+// (2026-11-27, S5, Michal: "Norway will be part freeride and part normal jumps and pipes. In the freeride part you will go through a narrow path
+// in the forest, then do some natural jumps, and instead of a pipe there will be a fallen log over a (frozen) river") NORWAY = two halves, each in a
+// random order: the PARK (kicker, rail, box, table top, the U-ramp: 9 questions), then the FREERIDE down a narrow winding forest path (a rock drop,
+// a wind lip, a log kicker, the fallen log over the frozen river: 4), out of the trees over THE CORNICE (a big natural jump: 2) = 15.
+const PARK = SECT.filter((F) => ['k1', 'r1', 'r2', 'k2', 'p'].includes(F.id));
+const NFEAT = [
+  { k: 'kick', id: 'n1', name: 'ROCK DROP', s: 0, len: 3.6, lip: 1.2, w: 4.2, back: 0.9, T: 1.25, H: 1.8, lipC: 0xdfe8ff, look: 'rock', fr: 1 },
+  { k: 'kick', id: 'n2', name: 'WIND LIP', s: 0, len: 5, lip: 1.4, w: 5.2, back: 2.4, T: 1.35, H: 1.9, lipC: 0xffffff, look: 'wind', fr: 1 },
+  { k: 'kick', id: 'n3', name: 'LOG KICKER', s: 0, len: 4, lip: 1.1, w: 4.2, back: 1.3, T: 1.15, H: 1.6, lipC: 0x8a5a32, look: 'log', fr: 1 },
+  { k: 'rail', id: 'lg', name: 'FALLEN LOG', a: 0, b: 14, h: 0.55, look: 'log', fr: 1 }];
+const NBIG = { k: 'big', id: 'big', name: 'THE CORNICE' }; RLEN.lg = 14;
+const PG = 12;   // (the forest path: extra room before every freeride section, for the path to wind)
 const rng32 = (a) => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const hashStr = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 const okOrder = (o) => { for (let i = 2; i < o.length; i++) if (o[i].k === o[i - 1].k && o[i].k === o[i - 2].k) return false; return true; };
 const orderKey = (o) => o.map((f) => f.id).join(',');
-function shuffleOrder(seed) { const r = rng32(seed); for (let n = 0; n < 400; n++) { const o = SECT.slice(); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } if (okOrder(o)) return o; } return SECT.slice(); }
+function shuffleOrder(seed) { const r = rng32(seed), sh = (L) => { const o = L.slice(); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; }, nor = S.loc && S.loc.id === 'norway';
+  for (let n = 0; n < 400; n++) { const o = nor ? [...sh(PARK), ...sh(NFEAT), NBIG] : sh(SECT); if (okOrder(o)) return o; } return nor ? [...PARK, ...NFEAT, NBIG] : SECT.slice(); }   // (S5: Norway = the park half, then the freeride half, the cornice last)
 // the seed for one run: ?seed= (a test), a party (the same on both phones: party code + round + list index), or random (solo)
 function runSeeds(runN) {
   const q = new URLSearchParams(location.search), fixed = q.get('seed');
@@ -103,7 +116,7 @@ function pickOrder(sd) {
 // The ride line stays clear (nothing to dodge): any kicker or rail inside works as everywhere (questions, slow motion, tricks).
 const inGap = (z) => !!S.gap && z > S.gap.zA - 4 && z < S.gap.zB + 4;
 const gapClose = (z) => { const G = S.gap; if (!G) return 0; const u = (z - G.zA) / (G.zB - G.zA); return u <= 0 || u >= 1 ? 0 : Math.pow(Math.sin(Math.PI * u), 0.55); };
-const gapHW = (z) => S.gap && S.gap.kind === 'tunnel' ? S.gap.hw : 14 - 8 * gapClose(z);   // (the half-width between the walls: 14 at the mouths, ~6 in the middle: a narrow passage, the ride line clear)
+const gapHW = (z) => S.gap && (S.gap.kind === 'tunnel' || S.gap.kind === 'forest') ? S.gap.hw : 14 - 8 * gapClose(z);   // (the half-width between the walls: 14 at the mouths, ~6 in the middle: a narrow passage, the ride line clear)
 const hsh = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
 function makeRockGap(E, g, Z) {
   const { THREE } = E, G = S.gap, pos = [], col = [], rows = [], C = new THREE.Color(), snow = new THREE.Color(0xeef3ff), rockA = new THREE.Color(0x7a77a6), rockB = new THREE.Color(0x5b587f);
@@ -237,17 +250,19 @@ const ROUTES = [
   { id: 'tunnel', name: 'THE SNOW TUNNEL', side: 1, n: 2, ready: true, host: (F) => F.k === 'rail', dress: (E, g, Z) => makeTunnel(E, g, Z) },   // (R5: the rails (bars) ride inside)
   { id: 'igloo', name: 'THE IGLOO', side: -1, n: 0, len: 34, ready: true, host: () => false, dress: (E, g, Z) => makeIgloo(E, g, Z) },   // (R6: an empty zone: the igloo, in and smash out)
   { id: 'right', name: 'DETOUR RIGHT', side: -1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' },
-  { id: 'left', name: 'DETOUR LEFT', side: 1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' }];
+  { id: 'left', name: 'DETOUR LEFT', side: 1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' },
+  { id: 'forest', name: 'THE FOREST PATH', ready: true }];   // (S5: Norway's own: the freeride half down the narrow forest path; laid out in layout())
 // (2026-11-27, S4, Michal: "Make 3 different locations for it: Austria (current one), Norway, Alaska ... Before each game, let there be a little
 // cutscene of the cart rotating and zooming on that location, the lighting, and you're riding") the LOCATION is picked first (the same seed:
 // the same on both phones; never twice in a row once several are ready; ?loc=<id> for tests), then its routes and the order. Austria = the course
 // as it was; Norway (S5) and Alaska (S6) get their own terrain, sky, light, scenery, parts and routes: set ready and fill them in.
 const LOCS = [
   { id: 'austria', name: 'AUSTRIA', sub: 'The Tyrol Alps · night run', flag: ['#ef3340', '#ffffff', '#ef3340'], ready: true, routes: ['straight', 'rockgap', 'tunnel', 'igloo'] },
-  { id: 'norway', name: 'NORWAY', sub: 'Forest freeride · the frozen river', flag: 'norway', ready: false, routes: ['straight'] },
+  { id: 'norway', name: 'NORWAY', sub: 'Fjord forest · the frozen river', flag: 'norway', ready: true, routes: ['forest'] },   // (S5)
   { id: 'alaska', name: 'ALASKA', sub: 'Big mountain freeride · the ice cave', flag: 'alaska', ready: false, routes: ['straight'] }];
 function pickLoc(sd) {
   const want = new URLSearchParams(QALL).get('loc'), forced = want && LOCS.find((l) => l.id === want && l.ready); if (forced) return forced;
+  const wr = new URLSearchParams(QALL).get('route'), rl = wr && LOCS.find((l) => l.ready && l.routes.includes(wr)); if (rl) return rl;   // (a test's ?route=igloo: the location that has it)
   const can = LOCS.filter((l) => l.ready); if (can.length === 1) return can[0];
   const at = (seed) => can[Math.floor(rng32(seed ^ 0x1b873593)() * can.length)];
   if (sd.fixed) return at(sd.cur);
@@ -255,7 +270,7 @@ function pickLoc(sd) {
   const last = lsGet('hp-loc'); let l = at(sd.cur); for (let k = 1; l.id === last && k < 12; k++) l = at(sd.cur + k * 7919); return l;
 }
 function pickRoute(sd, loc = LOCS[0]) {
-  const want = new URLSearchParams(QALL).get('route'),   /* (also on the lobby's address: /sports/?route=right) */ forced = want && ROUTES.find((r) => r.id === want); if (forced) return forced;
+  const want = new URLSearchParams(QALL).get('route'),   /* (also on the lobby's address: /sports/?route=right) */ forced = want && ROUTES.find((r) => r.id === want && (r.test || !loc || loc.routes.includes(r.id))); if (forced) return forced;
   const can = ROUTES.filter((r) => r.ready && !r.test && (!loc || loc.routes.includes(r.id))); if (can.length === 1) return can[0];
   const at = (seed) => can[Math.floor(rng32(seed ^ 0x5bd1e995)() * can.length)];
   if (sd.fixed) return at(sd.cur);
@@ -275,18 +290,31 @@ function layout(o, route, seed) {
   else if (route.side) { const r = rng32(seed ^ 0x27d4eb2f), N = route.n || 1, cand = [];
     for (let i = 1; i + N <= o.length; i++) if (o.slice(i, i + N).every((F) => route.host(F))) cand.push(i);
     if (cand.length) { i0 = cand[Math.floor(r() * cand.length)]; n = N; } else { for (let i = 1; i < o.length; i++) if (route.host(o[i])) { i0 = i; n = 1; break; } } }
+  const nor = S.loc && S.loc.id === 'norway', FR = { a: null, b: null }; S.forest = null; S.river = null;
+  KICKS.length = 0; KICKS.push(...o.filter((F) => F.k === 'kick')); RAILS.length = 0; RAILS.push(...o.filter((F) => F.k === 'rail'));   // (S5: this run's sections)
+  Object.assign(BIG, nor ? { name: 'THE CORNICE', spon: null, look: 'cornice' } : { name: 'BIG AIR', spon: 'red', look: null });
   let z = 6; const Z = { side: route.side || 0 };
   o.forEach((F, i) => { const last = i === o.length - 1;
+    if (F.fr) { if (FR.a == null) FR.a = z; z += PG; }
     if (i === i0) { Z.a = z; z += TURN; Z.b = z; if (route.n === 0) { z += route.len; Z.c = z; z += TURN; Z.d = z; } }
     if (F.k === 'kick') { F.s = z + 12; z = F.s + F.len + (F.table || 0) + F.back + F.T * 11 + 4; }
     else if (F.k === 'rail') { F.a = z + 6; F.b = F.a + RLEN[F.id]; z = F.b + 12; }
     else if (F.k === 'pipe') { PIPE_A = z + 14; PIPE_B = PIPE_A + 125; z = PIPE_B + 12; }   // (S3: 5 airs need 125 m)
     else { BIG.s = z + 32; z = BIG.s + BIG.len + 96 + (last ? 20 : 22); }   /* (the big air: up to ~95 m of flight at full speed with slow-motion tricks) */
+    if (F.fr) FR.b = z;
     if (i0 >= 0 && n > 0 && i === i0 + n - 1) { Z.c = z; z += TURN; Z.d = z; } });
-  STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
+  STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.secs = o; S.big = BIG; S.pipeA = () => PIPE_A; S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
   S.route = route; S.zone = i0 >= 0 ? Z : null; S.gap = route.id === 'igloo' && i0 >= 0 ? { kind: 'igloo', zA: Z.b - 2, zB: Z.c + 2, hw: 8, ent: Z.b + 4, cz: Z.b + 19, R: 9, exit: Z.b + 28 } : route.id === 'rockgap' && i0 >= 0 ? { kind: 'rockgap', zA: Z.b - 14, zB: Z.c + 14 } : route.id === 'tunnel' && i0 >= 0 ? { kind: 'tunnel', zA: Z.b - 8, zB: Z.c + 8, hw: 7, h: 6.4 } : null; S.inZone = i0 >= 0 ? o.slice(i0, i0 + n).map((F) => F.id) : []; if (route.n === 0 && i0 >= 0) S.inZone = ['(empty)'];
   // X: 0 on the main slope; in a detour it bends out over TURN metres (a smooth S), holds SWING metres to the side through the zone, bends back
   for (let i = 0; i < PN; i++) { const zz = PZ0 + i * PST; let x = 0; if (S.zone) { const D = Z.side * SWING; x = zz < Z.a ? 0 : zz < Z.b ? D * ss5((zz - Z.a) / TURN) : zz < Z.c ? D : zz < Z.d ? D * (1 - ss5((zz - Z.c) / TURN)) : 0; } PX[i] = x; }
+  // (S5) Norway's forest path winds: every freeride section sits a little to one side (the sides take turns), the path swings smoothly between them
+  // (only in the free stretches: each kicker, log and landing is straight), and back to the middle for the cornice's run-in
+  if (nor && FR.a != null) { const r = rng32(seed ^ 0x2545f491), sp = []; let sg = r() < 0.5 ? -1 : 1;
+    for (const F of o) if (F.fr) { const p = F.k === 'kick' ? F.s - 5 : F.a - 4, q = F.k === 'kick' ? F.s + F.len + (F.table || 0) + F.back + F.T * 11 + 2 : F.b + 4; sp.push([p, q, sg * (1.6 + r() * 2.6)]); sg = -sg; }
+    const pts = [[FR.a, 0], ...sp.flatMap(([p, q, ox]) => [[p, ox], [q, ox]]), [BIG.s - 14, 0]];
+    for (let i = 0; i < PN; i++) { const zz = PZ0 + i * PST; if (zz <= FR.a || zz >= BIG.s - 14) continue; let j = 0; while (j < pts.length - 2 && zz > pts[j + 1][0]) j++; const [z0, x0] = pts[j], [z1, x1] = pts[j + 1]; PX[i] = x0 + (x1 - x0) * ss5((zz - z0) / Math.max(1e-3, z1 - z0)); }
+    S.forest = { zA: FR.a + 6, zB: FR.b }; S.gap = { kind: 'forest', zA: S.forest.zA - 6, zB: S.forest.zB + 4, hw: 5.6 };
+    const lg = o.find((F) => F.id === 'lg'); if (lg) S.river = { a: lg.a + 2.6, b: lg.b - 2.6 }; }
   // V: gentle rolls (whoops) in the free stretches between the sections; flat on every feature, its run-in and landing, the pipe, the turns
   const busy = [[-1e9, 8], [STOP_Z - 24, 1e9]];
   for (const F of o) { if (F.k === 'kick') busy.push([F.s - 5, F.s + F.len + (F.table || 0) + F.back + F.T * 11 + 2]); else if (F.k === 'rail') busy.push([F.a - 4, F.b + 4]); else if (F.k === 'pipe') busy.push([PIPE_A - 6, PIPE_B + 6]); else busy.push([BIG.s - 10, BIG.s + BIG.len + 100]); }
@@ -297,6 +325,18 @@ function layout(o, route, seed) {
     for (let i = Math.max(0, Math.floor((fa - PZ0) / PST)); i < PN && PZ0 + i * PST <= fb; i++) { const zz = PZ0 + i * PST; PV[i] = A * Math.pow(Math.sin(Math.PI * (zz - fa) / w), 2); } S.rolls += nn; }
   for (const K of KICKS) K.x = X(K.s); for (const R of RAILS) R.x = X(R.a); BIG.x = X(BIG.s); S.pipeX = X(PIPE_A);
   lsSet('hp-order', S.order); lsSet('hp-route', route.id);
+}
+// (S5) each location's look: the painted sky (Norway: the northern lights), the fog, the ambient light, the rim light (Norway: aurora green), the mountains
+function applyLook(E) {
+  const nor = S.loc && S.loc.id === 'norway', { THREE } = E;
+  if (!S.look0) S.look0 = { fog: E.fogColor, hs: E.hemi.color.getHex(), hg: E.hemi.groundColor.getHex(), hi: E.hemi.intensity, rc: E.rim.color.getHex(), ri: E.rim.intensity };
+  if (!S.sky) { S.sky = E.scene.children.find((o) => o.material && o.material.uniforms && o.material.uniforms.uYaw); if (S.sky) { const U = S.sky.material.uniforms; S.skyA = { map: U.map.value, b: U.uB.value, s: U.uS.value, y: U.uYaw.value }; } }
+  if (S.sky) { const U = S.sky.material.uniforms;
+    if (nor) { if (!S.skyN) { const t = S.skyN = new THREE.TextureLoader().load('sky/norway-night.webp?v=1'); t.colorSpace = THREE.SRGBColorSpace; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; } U.map.value = S.skyN; U.uB.value = 0.38; U.uS.value = 1.05; U.uYaw.value = 0.25;   /* (the lower curtain of the northern lights just over the mountains, in the riding view) */ }
+    else { U.map.value = S.skyA.map; U.uB.value = S.skyA.b; U.uS.value = S.skyA.s; U.uYaw.value = S.skyA.y; } }
+  const L0 = S.look0; E.fogColor = nor ? 0x1d3c6c : L0.fog; E.hemi.color.setHex(nor ? 0x6a9cd8 : L0.hs); E.hemi.groundColor.setHex(nor ? 0x24305c : L0.hg); E.hemi.intensity = nor ? 0.55 : L0.hi;
+  E.rim.color.setHex(nor ? 0x7dffc0 : L0.rc); E.rim.intensity = nor ? 1.5 : L0.ri;
+  if (S.mount) S.mount.traverse((o) => { if (o.isMesh) o.material.color.setHex(nor ? 0x5a78a8 : 0x8890c8); });
 }
 export const _S = S; export const _fx = { trickCard: (...a) => trickCard(...a), scoreFly: (...a) => scoreFly(...a) };   /* (tests: the pop-up gallery) */
 // (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
@@ -417,11 +457,11 @@ function makeRail(THREE, R) {
 function makeBlueLines(THREE) {
   const pos = [], q = (x0, z0, x1, z1, w) => { x0 += X(z0); x1 += X(z1); const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w / 2, nz = dx / L * w / 2, Y = (x, z) => gY(x, z) + 0.035;
     const a = [x0 + nx, Y(x0 + nx, z0 + nz), z0 + nz], b = [x1 + nx, Y(x1 + nx, z1 + nz), z1 + nz], c = [x1 - nx, Y(x1 - nx, z1 - nz), z1 - nz], d = [x0 - nx, Y(x0 - nx, z0 - nz), z0 - nz]; pos.push(...a, ...b, ...c, ...a, ...c, ...d); };
-  for (const [a, b] of [[-4, PIPE_A - 4], [PIPE_B + 4, STOP_Z + 4]]) for (const sd of [-1, 1]) for (let z = a; z < b; z += 5) if (!inGap(z)) q(sd * 9.5, z, sd * 9.5, z + 2.6, 0.2);   // (the dashed edges)
-  for (const K of [...KICKS, BIG]) { const hw = K.w / 2 + 0.35, e = K.s + K.len + 0.35 + (K.table || 0) + K.back, land = K.s + K.len + K.T * (K === BIG ? 15 : 8.5);
+  for (const [a, b] of [[-4, PIPE_A - 4], [PIPE_B + 4, STOP_Z + 4]]) for (const sd of [-1, 1]) for (let z = a; z < b; z += 5) if (!inGap(z) && !(S.forest && z > S.forest.zA - 8)) q(sd * 9.5, z, sd * 9.5, z + 2.6, 0.2);   // (the dashed edges)
+  for (const K of [...KICKS, BIG].filter((K) => !K.look)) { const hw = K.w / 2 + 0.35, e = K.s + K.len + 0.35 + (K.table || 0) + K.back, land = K.s + K.len + K.T * (K === BIG ? 15 : 8.5);
     q(-hw - 0.6, K.s - 3, hw + 0.6, K.s - 3, 0.28); for (const sd of [-1, 1]) q(sd * hw, K.s - 3, sd * hw, e, 0.2);   // (the approach line, the kicker framed)
     q(-hw - 1.2, land - 2, hw + 1.2, land - 2, 0.3); q(-hw - 1.2, land + 2, hw + 1.2, land + 2, 0.3); }   // (the landing zone)
-  for (const R of RAILS) { q(-1.6, R.a - 3, 1.6, R.a - 3, 0.26); for (const sd of [-1, 1]) q(sd * 0.9, R.a - 3, sd * 0.9, R.a, 0.16); }
+  for (const R of RAILS.filter((R) => R.look !== 'log')) { q(-1.6, R.a - 3, 1.6, R.a - 3, 0.26); for (const sd of [-1, 1]) q(sd * 0.9, R.a - 3, sd * 0.9, R.a, 0.16); }
   for (const sd of [-1, 1]) q(sd * S.FLAT, PIPE_A + 1, sd * S.FLAT, PIPE_B - 1, 0.22);   // (the pipe's flat bottom edges)
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x2b6be8, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 })); m.renderOrder = 1; return m;
@@ -456,15 +496,23 @@ function makeForest(THREE, rnd) {
   pos.set(pa.array, 0); pos.set(pb.array, pa.count * 3); for (let i = 0; i < pa.count + pb.count; i++) { const y = pos[i * 3 + 1]; const c = y > 4.6 ? [0.92, 0.95, 1] : y > 3.3 ? [0.16, 0.34, 0.27] : [0.11, 0.25, 0.2]; col.push(...c); }
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }), grp = new THREE.Group(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+  const FO = S.forest, inF = (z) => !!FO && z > FO.zA - 8 && z < FO.zB + 6;
   for (let z0 = -90; z0 < COURSE_END + 90; z0 += 50) { const items = [];
-    for (let z = z0; z < z0 + 50; z += 3.1) for (const sd of [-1, 1]) { const near = (z > PIPE_A - 3 && z < PIPE_B + 3 ? W() + DECK + 8 : 21);
-      for (const [x0, span, p] of [[near, 10, 1], [near + 10, 14, 0.75], [near + 24, 28, 0.4]]) if (rnd() < p) { const zz0 = z + rnd() * 3.1, x = X(zz0) + sd * (x0 + rnd() * span), zz = zz0, s = 0.9 + rnd() * 0.9; items.push([x, gY(x, zz) - 0.2, zz, s, rnd() * 6.28]); } }
+    for (let z = z0; z < z0 + 50; z += inF(z) ? 2.3 : 3.1) for (const sd of [-1, 1]) { if (inF(z)) {   // (S5: the forest path: trees close on both sides, deep behind; none on the river)
+        if (!inRiver(z, 1.2)) for (const [x0, span, p, s0, sr] of [[7, 3, 1, 0.8, 0.45], [10.5, 5, 1, 0.9, 0.7], [15.5, 8, 0.9, 0.9, 0.9], [23.5, 14, 0.8, 0.9, 0.9], [37.5, 22, 0.6, 0.9, 0.9]]) if (rnd() < p) { const zz = z + rnd() * 2.3, x = X(zz) + sd * (x0 + rnd() * span), s = s0 + rnd() * sr; items.push([x, gY(x, zz) - 0.2, zz, s, rnd() * 6.28]); }
+        continue; }
+      const near = (z > PIPE_A - 3 && z < PIPE_B + 3 ? W() + DECK + 8 : 21);
+      for (const [x0, span, p] of [[near, 10, 1], [near + 10, 14, 0.75], [near + 24, 28, 0.4]]) if (rnd() < p) { const zz0 = z + rnd() * 3.1, x = X(zz0) + sd * (x0 + rnd() * span), zz = zz0, s = 0.9 + rnd() * 0.9; if (inRiver(zz, 1.2)) continue; items.push([x, gY(x, zz) - 0.2, zz, s, rnd() * 6.28]); } }
     const im = new THREE.InstancedMesh(geo, mat, items.length); items.forEach(([x, y, z, s, r], i) => { m4.compose(ps.set(x, y, z), q.setFromAxisAngle(Y, r), sc.set(s, s * (0.9 + (i % 5) * 0.08), s)); im.setMatrixAt(i, m4); });
     im.computeBoundingSphere(); im.receiveShadow = false; im.castShadow = false; im.userData.noCast = true; grp.add(im); }
   return grp;
 }
 // the open slope: flat down the course (|x| < 14), rolling gently up into snowy hills beside it
-function gY(x, z) { const lx = x - X(z), ax = Math.abs(lx), k = Math.max(0, Math.min(1, (ax - 14) / 12)); return -z * S.SL + V(z) - Math.sign(lx) * Math.min(ax, 16) * Math.tan(bankAt(z)) + k * k * (3 - 2 * k) * ((ax - 14) * 0.16 + Math.sin(x * 0.13 + z * 0.07) * 0.9 + Math.sin(x * 0.05 - z * 0.11) * 1.3); }   // (R3: along the route: its swing X, its rolls V, banked a little in the turns)
+// (S5) in Norway's forest the open slope narrows to a path (flat ~5.6 m either side, snowy banks up into the trees); the frozen river cuts a channel across
+const fz = (z) => { const F = S.forest; return F ? ss5((z - (F.zA - 14)) / 12) * (1 - ss5((z - (F.zB + 4)) / 12)) : 0; };
+const riverDip = (z) => { const R = S.river; return R ? 1.9 * ss5((z - (R.a - 1.6)) / 1.6) * (1 - ss5((z - R.b) / 1.6)) : 0; };
+const inRiver = (z, m = 0) => !!S.river && z > S.river.a - 1.6 - m && z < S.river.b + 1.6 + m;
+function gY(x, z) { const lx = x - X(z), ax = Math.abs(lx), f = fz(z), fw = 14 - 8.4 * f, k = Math.max(0, Math.min(1, (ax - fw) / 12)), bk = f ? f * 1.1 * Math.pow(Math.max(0, Math.min(1, (ax - fw) / 3)), 2) : 0; return -z * S.SL + V(z) - Math.sign(lx) * Math.min(ax, 16) * Math.tan(bankAt(z)) + k * k * (3 - 2 * k) * ((ax - fw) * 0.16 + Math.sin(x * 0.13 + z * 0.07) * 0.9 + Math.sin(x * 0.05 - z * 0.11) * 1.3) + bk - (S.river ? riverDip(z) : 0); }   // (R3: along the route: its swing X, its rolls V, banked a little in the turns)
 function gridMesh(THREE, xs, zs, f, mat, xo = () => 0) {
   const pos = [], idx = []; for (const z of zs) { const o = xo(z); for (const x of xs) pos.push(o + x, f(o + x, z), z); }
   for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b = a + 1, c = a + xs.length, d = c + 1; idx.push(a, c, b, b, c, d); }
@@ -472,9 +520,11 @@ function gridMesh(THREE, xs, zs, f, mat, xo = () => 0) {
   const m = new THREE.Mesh(g, mat); m.receiveShadow = true; return m;
 }
 function makeGround(THREE, snowM, pisteM) {   // (R3: in 50 m pieces that follow the route; the far pieces are not drawn)
-  const side = [14, 17, 21, 26, 32, 40, 50, 62, 78, 98, 124], xs = [...side.map((x) => -x).reverse(), ...side], grp = new THREE.Group();
+  const side = [14, 17, 21, 26, 32, 40, 50, 62, 78, 98, 124], xs = [...side.map((x) => -x).reverse(), ...side], grp = new THREE.Group(), mid = [-11, -8, -5.5, -3, 0, 3, 5.5, 8, 11], xsF = [...side.map((x) => -x).reverse(), ...mid, ...side];
   for (let z0 = -100; z0 < COURSE_END + 130; z0 += 50) { const zs = []; for (let z = z0; z <= z0 + 50; z += 2.5) zs.push(z);
-    grp.add(gridMesh(THREE, xs, zs, gY, snowM, X), gridMesh(THREE, [-14, -7, 0, 7, 14], zs, (x, z) => gY(x, z) + 0.02, pisteM, X)); }   // (the groomed course: piste lines)
+    const R = S.river, F = S.forest, inF = F && z0 + 50 > F.zA - 30 && z0 < F.zB + 22;   // (S5: the forest's banks and the river's channel need the extra rows)
+    if (R) { for (const q of [R.a - 1.6, R.a - 0.8, R.a, R.b, R.b + 0.8, R.b + 1.6]) if (q > z0 && q < z0 + 50) zs.push(q); zs.sort((a, b) => a - b); }
+    grp.add(gridMesh(THREE, inF ? xsF : xs, zs, gY, snowM, X), gridMesh(THREE, inF ? [-14, ...mid, 14] : [-14, -7, 0, 7, 14], zs, (x, z) => gY(x, z) + 0.02, pisteM, X)); }   // (the groomed course: piste lines)
   return grp;
 }
 // the halfpipe, built standing on the slope from PIPE_A to PIPE_B: the curved walls, the vertical bit, the decks, the outer walls, both ends closed
@@ -495,11 +545,88 @@ function makePipe(THREE, mat) {
   for (const sd of [1, -1]) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, len), cop); const zm = (PIPE_A + PIPE_B) / 2; c.position.set((S.pipeX || 0) + sd * (W() + 0.1), -zm * S.SL + top + 0.05, zm); c.rotation.x = Math.atan(S.SL); grp.add(c); }
   return grp;
 }
+// (S5) Norway's natural jumps: the same kicker shape (the same air) dressed as nature: a ROCK DROP (rock sides, snowy boulders at the lip), a WIND LIP
+// (all snow, a curled lip), a LOG KICKER (a snow ramp up to a log lying across), THE CORNICE (the big air as a huge snow lip between snowy rocks)
+function makeNatural(THREE, K, M) {
+  const big = K === BIG, grp = makeKicker(THREE, K, M.snow, M.snow, K.look === 'rock' ? M.rock : M.snowSide), kx = K.x || 0, hw = K.w / 2, zl = K.s + K.len, yl = -zl * S.SL + K.lip;
+  const add = (geo, mat, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; grp.add(m); return m; };
+  const ico = M.ico || (M.ico = new THREE.IcosahedronGeometry(1, 0)), cyl = M.cyl || (M.cyl = new THREE.CylinderGeometry(1, 1, 1, 9, 1));
+  if (K.look === 'rock' || big) for (const sd of [-1, 1]) { const s = big ? 2.4 : 1.15, x = kx + sd * (hw + s * 0.75), z = zl - s * 0.3, y0 = -z * S.SL;
+    add(ico, M.rock, x, y0 + s * 0.45, z, s * 1.1, s * 0.95, s, 0, sd, 0); add(ico, M.snow, x, y0 + s * 1.12, z, s * 0.92, s * 0.3, s * 0.82, 0, sd + 0.3, 0);
+    add(ico, M.rock, x + sd * s * 1.1, y0 + s * 0.25, z - s * 1.6, s * 0.7, s * 0.6, s * 0.75, 0, sd * 2, 0); }
+  if (K.look === 'rock') add(ico, M.rock, kx, yl - 0.75, zl + 0.75, hw * 0.9, 0.7, 0.7, 0, 0.4, 0);   // (the rock face under the lip)
+  if (K.look === 'wind' || big) { const r = big ? 0.55 : 0.32; add(cyl, M.snow, kx, yl - r, zl + r * 0.4, r, K.w + 0.3, r * 1.25, 0, 0, Math.PI / 2); }   // (the curled lip)
+  if (K.look === 'log') { add(cyl, M.bark, kx, yl - 0.3, zl + 0.12, 0.32, K.w + 1.4, 0.32, 0, 0, Math.PI / 2); add(cyl, M.snow, kx, yl + 0.02, zl + 0.12, 0.2, K.w + 0.9, 0.24, 0, 0, Math.PI / 2); }
+  return grp;
+}
+// (S5) the FALLEN LOG over the frozen river: a long trunk lying down the hill (snow along its top, a root ball at the top end, broken branch stubs)
+let LOGM = null;
+function makeLog(THREE, R) {
+  const M = LOGM || (LOGM = { bark: new THREE.MeshStandardMaterial({ color: 0x6b4426, roughness: 0.95, flatShading: true }), root: new THREE.MeshStandardMaterial({ color: 0x4a2f1c, roughness: 1, flatShading: true }), snow: new THREE.MeshStandardMaterial({ color: 0xf4f7ff, roughness: 0.9, flatShading: true }) });
+  const g = new THREE.Group(), r = 0.52, pt = (z) => new THREE.Vector3(R.x || 0, -z * S.SL + railH(R, z), z), A = pt(R.a - 1.6), B = pt(R.b + 1.6), len = A.distanceTo(B), dir = B.clone().sub(A).normalize(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r, len, 9, 1), M.bark); log.position.copy(A).lerp(B, 0.5).add(new THREE.Vector3(0, -r - 0.03, 0)); log.quaternion.copy(q); log.castShadow = true; log.receiveShadow = true; g.add(log);
+  const sn = new THREE.Mesh(new THREE.BoxGeometry(r * 1.25, 0.1, len * 0.9), M.snow); sn.position.copy(A).lerp(B, 0.5).add(new THREE.Vector3(0, -0.02, 0)); sn.rotation.x = Math.atan(S.SL); sn.receiveShadow = true; g.add(sn);
+  const rb = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), M.root); rb.position.copy(B).add(new THREE.Vector3(0.3, -r - 0.1, 0.55)); rb.scale.set(1.25, 1.05, 0.55);   /* (the root ball at the far end: ahead of him, never filling the camera) */ rb.castShadow = true; g.add(rb);
+  for (const [dz, sx, sy, sz] of [[-0.4, 1.5, 0.85, 1.6], [0.9, 1.1, 0.55, 1.1]]) { const d = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), M.snow); d.position.set(A.x + (dz > 0 ? 0.35 : -0.2), A.y - 0.55 + (dz > 0 ? 0.05 : 0.15), A.z + dz); d.scale.set(sx, sy, sz); d.receiveShadow = true; g.add(d); }   // (its top end buried in a snowdrift)
+  for (const [f, sd, l] of [[0.3, 1, 0.9], [0.55, -1, 0.7], [0.78, 1, 0.6]]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, l, 5, 1), M.bark); b.position.copy(A).lerp(B, f).add(new THREE.Vector3(sd * (r + l * 0.3), -r * 0.6, 0)); b.rotation.z = -sd * 1.1; g.add(b); }
+  return g;
+}
+// (S5) the frozen river: cracked blue ice down in its channel, right across the valley
+function makeIce(THREE) {
+  const R = S.river; if (!R) return null; const cv = document.createElement('canvas'); cv.width = cv.height = 256; const x = cv.getContext('2d');
+  const gr = x.createLinearGradient(0, 0, 256, 256); gr.addColorStop(0, '#a6dcf6'); gr.addColorStop(0.5, '#62ade3'); gr.addColorStop(1, '#93d2f3'); x.fillStyle = gr; x.fillRect(0, 0, 256, 256);
+  let sd = 11; const rn = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 16; i++) { const cx = rn() * 256, cy = rn() * 256, rr = 14 + rn() * 40, rg = x.createRadialGradient(cx, cy, 0, cx, cy, rr); rg.addColorStop(0, 'rgba(235,250,255,.38)'); rg.addColorStop(1, 'rgba(235,250,255,0)'); x.fillStyle = rg; x.fillRect(0, 0, 256, 256); }
+  x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineCap = 'round';
+  const crack = (px, py, a, n, w) => { x.lineWidth = w; x.beginPath(); x.moveTo(px, py); for (let i = 0; i < n; i++) { a += (rn() - 0.5) * 1.1; px += Math.cos(a) * 9; py += Math.sin(a) * 9; x.lineTo(px, py); if (rn() < 0.18 && w > 0.8) { x.stroke(); crack(px, py, a + (rn() < 0.5 ? 1 : -1) * 0.9, 4 + rn() * 5, w * 0.6); x.lineWidth = w; x.beginPath(); x.moveTo(px, py); } } x.stroke(); };
+  for (let i = 0; i < 7; i++) crack(rn() * 256, rn() * 256, rn() * 6.28, 9 + rn() * 10, 1.8);
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.anisotropy = 4;
+  const pos = [], uv = [], idx = [], xs = [], zs = [R.a - 0.9, R.a - 0.3, R.a + 1.5, (R.a + R.b) / 2, R.b - 1.5, R.b + 0.3, R.b + 0.9]; for (let v = -126; v <= 126; v += 6) xs.push(v);
+  for (const z of zs) for (const v of xs) { const wx = X(z) + v; pos.push(wx, gY(wx, z) + 0.05, z); uv.push(wx / 9, z / 9); }
+  for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b = a + 1, c = a + xs.length, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tx, roughness: 0.16, metalness: 0.08, emissive: 0x1b4f7a, emissiveIntensity: 0.55 })); m.receiveShadow = true; m.userData.noCast = true; return m;
+}
+// (S5) lanterns on posts along the forest path (taking turns left and right), so the narrow path reads at night
+function makeLanterns(THREE) {
+  const F = S.forest; if (!F) return null; const items = []; for (let z = F.zA - 2, i = 0; z < F.zB + 4; z += 13, i++) { if (inRiver(z, 1)) continue; const sd = i % 2 ? 1 : -1, x = X(z) + sd * 4.9; items.push([x, gY(x, z), z]); }
+  const g = new THREE.Group(), m4 = new THREE.Matrix4(), parts = [[new THREE.BoxGeometry(0.14, 1.7, 0.14), new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: 0.9 }), 0.85], [new THREE.BoxGeometry(0.3, 0.34, 0.3), new THREE.MeshBasicMaterial({ color: 0xffc36a, toneMapped: false }), 1.85], [new THREE.ConeGeometry(0.3, 0.22, 4), new THREE.MeshStandardMaterial({ color: 0x2a1d15, roughness: 0.9 }), 2.13]];
+  for (const [geo, mat, dy] of parts) { const im = new THREE.InstancedMesh(geo, mat, items.length); items.forEach(([x, y, z], i) => im.setMatrixAt(i, m4.makeTranslation(x, y + dy, z))); im.computeBoundingSphere(); im.userData.noCast = true; g.add(im); }
+  return g;
+}
+// (S5) the Norwegian night out on the hills: red wooden cabins with snowy roofs and warm windows, and a stave church on a hill (a dark silhouette
+// with its stacked roofs, against the northern lights)
+function makeVillage(THREE, rnd) {
+  const g = new THREE.Group(), m4 = new THREE.Matrix4(), mm = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), cab = [];
+  for (let i = 0; i < 10; i++) { const z = 20 + rnd() * (COURSE_END - 20), sd = i % 2 ? 1 : -1, x = X(z) + sd * (46 + rnd() * 40); if (inRiver(z, 6)) continue; cab.push([x, gY(x, z) - 0.2, z, (sd > 0 ? -Math.PI / 2 : Math.PI / 2) + (rnd() - 0.5) * 0.8, 0.9 + rnd() * 0.4]); }
+  const roofG = new THREE.CylinderGeometry(1, 1, 1, 3, 1); roofG.rotateZ(Math.PI / 2); roofG.rotateX(-Math.PI / 2);   // (a prism along the cabin, its ridge up)
+  const parts = [[new THREE.BoxGeometry(4.2, 2.6, 3.4), new THREE.MeshStandardMaterial({ color: 0x8b2a1f, roughness: 0.9, flatShading: true }), [0, 1.3, 0], [1, 1, 1], 0],
+    [roofG, new THREE.MeshStandardMaterial({ color: 0xf2f6ff, roughness: 0.9, flatShading: true }), [0, 3.15, 0], [4.8, 1.35, 2.3], 0],
+    [new THREE.PlaneGeometry(0.8, 0.7), new THREE.MeshBasicMaterial({ color: 0xffb347, toneMapped: false }), [-0.9, 1.4, 1.72], [1, 1, 1], 0],
+    [new THREE.PlaneGeometry(0.8, 0.7), new THREE.MeshBasicMaterial({ color: 0xffb347, toneMapped: false }), [0.9, 1.4, 1.72], [1, 1, 1], 0]];
+  for (const [geo, mat, off, sc] of parts) { const im = new THREE.InstancedMesh(geo, mat, cab.length);
+    cab.forEach(([x, y, z, ry, s], i) => { m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(Y, ry), new THREE.Vector3(s, s, s)); mm.compose(new THREE.Vector3(...off), new THREE.Quaternion(), new THREE.Vector3(...sc)); im.setMatrixAt(i, m4.clone().multiply(mm)); });
+    im.computeBoundingSphere(); im.userData.noCast = true; g.add(im); }
+  // the stave church: far out on a hill, the same side every run; ~120 triangles, always drawn (it is the skyline)
+  const wood = new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.95, flatShading: true }), roof = new THREE.MeshStandardMaterial({ color: 0x241913, roughness: 0.95, flatShading: true }), win = new THREE.MeshBasicMaterial({ color: 0xffb04a, toneMapped: false });
+  const ch = new THREE.Group(), box = (w, h, d, y, m) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.y = y; ch.add(b); }, pyr = (r, h, y) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4, 1), roof); c.position.y = y; c.rotation.y = Math.PI / 4; ch.add(c); };
+  box(6, 4, 8, 2, wood); pyr(5.6, 2.8, 5.4); box(3.6, 2.4, 3.6, 7.4, wood); pyr(3.6, 2.2, 9.6); box(2, 1.8, 2, 11.4, wood); pyr(1.7, 5, 14.8); box(0.7, 1.1, 0.05, 2.2, win); ch.children[ch.children.length - 1].position.z = 4.03;
+  const cz = STOP_Z * 0.42, cx = X(cz) - 92; ch.position.set(cx, gY(cx, cz) - 0.4, cz); ch.rotation.y = Math.PI / 2 + 0.4; ch.scale.setScalar(1.5); ch.traverse((o) => { if (o.isMesh) o.userData.noCast = true; }); g.add(ch);
+  return g;
+}
 // an arch over the course: two posts and a banner facing the riders coming down
+function bannerFade(E, rdt) {   // (S5) an arch's banner never sits behind the HUD (the score and "HALFPIPE · AIR 1 OF 5" at the top): it fades out there
+  const B = S.banners; if (!B || !B.length) return; S.hudT = (S.hudT ?? 9) + rdt;
+  if (S.hudT > 0.5) { S.hudT = 0; const el = document.getElementById('hudMain'), hd = document.getElementById('hud'), r = el && hd && !hd.classList.contains('hidden') ? el.getBoundingClientRect() : null; S.hudB = r && r.height ? r.bottom + 28 : 0;   /* (with a margin: it is gone before it touches the title) */ }
+  const yH = 1 - 2 * (S.hudB || 0) / innerHeight, v = S._bv || (S._bv = new E.THREE.Vector3());
+  for (const b of B) { const h = b.userData.h / 2; v.set(b.position.x, b.position.y + h, b.position.z).project(E.camera); const top = v.y, front = v.z < 1; v.set(b.position.x, b.position.y - h, b.position.z).project(E.camera);
+    const over = S.hudB > 0 && front && v.y < 1 && top > yH, o = E.damp(b.material.opacity, over ? 0 : 1, 12, rdt); b.material.opacity = o; b.visible = o > 0.02; }
+}
 function makeArch(E, text, color, z, hw, h, mat = null) {
   const { THREE } = E, grp = new THREE.Group(), postM = new THREE.MeshStandardMaterial({ color: 0x2a2f5c, roughness: 0.6 }), y0 = -z * S.SL + V(z), ax = X(z);
   for (const sd of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, h + 1.6, 0.35), postM); p.position.set(ax + sd * hw, y0 + (h + 1.6) / 2 - 0.3, z); p.castShadow = true; grp.add(p); }
-  const b = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, mat ? hw : Math.min(2.2, hw * 2 / 8)), mat || E.bannerMaterial(text, color)); b.position.set(ax, y0 + h + 0.6, z); b.rotation.y = Math.PI; grp.add(b);
+  const bh = mat ? hw : Math.min(2.2, hw * 2 / 8), b = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, bh), mat || E.bannerMaterial(text, color)); b.position.set(ax, y0 + h + 0.6, z); b.rotation.y = Math.PI; grp.add(b);
+  b.material.transparent = true; b.userData.h = bh; (S.banners || (S.banners = [])).push(b);   // (S5: it fades out while it would sit behind the HUD's title)
   return grp;
 }
 // (2026-11-26, H33, Michal: "Make the questions or the sentences as questions in a 3D soace not in the tab and answers normal tabs for answers")
@@ -585,7 +712,7 @@ export default {
     prog(30, 'Planting the trees…');
     [S.firepit, S.tripod] = await Promise.all(['camp-firepit', 'camp-tripod'].map((n) => E.loadGLB(`models/${n}.glb?v=1`).then((gl) => gl.scene).catch(() => null)));   // (R8: the Adventures fire pit and its tripod with the pot)
     S.wallM = wallM; S.snowM = snowM; S.pisteM = pisteM; this.course(E);   // (R2/R3: the ground, the pipe, the features and everything round them, for this run's order and route)   // (R2: the pipe, the features and everything round them, for this run's order)
-    await E.addMountains(-240, 0x8890c8);
+    S.mount = await E.addMountains(-240, 0x8890c8); applyLook(E);   // (S5: the location's sky, light and mountains)
     prog(60, 'Waxing the board…');
     S.a = NB ? await E.makeBoarder({ url: RIDER_URL }) : await E.makeActor({ gear: 'board' });
     if (/[?&]party=1/.test(location.search)) { S.ghost = NB ? await E.makeBoarder({ friend: true, url: RIDER_URL }) : await E.makeActor({ gear: 'board', kit: E.FRIEND_KIT }); S.ghost.g.visible = false; S.ghost.g.traverse((o) => { o.castShadow = false; o.userData.noCast = true; }); }   /* (2026-11-25: the friend casts no shadow: under 100k a frame) */
@@ -599,28 +726,31 @@ export default {
   course(E) {
     const { THREE } = E; if (S.cg) E.scene.remove(S.cg);
     const sd = runSeeds(S.runN || 0); S.loc = pickLoc(sd); lsSet('hp-loc', S.loc.id); layout(pickOrder(sd), pickRoute(sd, S.loc), sd.cur); S.L = COURSE_END;   // (S4: the location first)
+    S.banners = []; applyLook(E); const nor = S.loc.id === 'norway', FO = S.forest, inF = (z) => !!FO && z > FO.zA - 8 && z < FO.zB + 6;
     const g = new THREE.Group(); S.cg = g; const ground = makeGround(THREE, S.snowM, S.pisteM); g.add(ground, makePipe(THREE, S.wallM));
     let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const trees = [], lights = [], inPipe = (z) => z > PIPE_A - 3 && z < PIPE_B + 3;
     // (2026-11-25, the user: "surrounded by deep forest") a thick wall of pines on both sides all the way down, thinning out into the hills
     // (the detailed pines: one row along the course; behind them the deep forest of cheap low-poly firs, see makeForest)
-    for (let z = -80; z < COURSE_END + 70; z += 12) for (const sd of [-1, 1]) { const near = (inPipe(z) ? W() + DECK + 4 : 16.5), rx = sd * (near + rnd() * 5), zz = z + rnd() * 4, x = X(zz) + rx; trees.push([1 + Math.floor(rnd() * 3), x, gY(x, zz) - 0.15, zz, rnd() * 6.28, 0.85 + rnd() * 0.6]); }
+    for (let z = -80; z < COURSE_END + 70; z += 12) for (const sd of [-1, 1]) { const near = (inPipe(z) ? W() + DECK + 4 : inF(z) ? 8.6 : 16.5), rx = sd * (near + rnd() * 5), zz = z + rnd() * 4, x = X(zz) + rx; if (inRiver(zz, 2.5)) { rnd(); rnd(); rnd(); continue; } trees.push([1 + Math.floor(rnd() * 3), x, gY(x, zz) - 0.15, zz, rnd() * 6.28, 0.85 + rnd() * 0.6]); }
     g.add(makeForest(THREE, rnd));
     for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { if (inGap(z)) continue; const x = X(z) + sd * (inPipe(z) ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
     g.add(E.instanceField(trees, (t) => `Pine${t}`), E.instanceField(lights, () => 'Floodlight', 400));
     // the floodlights' glow on the snow: 7 warm point lights spread down the course (no shadows; always 7, so no shader rebuild)
-    const gz = S.gap ? [S.gap.zA + (S.gap.zB - S.gap.zA) * 0.3, S.gap.zA + (S.gap.zB - S.gap.zA) * 0.72] : [];   // (R4: two of the glows light the rock gap)
-    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, tun = inG && S.gap.kind === 'tunnel', igl = inG && S.gap.kind === 'igloo', pl = new THREE.PointLight(tun ? 0xa8dcff : igl ? 0xffa25a : 0xffe2b0, igl ? 45 : inG ? 70 : 60, igl ? 24 : 55, 1.6); const iz = igl ? S.gap.cz + (i ? 0.5 : -2) : z; pl.position.set(X(iz) + (igl ? (i ? 4.4 : -3) : inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -iz * S.SL + V(iz) + (tun ? 4.6 : igl ? (i ? 1.4 : 3.2) : inG ? 8 : 12), iz); g.add(pl); if (igl && i === 1) { IG.light = pl; IG.lightI = pl.intensity; } }   // (R8: the fire's own flickering light)   // (R6: warm light inside the igloo, by the fire spot)
-    const rocks = []; for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, z = -50 + rnd() * (COURSE_END + 60), x = X(z) + sd * (17 + rnd() * 60); rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
+    const gz = S.gap ? (S.gap.kind === 'forest' ? [0.15, 0.5, 0.85] : [0.3, 0.72]).map((f) => S.gap.zA + (S.gap.zB - S.gap.zA) * f) : [];   // (R4: two of the glows light the rock gap)
+    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, tun = inG && S.gap.kind === 'tunnel', igl = inG && S.gap.kind === 'igloo', fo = inG && S.gap.kind === 'forest', pl = new THREE.PointLight(tun ? 0xa8dcff : igl ? 0xffa25a : fo ? 0xffc890 : 0xffe2b0, igl ? 45 : fo ? 55 : inG ? 70 : 60, igl ? 24 : fo ? 40 : 55, 1.6); const iz = igl ? S.gap.cz + (i ? 0.5 : -2) : z; pl.position.set(X(iz) + (igl ? (i ? 4.4 : -3) : inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -iz * S.SL + V(iz) + (tun ? 4.6 : igl ? (i ? 1.4 : 3.2) : fo ? 5 : inG ? 8 : 12), iz); g.add(pl); if (igl && i === 1) { IG.light = pl; IG.lightI = pl.intensity; } }   // (R8: the fire's own flickering light)   // (R6: warm light inside the igloo, by the fire spot)
+    const rocks = []; for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, z = -50 + rnd() * (COURSE_END + 60), x = X(z) + sd * (17 + rnd() * 60); if (inRiver(z, 2)) { rnd(); rnd(); continue; } rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
     g.add(E.instanceField(rocks, (t) => `Rock${t}`));
     // the features: the kickers, the rails, the BIG kicker; arches over the pipe's entrance, the big air and the finish
     const M = S.fm || (S.fm = { snow: new THREE.MeshStandardMaterial({ color: 0xf2f5ff, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }), sideM: new THREE.MeshStandardMaterial({ color: 0x9fb4f2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide }), bigLip: new THREE.MeshStandardMaterial({ color: 0xff4d8d, roughness: 0.5, emissive: 0x5a0d2a }) });
-    for (const K of KICKS) g.add(makeKicker(THREE, K, M.snow, new THREE.MeshStandardMaterial({ color: K.lipC, roughness: 0.5, emissive: new THREE.Color(K.lipC).multiplyScalar(0.25) }), M.sideM));
-    g.add(makeKicker(THREE, BIG, M.snow, M.bigLip, M.sideM)); for (const R of RAILS) g.add(makeRail(THREE, R));
+    if (!M.rock) Object.assign(M, { rock: new THREE.MeshStandardMaterial({ color: 0x5f667c, roughness: 0.95, flatShading: true, side: THREE.DoubleSide }), snowSide: new THREE.MeshStandardMaterial({ color: 0xd9e5ff, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }), bark: new THREE.MeshStandardMaterial({ color: 0x6b4426, roughness: 0.95, flatShading: true }) });   // (S5: nature)
+    for (const K of KICKS) g.add(K.look ? makeNatural(THREE, K, M) : makeKicker(THREE, K, M.snow, new THREE.MeshStandardMaterial({ color: K.lipC, roughness: 0.5, emissive: new THREE.Color(K.lipC).multiplyScalar(0.25) }), M.sideM));
+    g.add(BIG.look ? makeNatural(THREE, BIG, M) : makeKicker(THREE, BIG, M.snow, M.bigLip, M.sideM)); for (const R of RAILS) g.add(R.look === 'log' ? makeLog(THREE, R) : makeRail(THREE, R));
     g.add(makeBlueLines(THREE));
-    g.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), makeArch(E, 'RED FOX BIG AIR', '#ff5a1f', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#0f3d44', STOP_Z + 8, 9, 6.5));
+    g.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), nor && FO ? makeArch(E, 'FREERIDE', '#2f7a52', FO.zA - 6, 6.4, 6) : makeArch(E, 'RED FOX BIG AIR', '#ff5a1f', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#0f3d44', STOP_Z + 8, 9, 6.5));
+    if (nor) { for (const o of [makeIce(THREE), makeLanterns(THREE)]) if (o) { g.add(o); E.far(o); } g.add(makeVillage(THREE, rnd)); }   // (S5: the frozen river, the path's lanterns, the cabins and the stave church)
     // the sponsor boards down both edges of the open slopes (the parody brands, taking turns)
-    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) if (!inGap(z)) g.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
+    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) if (!inGap(z) && !(FO && z > FO.zA - 8))   /* (S5: none from the forest on: the freeride half is nature) */ g.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
     E.scene.add(g); E.far(ground);
     if (S.route && S.route.dress && S.zone) S.route.dress(E, g, S.zone);   // (R4+: the route's zone: the rock gap, the snow tunnel, the igloo)
     if (S.X) this.xmas(E, S.X);   // (a new run: the Christmas kit again, round the new course)
@@ -637,8 +767,8 @@ export default {
       if (i % 2 === 0) X.put('Snowman', G(-sd * 13, z - 6), sd * 1.2); }
     for (const sd of [1, -1]) { X.put('Lantern', G(sd * 3.5, -3), sd); X.put('XmasTree_Small', G(sd * 6, -8), sd, 1.6); X.put('XmasTree_Small', P(sd * (W0 + 3), PIPE_A + 3), sd, 1.6); }
     X.put('Sleigh', G(8, STOP_Z + 2), 2.4);   // (2026-11-26, Michal: "Make sure the tree at the finish line is removed": the big tree that stood on the line past the stop is gone; the finish is open)
-    for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3((BIG.x || 0) + sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
-    for (const R of RAILS) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
+    if (!BIG.look) for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3((BIG.x || 0) + sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
+    for (const R of RAILS.filter((R) => R.look !== 'log')) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
     if (S.cg) for (const o of E.scene.children.slice(n0)) S.cg.add(o);   // (R2: the kit joins this run's course group: a new run rebuilds it)
     E.scene.updateMatrixWorld();   // (S4: the kit's world positions before the first far-cull: else the first intro frame drew every tree and snowman, ~105k)
   },
@@ -671,14 +801,14 @@ export default {
   introCam(E, THREE, Pp) {   // the sweep: high and wide, looking back up the slope at the sky; round behind him; his riding view (where the follow camera starts)
     const I = S.intro, t = performance.now() - I.t0, u = ss5((t - I.card * 0.75) / (I.sweep - I.card * 0.75)), sl = Math.atan(S.SL);
     const P = (dx, dy, dz) => new THREE.Vector3(Pp.x + dx, Pp.y + dy, Pp.z + dz), b2 = (a, b, c, k) => a.clone().multiplyScalar((1 - k) * (1 - k)).add(b.clone().multiplyScalar(2 * k * (1 - k))).add(c.clone().multiplyScalar(k * k));
-    const pos = b2(P(9, 4, -2), P(-9, 7, -9), P(0, 2.6, -6.2), u), look = b2(P(-14, -5, 70), P(0, 0, 14), P(0, 0.7, 4), u);   // (first out over the valley: the night sky, the mountains, the lit slope; then round behind him)
+    const pos = b2(P(7, 12, -9), P(-13, 8, -13), P(0, 2.6, -6.2), u), look = b2(P(-8, 6, 90), P(4, 0, 26), P(0, 0.7, 4), u);   // (S5: higher and looking out further first: the valley, the forest, the lights and the sky, over the arches)   // (first out over the valley: the night sky, the mountains, the lit slope; then round behind him)
     E.cam(pos, look, u >= 1 ? 8 : 40, 60 - 8 * (1 - u)); if (u >= 1) I.done = true; },
   async run(E) {
     if (S.ran) { S.runN = (S.runN || 0) + 1; this.course(E); } S.ran = true;   // (R2: PLAY AGAIN = a new order)
     this.reset(E); S.phase = 'drop'; fxRoot();   // (H33: the answer-button styles are there from the first question)
     await this.intro(E);   // (S4: the location card spins in and zooms into the place; the camera sweeps down to him during the count)
     E.banner('3', '', 700); await E.wait(0.8); E.banner('2', '', 700); await E.wait(0.8); E.banner('1', '', 700); await E.wait(0.8);
-    E.banner('GO!', `${QN} QUESTIONS · KICKERS · RAILS · PIPE · BIG AIR`, 900); S.phase = 'line';
+    E.banner('GO!', S.loc && S.loc.id === 'norway' ? `${QN} QUESTIONS · PARK · FOREST PATH · FROZEN RIVER` : `${QN} QUESTIONS · KICKERS · RAILS · PIPE · BIG AIR`, 900); S.phase = 'line';
     const at = (dy = 1.5) => S.a.g.position.clone().setY(S.a.g.position.y + dy);
     let chain = Promise.resolve();   // (the points fly into the total one after another)
     const free = (pts) => { chain = chain.then(() => scoreFly(E, pts, at())).then(() => { S.pts += pts; E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` }); }); };
@@ -725,13 +855,13 @@ export default {
         }
       } else if (F.k === 'big') {   // the BIG AIR: question 1 on the run-in (slow motion to the lip), question 2 at the top of the flight (a slow float)
         await E.until(() => S.phase === 'line' && S.s >= BIG.s + BIG.len - Math.max(4, S.v) * 1.25); let due = 0, failed = false;
-        { const c0 = E.combo; S.asking = true; const r = await ask('BIG AIR 1', slowTo((BIG.s + BIG.len - S.s) / Math.max(3, S.v))); S.asking = false; S.hit++;
+        { const c0 = E.combo; S.asking = true; const r = await ask(`${BIG.name || 'BIG AIR'} 1`, slowTo((BIG.s + BIG.len - S.s) / Math.max(3, S.v))); S.asking = false; S.hit++;
           if (r.ok) { const T = ladder(r), sc = score(r, T[5]); giveTrick({ T, f0: 0.1, f1: 0.46 }, false, 'bair'); due += sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
           else { failed = true; giveTrick(S.a.isClip ? { T: failTrick(c0), f0: 0.1, f1: 0.995, fail: true } : null, true, 'bair'); trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
           react(r); }
         await E.until(() => S.phase !== 'line' || S.s > BIG.s + BIG.len + 1);
         if (!failed) { await E.until(() => S.phase !== 'bair' || S.air / S.airT >= 0.52);
-          if (S.phase === 'bair') { const c0 = E.combo; S.asking = true; const r = await ask('BIG AIR 2', slowTo((0.93 - S.air / S.airT) * S.airT * 0.6)); S.asking = false; S.hit++; const f = S.air / S.airT;
+          if (S.phase === 'bair') { const c0 = E.combo; S.asking = true; const r = await ask(`${BIG.name || 'BIG AIR'} 2`, slowTo((0.93 - S.air / S.airT) * S.airT * 0.6)); S.asking = false; S.hit++; const f = S.air / S.airT;
             if (r.ok) { const T = ladder(r), sc = score(r, T[5]); S.airTr.push({ T, f0: f + 0.02, f1: 0.95 }); due += sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
             else { if (S.a.isClip) S.airTr.push({ T: failTrick(c0), f0: f + 0.02, f1: 0.995, fail: true }); S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
             react(r); } }
@@ -759,7 +889,7 @@ export default {
       a.g.position.set(0, -S.s * S.SL, S.s); a.g.rotation.set(0, 0, 0); a.g.rotateX(SLA());
       if (a.isClip) { a.want('stance_idle'); a.update(dt || rdt); } else { a.pose(this.ridePose(t, 0), 8, rdt); a.update(); }
       const Pp = a.g.position, ang = t * 0.15 + 0.6;
-      if (S.phase === 'drop' && S.intro) this.introCam(E, THREE, Pp); else E.cam(new THREE.Vector3(Pp.x + Math.cos(ang) * 3.6, Pp.y + 1.5, Pp.z + Math.sin(ang) * 3.6), new THREE.Vector3(Pp.x, Pp.y + 0.8, Pp.z), 3, 50);
+      bannerFade(E, rdt); if (S.phase === 'drop' && S.intro) this.introCam(E, THREE, Pp); else E.cam(new THREE.Vector3(Pp.x + Math.cos(ang) * 3.6, Pp.y + 1.5, Pp.z + Math.sin(ang) * 3.6), new THREE.Vector3(Pp.x, Pp.y + 0.8, Pp.z), 3, 50);
       E.focusAt = Pp; E.focus = 4; E.hud('0', 'SNOWBOARD'); if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt); return;
     }
     S.s += S.v * dt;
@@ -855,7 +985,7 @@ export default {
     if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt);
     else if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(X(gs) - S.d * 0.8, -gs * S.SL + V(gs) + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
     const nx = FEAT.find((f) => (f.k === 'pipe' ? !(S.pN >= HITS && S.phase !== 'cross' && S.phase !== 'air') : f.k === 'big' ? !S.b1 || S.phase === 'bair' : !S.done[f.id] || (S.kick === f && S.phase === 'kair') || (S.rail === f && S.phase === 'rail')));
-    const where = !nx ? 'FINISH' : nx.k === 'big' ? 'BIG AIR' : nx.k === 'pipe' ? `HALFPIPE · AIR ${Math.min(HITS, S.pN + (S.phase === 'air' ? 0 : 1))} OF ${HITS}` : nx.name;
+    const where = !nx ? 'FINISH' : nx.k === 'big' ? (BIG.name || 'BIG AIR') : nx.k === 'pipe' ? `HALFPIPE · AIR ${Math.min(HITS, S.pN + (S.phase === 'air' ? 0 : 1))} OF ${HITS}` : nx.name;
     E.hud(`${Math.round(S.shown ?? S.pts)}`, where); E.progress(Math.min(1, S.s / STOP_Z));
     this.camera(E, rdt);
   },
@@ -942,7 +1072,7 @@ export default {
     const CV = S.camV || (S.camV = { x: 0, px: P.x, ok: false }); if (rdt > 0) { const vx = CV.ok ? (P.x - CV.px) / rdt : 0; CV.x = E.damp(CV.x, Math.max(-25, Math.min(25, vx)), 12, rdt); CV.px = P.x; CV.ok = true; }
     look.x += CV.x / (k * 1.6);
     E.cam(pos, look, k, fov); E.focusAt = P; E.focus = P.distanceTo(E.camera.position);
-    signPlace(E);   // (H33: the question's 3D sign)
+    bannerFade(E, rdt); signPlace(E);   // (H33: the question's 3D sign)
   },
 };
 function smoothStep(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
