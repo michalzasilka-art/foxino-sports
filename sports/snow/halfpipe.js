@@ -101,7 +101,7 @@ function pickOrder(sd) {
 // The ride line stays clear (nothing to dodge): any kicker or rail inside works as everywhere (questions, slow motion, tricks).
 const inGap = (z) => !!S.gap && z > S.gap.zA - 4 && z < S.gap.zB + 4;
 const gapClose = (z) => { const G = S.gap; if (!G) return 0; const u = (z - G.zA) / (G.zB - G.zA); return u <= 0 || u >= 1 ? 0 : Math.pow(Math.sin(Math.PI * u), 0.55); };
-const gapHW = (z) => 14 - 8 * gapClose(z);   // (the half-width between the walls: 14 at the mouths, ~6 in the middle: a narrow passage, the ride line clear)
+const gapHW = (z) => S.gap && S.gap.kind === 'tunnel' ? S.gap.hw : 14 - 8 * gapClose(z);   // (the half-width between the walls: 14 at the mouths, ~6 in the middle: a narrow passage, the ride line clear)
 const hsh = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
 function makeRockGap(E, g, Z) {
   const { THREE } = E, G = S.gap, pos = [], col = [], rows = [], C = new THREE.Color(), snow = new THREE.Color(0xeef3ff), rockA = new THREE.Color(0x7a77a6), rockB = new THREE.Color(0x5b587f);
@@ -128,10 +128,40 @@ function makeRockGap(E, g, Z) {
   E.far(walls); E.far(icm); E.far(lm);
   S.gapTris = pos.length / 9 + ice.length * 10 + lamps.length * 80;
 }
+// (2026-11-27, R5, Michal: "one time ti can go to left through some snowtunel a here are bars to slide on") THE SNOW TUNNEL: the left detour
+// runs through a tunnel carved in deep snow: a rounded snowy shell outside, an icy blue arch inside (a soft glow), thick snowy mouths, icicles at
+// both ends, cool lanterns and glints on the ice, two of the floodlight glows inside (tinted blue). It holds the course's rails (1–2): their
+// questions (on the approach, in slow motion) and S2's jib tricks work as everywhere. The camera stays under the roof and inside the walls.
+function makeTunnel(E, g, Z) {
+  const { THREE } = E, G = S.gap, hw = G.hw, H = G.h, N = 14, inner = [], outer = [], ci = [], co = [], C = new THREE.Color(), iceA = new THREE.Color(0x8ccaf5), iceB = new THREE.Color(0xd2ecff), snowC = new THREE.Color(0xf1f5ff), rows = [];
+  for (let z = G.zA; z <= G.zB + 0.01; z += 2.5) { const cx = X(z), base = gY(cx, z) - 0.35, ri = [], ro = [];
+    for (let k = 0; k <= N; k++) { const th = Math.PI * k / N, wob = 1 + (hsh(z, k) - 0.5) * 0.06;
+      ri.push([cx + hw * wob * Math.cos(th), base + H * Math.sin(th) * (0.97 + hsh(z, k + 30) * 0.06), z]);
+      ro.push([cx + (hw + 2.4 + hsh(z, k + 60) * 0.8) * Math.cos(th), base - 0.4 + (H + 2.6 + hsh(z, k + 90) * 0.8) * Math.sin(th), z]); }
+    rows.push([ri, ro]); }
+  const quad = (P, Cs, a, b, c, d, col) => { P.push(...a, ...b, ...c, ...a, ...c, ...d); for (let i = 0; i < 6; i++) Cs.push(col.r, col.g, col.b); };
+  for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < N; k++) { const A = rows[r], B = rows[r + 1];
+    C.copy(iceA).lerp(iceB, hsh(r, k)); if (hsh(k, r + 5) > 0.93) C.lerp(snowC, 0.7); quad(inner, ci, A[0][k], B[0][k], B[0][k + 1], A[0][k + 1], C.clone());
+    C.copy(snowC).multiplyScalar(0.94 + hsh(r, k + 7) * 0.06); quad(outer, co, A[1][k], A[1][k + 1], B[1][k + 1], B[1][k], C.clone()); }
+  for (const r of [0, rows.length - 1]) for (let k = 0; k < N; k++) { const R = rows[r]; C.copy(snowC); quad(outer, co, R[0][k], R[1][k], R[1][k + 1], R[0][k + 1], C.clone()); }   // (the two mouths: thick snowy arches)
+  const mk = (P, Cs, mat) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(Cs, 3)); geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); m.castShadow = false; m.receiveShadow = true; m.userData.noCast = true; g.add(m); E.far(m); return m; };
+  mk(inner, ci, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, metalness: 0.1, flatShading: true, side: THREE.DoubleSide, emissive: 0x1d4a80, emissiveIntensity: 0.55 }));
+  mk(outer, co, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }));
+  // icicles hanging from the roof near both mouths, cool lanterns along the walls, glints on the ice
+  const ice = [], lamps = [], glint = [], M4 = new THREE.Matrix4();
+  for (let r = 0; r < rows.length; r++) { const z = rows[r][0][0][2], nearMouth = r < 4 || r > rows.length - 5;
+    for (let k = 3; k <= N - 3; k++) { if (hsh(r, k + 11) < (nearMouth ? 0.45 : 0.85)) continue; const p = rows[r][0][k]; ice.push([p[0], p[1] - 0.05, z, 0.5 + hsh(r, k + 12) * (nearMouth ? 1.3 : 0.7)]); }
+    if (r % 5 === 2) for (const k of [2, N - 2]) { const p = rows[r][0][k], cx = X(z); lamps.push([p[0] + (cx - p[0]) * 0.06, p[1], z]); }
+    for (let k = 1; k < N; k++) if (hsh(r, k + 40) > 0.82) { const p = rows[r][0][k], cx = X(z); glint.push(p[0] + (cx - p[0]) * 0.02, p[1] - 0.05, z); } }
+  const icg = new THREE.ConeGeometry(0.12, 1, 5); icg.translate(0, -0.5, 0); const icm = new THREE.InstancedMesh(icg, new THREE.MeshStandardMaterial({ color: 0xd6f0ff, roughness: 0.15, metalness: 0.1, emissive: 0x2a5a8a }), Math.max(1, ice.length));
+  ice.forEach(([x, y, z, l], i) => icm.setMatrixAt(i, M4.makeScale(1, l, 1).setPosition(x, y, z))); icm.count = ice.length; icm.userData.noCast = true; g.add(icm); E.far(icm);
+  const lm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshBasicMaterial({ color: 0xc4ecff, toneMapped: false }), Math.max(1, lamps.length)); lamps.forEach(([x, y, z], i) => lm.setMatrixAt(i, M4.makeTranslation(x, y, z))); lm.count = lamps.length; lm.userData.noCast = true; g.add(lm); E.far(lm);
+  const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(glint, 3)); const pts = new THREE.Points(gg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.9, depthWrite: false })); pts.userData.noCast = true; g.add(pts);
+}
 const ROUTES = [
   { id: 'straight', name: 'STRAIGHT DOWN', ready: true },
   { id: 'rockgap', name: 'THE ROCK GAP', side: -1, n: 2, ready: true, host: (F) => F.k === 'kick' || F.k === 'rail', dress: (E, g, Z) => makeRockGap(E, g, Z) },   // (R4)
-  { id: 'tunnel', name: 'THE SNOW TUNNEL', side: 1, n: 2, ready: false, host: (F) => F.k === 'rail' || F.k === 'kick' },
+  { id: 'tunnel', name: 'THE SNOW TUNNEL', side: 1, n: 2, ready: true, host: (F) => F.k === 'rail', dress: (E, g, Z) => makeTunnel(E, g, Z) },   // (R5: the rails (bars) ride inside)
   { id: 'igloo', name: 'THE IGLOO', side: -1, n: 1, ready: false, host: (F) => F.k === 'kick' || F.k === 'rail' },
   { id: 'right', name: 'DETOUR RIGHT', side: -1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' },
   { id: 'left', name: 'DETOUR LEFT', side: 1, n: 2, test: true, host: (F) => F.k === 'kick' || F.k === 'rail' }];
@@ -164,7 +194,7 @@ function layout(o, route, seed) {
     else { BIG.s = z + 32; z = BIG.s + BIG.len + 96 + (last ? 20 : 22); }   /* (the big air: up to ~95 m of flight at full speed with slow-motion tricks) */
     if (i0 >= 0 && i === i0 + n - 1) { Z.c = z; z += TURN; Z.d = z; } });
   STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
-  S.route = route; S.zone = i0 >= 0 ? Z : null; S.gap = route.id === 'rockgap' && i0 >= 0 ? { zA: Z.b - 14, zB: Z.c + 14 } : null; S.inZone = i0 >= 0 ? o.slice(i0, i0 + n).map((F) => F.id) : [];
+  S.route = route; S.zone = i0 >= 0 ? Z : null; S.gap = route.id === 'rockgap' && i0 >= 0 ? { kind: 'rockgap', zA: Z.b - 14, zB: Z.c + 14 } : route.id === 'tunnel' && i0 >= 0 ? { kind: 'tunnel', zA: Z.b - 8, zB: Z.c + 8, hw: 7, h: 6.4 } : null; S.inZone = i0 >= 0 ? o.slice(i0, i0 + n).map((F) => F.id) : [];
   // X: 0 on the main slope; in a detour it bends out over TURN metres (a smooth S), holds SWING metres to the side through the zone, bends back
   for (let i = 0; i < PN; i++) { const zz = PZ0 + i * PST; let x = 0; if (S.zone) { const D = Z.side * SWING; x = zz < Z.a ? 0 : zz < Z.b ? D * ss5((zz - Z.a) / TURN) : zz < Z.c ? D : zz < Z.d ? D * (1 - ss5((zz - Z.c) / TURN)) : 0; } PX[i] = x; }
   // V: gentle rolls (whoops) in the free stretches between the sections; flat on every feature, its run-in and landing, the pipe, the turns
@@ -489,7 +519,7 @@ export default {
     g.add(E.instanceField(trees, (t) => `Pine${t}`), E.instanceField(lights, () => 'Floodlight', 400));
     // the floodlights' glow on the snow: 7 warm point lights spread down the course (no shadows; always 7, so no shader rebuild)
     const gz = S.gap ? [S.gap.zA + (S.gap.zB - S.gap.zA) * 0.3, S.gap.zA + (S.gap.zB - S.gap.zA) * 0.72] : [];   // (R4: two of the glows light the rock gap)
-    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, pl = new THREE.PointLight(0xffe2b0, inG ? 70 : 60, 55, 1.6); pl.position.set(X(z) + (inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -z * S.SL + (inG ? 8 : 12), z); g.add(pl); }
+    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, tun = inG && S.gap.kind === 'tunnel', pl = new THREE.PointLight(tun ? 0xa8dcff : 0xffe2b0, inG ? 70 : 60, 55, 1.6); pl.position.set(X(z) + (inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -z * S.SL + V(z) + (tun ? 4.6 : inG ? 8 : 12), z); g.add(pl); }
     const rocks = []; for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, z = -50 + rnd() * (COURSE_END + 60), x = X(z) + sd * (17 + rnd() * 60); rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
     g.add(E.instanceField(rocks, (t) => `Rock${t}`));
     // the features: the kickers, the rails, the BIG kicker; arches over the pipe's entrance, the big air and the finish
@@ -683,7 +713,7 @@ export default {
       if (f >= 1) { const big = S.phase === 'bair'; if (!S.bOops && S.airTr.length && S.a.smile) S.a.smile(big ? 1.6 : 0.9); S.phase = big && S.lastF && S.lastF.k === 'big' ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
     // place: on the wall the board stands on the wall (roll), on a kicker it tips up, in the air the trick turns him
-    if (S.gap && dt > 0 && inGap(S.s + 10) && Math.random() < dt * 1.6) { const z = S.s + 6 + Math.random() * 16, k = gapClose(z); if (k > 0.4) { const sd = Math.random() < 0.5 ? -1 : 1, hw = gapHW(z), x = X(z) + sd * (hw + 1.4); E.spray.emit(new THREE.Vector3(x, gY(x, z) + 1.2 + 11 * k * 0.95, z), 10, -sd * 1.1, -0.4, 0, 1.4, 0.18); } }   // (R4: snow drifting off the rock tops)
+    if (S.gap && S.gap.kind === 'rockgap' && dt > 0 && inGap(S.s + 10) && Math.random() < dt * 1.6) { const z = S.s + 6 + Math.random() * 16, k = gapClose(z); if (k > 0.4) { const sd = Math.random() < 0.5 ? -1 : 1, hw = gapHW(z), x = X(z) + sd * (hw + 1.4); E.spray.emit(new THREE.Vector3(x, gY(x, z) + 1.2 + 11 * k * 0.95, z), 10, -sd * 1.1, -0.4, 0, 1.4, 0.18); } }   // (R4: snow drifting off the rock tops)
     const wx = X(S.s) + S.d; a.g.position.set(wx, -S.s * S.SL + y + V(S.s), S.s);   // (R3: on the route: its swing sideways, its rolls)
     const dd = dt > 1e-5 ? (wx - (S.dPrev ?? wx)) / dt : 0; S.dPrev = wx;   // (he faces where he goes: down the route's turns too)
     S.pT = (S.pT ?? 9) + rdt; S.head = (S.phase === 'cross' || S.phase === 'air') && S.pHead != null && S.fall <= 0 ? E.damp(S.head || 0, S.pHead, S.pT < 0.7 ? 6 : 30, rdt) :   /* (S1: a gentle carve into the first crossing) */ E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railYaw ?? 0) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
@@ -779,6 +809,7 @@ export default {
       look = new THREE.Vector3(P.x, P.y + (big ? 1.6 : 0.7), P.z + ahead); k = wide ? (innerWidth < innerHeight ? 11 : 7) : 5; fov = air && innerWidth > innerHeight ? 50 : 60;   /* (a portrait phone: a narrow screen shows any lag, so it keeps up faster) */
     }
     if (inGap(pos.z)) { const cx = X(pos.z), lim2 = gapHW(pos.z) - 2; pos.x = cx + Math.max(-lim2, Math.min(lim2, pos.x - cx)); }   // (R4: never inside the rock walls)
+    if (inGap(pos.z) && S.gap.kind === 'tunnel') pos.y = Math.min(pos.y, gY(X(pos.z), pos.z) + S.gap.h - 1.4);   // (R5: under the tunnel's roof)
     // every shot aims THROUGH him, seen from where the camera is now (so he stays in the horizontal centre even while the camera moves)
     const C = E.camera.position, dx = P.x - C.x, dz = P.z - C.z, dl = Math.hypot(dx, dz);
     // (the aim point is put at his own distance, the height scaled to keep the same tilt: it moves exactly with him, never swings wider)
