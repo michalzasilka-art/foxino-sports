@@ -1,3 +1,4 @@
+import { makeFlame } from './flamekit.js?v=1';   // (2026-11-27, R8: Patrik's Flame Kit, copied from Foxino Adventures, for the igloo's campfire)
 // HALFPIPE (the snowboard run): a night course under the floodlights, top to bottom. (2026-11-25, the user: "make there more
 // jumps starting with classic jump going on to sliding bar going on to 3 question U ramp and finishing of with 2 question big jump")
 //   (2026-11-25, then: "you need to answer a question on the first jump and on the bar. Dont make it all in u ramp make the first and last
@@ -190,10 +191,29 @@ function makeIgloo(E, g, Z) {
   const wood = new THREE.MeshStandardMaterial({ color: 0x7a4f2e, roughness: 0.9 }), table = new THREE.Group(), part = (geo, x, y, z) => { const m = new THREE.Mesh(geo, wood); m.position.set(x, y, z); table.add(m); }; part(new THREE.BoxGeometry(1.4, 0.1, 0.8), 0, 0.62, 0);
   for (const [a, b] of [[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]]) part(new THREE.BoxGeometry(0.08, 0.6, 0.08), a, 0.3, b); table.position.set(-4.8, 0.15, -2.2); grp.add(table);
   const potM = new THREE.MeshStandardMaterial({ color: 0x3d3f52, roughness: 0.6, metalness: 0.3 }); for (const [x, z, s2] of [[-4.6, -2.1, 0.22], [-4.95, -2.35, 0.16], [-6.2, 0.8, 0.3], [6.4, -2.6, 0.26]]) { const pot = new THREE.Mesh(new THREE.CylinderGeometry(s2, s2 * 0.85, s2 * 1.4, 8), potM); pot.position.set(x, x === -6.2 || x === 6.4 ? 0.15 + s2 * 0.7 : 0.69 + s2 * 0.7, z); grp.add(pot); }
-  const stoneM = new THREE.MeshStandardMaterial({ color: 0x55586a, roughness: 1, flatShading: true }); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneM); st.position.set(fx + Math.cos(a) * 0.75, 0.25, fz + Math.sin(a) * 0.75); grp.add(st); }
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffa04a, transparent: true, opacity: 0.85, toneMapped: false })); glow.position.set(fx, 0.55, fz); glow.scale.y = 0.7; grp.add(glow); IG.glow = glow;
+  // (2026-11-27, R8, Michal: "the fire should be copied from the source as it was in adventure game") Foxino Adventures' campfire, copied:
+  // its fire pit (camp-firepit.glb: the ring of stones and the logs), Patrik's three flames (a big one and two smaller, the same offsets), the
+  // embers floating up, the warm light flickering by the same formula; all ×2 (the Adventures camp is at a smaller scale). New here only: a
+  // little smoke that rises and fades well under the roof.
+  const SC = 2, base = 0.15; IG.flames = []; IG.embers = []; IG.smoke = [];
+  if (S.firepit) { const fp = S.firepit.clone(true); fp.scale.setScalar(SC); fp.position.set(fx, base + 0.006, fz); fp.rotation.y = 0.3; fp.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.userData.noCast = true; } }); grp.add(fp); }
+  else { const stoneM = new THREE.MeshStandardMaterial({ color: 0x55586a, roughness: 1, flatShading: true }); for (let i = 0; i < 8; i++) { const a2 = i * Math.PI / 4, st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneM); st.position.set(fx + Math.cos(a2) * 0.75, 0.25, fz + Math.sin(a2) * 0.75); grp.add(st); } }
+  for (const [dx, dy, dz, sc, seed, map] of [[0, 0.08, 0, 1.25, 1, 0], [0.14, 0.06, -0.08, 0.85, 2, 1], [-0.13, 0.06, 0.07, 0.75, 3, 0]]) {
+    const fk = makeFlame({ height: 0.5, width: 1, seed, map }), fg = new THREE.Group(); fk.object.position.y = -0.04; fg.add(fk.object); fg.position.set(fx + dx * SC, base + dy * SC, fz + dz * SC); fg.scale.setScalar(sc * SC); grp.add(fg); IG.flames.push(fk); }
+  { const em = new THREE.MeshBasicMaterial({ color: '#ffb24a', toneMapped: false }), eg = new THREE.OctahedronGeometry(0.018 * SC, 0);
+    for (let i = 0; i < 12; i++) { const m = new THREE.Mesh(eg, em); grp.add(m); IG.embers.push({ m, t: i / 12 * 2.4, x: (hsh(i, 1) - 0.5) * 0.2, z: (hsh(i, 2) - 0.5) * 0.2 }); } }
+  { const c = document.createElement('canvas'); c.width = c.height = 64; const x2 = c.getContext('2d'), gr = x2.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, 'rgba(210,205,215,.55)'); gr.addColorStop(1, 'rgba(210,205,215,0)'); x2.fillStyle = gr; x2.fillRect(0, 0, 64, 64);
+    const st = new THREE.CanvasTexture(c); for (let i = 0; i < 8; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: st, transparent: true, depthWrite: false, opacity: 0 })); grp.add(sp); IG.smoke.push({ sp, t: i / 8 * 3.2 }); } }
+  IG.fire = { x: fx, y: base, z: fz, SC };
   g.add(grp); grp.traverse((o) => { if (o.isMesh && o !== wall && o !== deb) E.far(o); });   // (the wall and the debris switch on and off themselves: the far-culling would undo that)
   IG.fireWorld = new THREE.Vector3(fx, 1.6, fz).applyMatrix4(grp.matrixWorld.compose(grp.position, grp.quaternion, grp.scale));
+}
+function iglooFire(E, dt) {
+  const F = IG.fire; if (!F) return; const T = E.T;
+  for (const fk of IG.flames) fk.update(dt, E.camera);
+  for (const e of IG.embers) { e.t = (e.t + dt) % 2.4; const k = e.t / 2.4; e.m.position.set(F.x + (e.x + Math.sin(T * 2 + e.t * 5) * 0.08 * k) * F.SC, F.y + (0.5 + k * 2.2) * F.SC * 0.8, F.z + e.z * F.SC); e.m.scale.setScalar(1 - k); }
+  for (const p of IG.smoke) { p.t = (p.t + dt) % 3.2; const k = p.t / 3.2; p.sp.position.set(F.x + Math.sin(T * 0.7 + p.t * 3) * 0.3 * k, F.y + 1.6 + k * 2.6, F.z + Math.cos(T * 0.5 + p.t * 2) * 0.2 * k); p.sp.scale.setScalar(0.5 + k * 1.6); p.sp.material.opacity = 0.35 * Math.sin(Math.PI * k); }   // (gone by ~4.4 m: well under the roof)
+  if (IG.light) { const k = 1 + Math.sin(T * 17) * 0.12 + Math.sin(T * 7.3) * 0.08; IG.light.intensity = IG.lightI * k; }   // (the Adventures flicker)
 }
 function iglooSmash(E) {   // the wall bursts: the blocks fly outward and down, a snow puff, a crunch, a short slow motion
   const { THREE } = E; if (!IG.wall || IG.t >= 0) return; IG.t = 0; IG.wall.visible = false; IG.deb.visible = true; IG.vel = IG.slots.map(([x, y, z]) => { const sx = Math.sign(x) || (Math.random() < 0.5 ? -1 : 1), mid = 1 - Math.min(1, Math.abs(x) / 3); return [sx * (1.4 + 2.6 * mid + Math.random() * 1.8), 3.8 + Math.random() * 3.6 + y * 0.4, 6 + Math.random() * 4, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10]; });   // (out to both sides and up: the middle clears, he bursts through with blocks flying round him)
@@ -543,6 +563,7 @@ export default {
     snowM = snowM || new THREE.MeshStandardMaterial({ color: 0xeef2fd, roughness: 0.88 }); pisteM = pisteM || new THREE.MeshStandardMaterial({ color: 0xe4ebfb, roughness: 0.8 });
     const wallM = pisteM.clone(); wallM.side = THREE.DoubleSide; wallM.onBeforeCompile = pisteM.onBeforeCompile;
     prog(30, 'Planting the trees…');
+    S.firepit = await E.loadGLB('models/camp-firepit.glb?v=1').then((gl) => gl.scene).catch(() => null);   // (R8: the Adventures fire pit)
     S.wallM = wallM; S.snowM = snowM; S.pisteM = pisteM; this.course(E);   // (R2/R3: the ground, the pipe, the features and everything round them, for this run's order and route)   // (R2: the pipe, the features and everything round them, for this run's order)
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
@@ -569,7 +590,7 @@ export default {
     g.add(E.instanceField(trees, (t) => `Pine${t}`), E.instanceField(lights, () => 'Floodlight', 400));
     // the floodlights' glow on the snow: 7 warm point lights spread down the course (no shadows; always 7, so no shader rebuild)
     const gz = S.gap ? [S.gap.zA + (S.gap.zB - S.gap.zA) * 0.3, S.gap.zA + (S.gap.zB - S.gap.zA) * 0.72] : [];   // (R4: two of the glows light the rock gap)
-    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, tun = inG && S.gap.kind === 'tunnel', igl = inG && S.gap.kind === 'igloo', pl = new THREE.PointLight(tun ? 0xa8dcff : igl ? 0xffa25a : 0xffe2b0, igl ? 45 : inG ? 70 : 60, igl ? 24 : 55, 1.6); const iz = igl ? S.gap.cz + (i ? 4 : -2) : z; pl.position.set(X(iz) + (igl ? (i ? 4.4 : -3) : inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -iz * S.SL + V(iz) + (tun ? 4.6 : igl ? 3.2 : inG ? 8 : 12), iz); g.add(pl); }   // (R6: warm light inside the igloo, by the fire spot)
+    for (let i = 0; i < 7; i++) { const z = i < gz.length ? gz[i] : 14 + i * (STOP_Z - 14) / 6, inG = i < gz.length, tun = inG && S.gap.kind === 'tunnel', igl = inG && S.gap.kind === 'igloo', pl = new THREE.PointLight(tun ? 0xa8dcff : igl ? 0xffa25a : 0xffe2b0, igl ? 45 : inG ? 70 : 60, igl ? 24 : 55, 1.6); const iz = igl ? S.gap.cz + (i ? 0.5 : -2) : z; pl.position.set(X(iz) + (igl ? (i ? 4.4 : -3) : inG ? (i % 2 ? 3 : -3) : i % 2 ? 9 : -9), -iz * S.SL + V(iz) + (tun ? 4.6 : igl ? (i ? 1.4 : 3.2) : inG ? 8 : 12), iz); g.add(pl); if (igl && i === 1) { IG.light = pl; IG.lightI = pl.intensity; } }   // (R8: the fire's own flickering light)   // (R6: warm light inside the igloo, by the fire spot)
     const rocks = []; for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, z = -50 + rnd() * (COURSE_END + 60), x = X(z) + sd * (17 + rnd() * 60); rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
     g.add(E.instanceField(rocks, (t) => `Rock${t}`));
     // the features: the kickers, the rails, the BIG kicker; arches over the pipe's entrance, the big air and the finish
@@ -764,7 +785,7 @@ export default {
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
     // place: on the wall the board stands on the wall (roll), on a kicker it tips up, in the air the trick turns him
     if (S.gap && S.gap.kind === 'rockgap' && dt > 0 && inGap(S.s + 10) && Math.random() < dt * 1.6) { const z = S.s + 6 + Math.random() * 16, k = gapClose(z); if (k > 0.4) { const sd = Math.random() < 0.5 ? -1 : 1, hw = gapHW(z), x = X(z) + sd * (hw + 1.4); E.spray.emit(new THREE.Vector3(x, gY(x, z) + 1.2 + 11 * k * 0.95, z), 10, -sd * 1.1, -0.4, 0, 1.4, 0.18); } }   // (R4: snow drifting off the rock tops)
-    if (S.gap && S.gap.kind === 'igloo') { if (IG.t < 0 && S.s >= S.gap.exit - 3.4) iglooSmash(E); iglooTick(E, dt); if (IG.glow) IG.glow.scale.setScalar(0.9 + 0.12 * Math.sin(E.T * 13) + 0.06 * Math.sin(E.T * 29)); }   // (R6)
+    if (S.gap && S.gap.kind === 'igloo') { if (IG.t < 0 && S.s >= S.gap.exit - 3.4) iglooSmash(E); iglooTick(E, dt); iglooFire(E, dt); }   // (R6, R8: the campfire)
     const wx = X(S.s) + S.d; a.g.position.set(wx, -S.s * S.SL + y + V(S.s), S.s);   // (R3: on the route: its swing sideways, its rolls)
     const dd = dt > 1e-5 ? (wx - (S.dPrev ?? wx)) / dt : 0; S.dPrev = wx;   // (he faces where he goes: down the route's turns too)
     S.pT = (S.pT ?? 9) + rdt; S.head = (S.phase === 'cross' || S.phase === 'air') && S.pHead != null && S.fall <= 0 ? E.damp(S.head || 0, S.pHead, S.pT < 0.7 ? 6 : 30, rdt) :   /* (S1: a gentle carve into the first crossing) */ E.damp(S.head || 0, S.phase === 'air' ? S.side * 1.25 : S.phase === 'rail' ? (S.railYaw ?? 0) : Math.atan2(dd, Math.max(2, S.v)), 10, rdt);
