@@ -281,7 +281,39 @@ const ONCE_CLIPS = new Set(['drop_in', 'takeoff', 'windup_spin', 'windup_flip', 
 // (2026-11-25, the user: "Make 2 separate models / Ski / Foxino / Make the foxino so it just attached to the skis / Make sure that the skis arent
 // deformed ...") the skier: Foxino (Tripo + Claudee RCC, rigged, his own clips) and ONE straight ski model hung on his SkiL / SkiR mount bones.
 // jump: the ski-jumping skis are longer in front and behind (not at the binding).
-export async function makeSkier({ friend = false, jump = false, url = 'models/foxino-skier.glb?v=2', skiUrl = 'models/ski.glb?v=2' } = {}) {
+// (2026-11-26, F1+F2: Foxino's face, Michal: "his mouth is also most of the times closed only opened when hes clebrating",
+// "eyes with natural blinking and closed eyes to 15%" = the lids rest 15% closed, plus natural blinks; neutral on a fail or crash)
+// The face's shape keys (MouthClosed, MouthSmile, MouthOpen, EyesClosed or EyeClosedL/R; a model without them = no-op), blended smoothly.
+// Mouth: one state, 'closed' (default) | 'smile' | 'open'; auto(clip) opens it only for the celebrating clips.
+// (F5, the shared rule for both Foxinos) a short closed SMILE for small happy moments (smile(secs): a right answer, a clean landing);
+// the open grin only when he celebrates (the cheer); a crash (wipeout clips) is always neutral, even mid-smile.
+// Eyes: rest 0.15; a blink (0.12-0.2 s) every 2-6 s at random (real time), sometimes a double; never on the money shots (take-off, early flight, the cheer's first 2 s).
+const MOUTH = { closed: { MouthClosed: 1 }, smile: { MouthClosed: 1, MouthSmile: 1 }, open: { MouthOpen: 1 } };
+const MOUTH_OPEN_CLIPS = new Set(['cheer']);
+const NO_BLINK = (clip, t) => clip === 'takeoff' || (clip === 'cheer' && t < 2) || (clip === 'fly' && t < 1.2) || /^windup/.test(clip) || (/^grab_/.test(clip) && t < 0.7) || (clip === 'land' && t < 0.5);   // (+ the snowboarder (F4): the pop, the wind-up and the first part of the trick, the landing)   // (the cheer's pose for 2 s; then he blinks again while the results show)
+const EYE_REST = 0.15, rnd = (a, b) => a + Math.random() * (b - a);
+function faceRig(root) {
+  const ms = []; root.traverse((o) => { if (o.isMesh && o.morphTargetDictionary && Object.keys(o.morphTargetDictionary).some((n) => /^(Mouth|Eye)/.test(n))) ms.push(o); });
+  const keys = new Set(); for (const m of ms) for (const n in m.morphTargetDictionary) keys.add(n);
+  const eyeKeys = keys.has('EyesClosed') ? ['EyesClosed'] : ['EyeClosedL', 'EyeClosedR'].filter((n) => keys.has(n));
+  const F = { ok: ms.length > 0, state: 'closed', hold: null, w: {}, keys: [...keys], eyeKeys, clip: '', clipT: 0,
+    eye: EYE_REST, next: rnd(1, 4), bt: -1, bd: 0.16, dbl: false, blinks: [], T: 0,
+    set(state) { if (MOUTH[state]) F.state = state; },
+    smileT: 0, smile(secs = 1.2) { F.smileT = Math.max(F.smileT, secs); },
+    auto(clip) { if (clip !== F.clip) { F.clip = clip; F.clipT = 0; } if (/^wipeout/.test(clip)) F.smileT = 0; if (!F.hold) F.state = MOUTH_OPEN_CLIPS.has(clip) ? 'open' : F.smileT > 0 ? 'smile' : 'closed'; },
+    blinkAt(dt) {   // the eyelids' value now: rest, or a blink's quick close (40%) and slower open (60%)
+      F.T += dt; F.clipT += dt;
+      if (F.bt < 0) { F.next -= dt; if (F.next <= 0) { if (NO_BLINK(F.clip, F.clipT)) F.next = rnd(0.25, 0.6); else { F.bt = 0; F.bd = rnd(0.12, 0.2); F.blinks.push(+F.T.toFixed(2)); if (F.blinks.length > 40) F.blinks.shift(); } } }
+      if (F.bt >= 0) { F.bt += dt; const u = F.bt / F.bd; if (u >= 1) { F.bt = -1; if (!F.dbl && Math.random() < 0.18) { F.dbl = true; F.next = rnd(0.08, 0.16); } else { F.dbl = false; F.next = rnd(2, 6); } return EYE_REST; }
+        const c = u < 0.4 ? u / 0.4 : 1 - (u - 0.4) / 0.6, e = c * c * (3 - 2 * c); return EYE_REST + (1 - EYE_REST) * e; }
+      return EYE_REST; },
+    update(dt, snap = false) { if (!F.ok) return; F.smileT = Math.max(0, F.smileT - dt); const tgt = MOUTH[F.hold || F.state], k = snap ? 1 : 1 - Math.exp(-dt * 20);
+      for (const n of F.keys) { if (!/^Mouth/.test(n)) continue; const want = tgt[n] || 0, cur = F.w[n] == null ? want : F.w[n]; F.w[n] = cur + (want - cur) * k; }
+      if (F.eyeKeys.length) { F.eye = F.blinkAt(dt); for (const n of F.eyeKeys) F.w[n] = F.eye; }
+      for (const m of ms) for (const n in F.w) { const i = m.morphTargetDictionary[n]; if (i != null) m.morphTargetInfluences[i] = F.w[n]; } } };
+  F.update(0, true); return F;
+}
+export async function makeSkier({ friend = false, jump = false, url = 'models/foxino-skier.glb?v=4', skiUrl = 'models/ski.glb?v=2' } = {}) {
   const [gl, sk] = await Promise.all([loadGLB(url), loadGLB(skiUrl)]), inner = gl.scene;
   inner.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(inner), s = 1.3 / Math.max(0.1, box.max.y - box.min.y);
   inner.scale.setScalar(s); inner.position.y = 0.032 * s;   // (he faces +Z in the file, the skis' noses +Z; lifted so the ski bases, 32 mm under his soles, are on the snow)
@@ -295,7 +327,8 @@ export async function makeSkier({ friend = false, jump = false, url = 'models/fo
   const A = { g, isClip: true, cur: '', skiMeshes: skis, skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts),
     want(name, fade = 0.2, speed = 1) { const a = acts[name]; if (!a) return; a.timeScale = speed; if (name === A.cur) return; const old = acts[A.cur]; a.reset(); a.enabled = true; a.setEffectiveWeight(1); a.play(); if (old) a.crossFadeFrom(old, fade, false); A.cur = name; },
     again(name, speed = 1) { A.cur = ''; A.want(name, 0.12, speed); },
-    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); } };
+    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); A.face.auto(A.cur); A.face.update(E.freeze ? 0 : Math.min(0.1, dt)); } };   // (real time: a blink stays a quick blink in the slow motion while answering; paused on a frozen frame)
+  A.face = faceRig(inner); A.smile = (s) => A.face.smile(s); A.mouth = (st) => { A.face.hold = st || null; };   // (A.mouth('open'|'smile'|'closed') holds a state; A.mouth() = back to auto)
   A.want('stance_idle', 0);
   return A;
 }
@@ -317,7 +350,8 @@ export async function makeBoarder({ friend = false, url = 'models/foxino-snowboa
   const A = { g, isClip: true, cur: '', skis: [], poles: [], board: null, skiYaw: [0, 0], skiPitch: 0, skiFree: false, clips: Object.keys(acts), dur: Object.fromEntries(gl.animations.map((c) => [c.name, c.duration])),
     want(name, fade = 0.18, speed = 1) { const a = acts[name]; if (!a) return; a.timeScale = speed; if (name === A.cur) return; const old = acts[A.cur]; a.reset(); a.enabled = true; a.setEffectiveWeight(1); a.play(); if (old) a.crossFadeFrom(old, fade, false); A.cur = name; },
     again(name, speed = 1) { A.cur = ''; A.want(name, 0.12, speed); },
-    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); } };
+    pose() {}, update(dt = 1 / 60) { mixer.update(Math.min(0.1, dt)); A.face.auto(A.cur); A.face.update(E.freeze ? 0 : Math.min(0.1, dt)); } };   // (F3/F4: the same face as the skier)
+  A.face = faceRig(inner); A.smile = (s) => A.face.smile(s); A.mouth = (st) => { A.face.hold = st || null; };
   A.want('stance_idle', 0);
   return A;
 }
@@ -385,6 +419,7 @@ const E = {
   drawDist: 230, sfx, waiters: [], camPos: new THREE.Vector3(0, 5, -10), camLook: new THREE.Vector3(), camFov: 60, camK: 5, shakeA: 0, groundAt: null, focus: 12,
   combo: 0, right: 0, asked: 0, missed: [], running: false, FRIEND_KIT, WINTER_KIT,
 };
+E.faceRig = faceRig;   // (tests)
 E.wait = (s) => new Promise((res) => E.waiters.push({ t: E.T + s, res }));
 E.until = (fn) => new Promise((res) => E.waiters.push({ fn, res }));
 E.shake = (a) => { E.shakeA = Math.max(E.shakeA, a); };

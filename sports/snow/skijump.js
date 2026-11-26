@@ -361,7 +361,7 @@ export default {
         const tKey = Math.max(0.25, (S.LIN - S.s) / Math.max(8, S.v)), h = askSJ(E, { who: 'TAKE-OFF!', num: `JUMP ${j + 1}`, size: 0.54, slow: Math.max(0.05, Math.min(0.5, tKey / SJ_LIMIT)), anchors }, SJ_LIMIT);
         const r = await Promise.race([h.p, E.until(() => S.phase !== 'inrun').then(() => null)]); S.asking = '';
         if (!r) { h.stop(); E.cancelAsk(); }
-        if (r && r.ok) { S.takeoff = true; S.got++; E.juice(r, head(), '+8 m'); rushFx(E, S.a.g.position); } else { S.weak = true; S.miss++; if (r) E.juice(r, head(), r.timeout ? 'too slow' : '−10 m'); } }
+        if (r && r.ok) { S.takeoff = true; S.got++; E.juice(r, head(), '+8 m'); rushFx(E, S.a.g.position); S.a.smile && S.a.smile(1.0); } else { S.weak = true; S.miss++; if (r) E.juice(r, head(), r.timeout ? 'too slow' : '−10 m'); } }
       if (S.got) E.banner(`${S.got} RIGHT!`, S.takeoff ? 'STRONG TAKE-OFF!' : S.weak ? 'WEAK TAKE-OFF' : 'TAKE-OFF!', 1100);
       E.cine(true); await E.until(() => S.phase === 'flight'); jumpMeter(true);
       await E.until(() => S.phase === 'outrun'); E.cine(false);
@@ -422,7 +422,7 @@ export default {
       a.g.position.set(0, f.y, f.z); pitch = Math.atan(-f.slope) * 0.4 + (a.isClip ? 0.1 : 0.42); P = P0.fly(t);   /* (the new skier's fly clip leans forward itself) */
       a.skiFree = true; a.skiYaw = [0.3, -0.3]; a.skiPitch = -0.55;
       jumpMeterLive(f.z);
-      if (f.z >= f.D) { S.phase = 'land'; S.landT = 0; E.shake(0.6); E.spray.emit(a.g.position, 40, 0, 3, 5, 3); S.v = f.vz; S.z = f.z; }
+      if (f.z >= f.D) { S.phase = 'land'; S.landT = 0; E.shake(0.6); if (!S.weak && S.a.smile) S.a.smile(1.6);   /* (F5: a clean, strong landing = a smile) */ E.spray.emit(a.g.position, 40, 0, 3, 5, 3); S.v = f.vz; S.z = f.z; }
     } else if (S.phase === 'land' || S.phase === 'outrun' || S.phase === 'stop') {
       S.landT = (S.landT || 0) + dt;
       if (S.phase === 'land' && S.landT > 0.35) S.phase = 'outrun';
