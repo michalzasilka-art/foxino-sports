@@ -76,6 +76,7 @@ html[data-fx="snow"] #jumpMeter.done b { animation: cmMeter .6s cubic-bezier(.2,
 /* ---- two call-outs at once never cover each other (the engine lifts the banner while a word floats over Foxino) ---- */
 html[data-fx="snow"] #banner.cm-lift { top: 25% !important; }
 @media (max-height: 520px) {
+  html[data-fx] .ptext { font-size: clamp(20px, 7.5vh, 30px); }   /* (a short screen: the words smaller, so they fit beside the answer bubbles) */
   html[data-fx="snow"] #banner.cm-lift { top: 22% !important; font-size: clamp(30px, 9vh, 52px); }
   html[data-fx="snow"] #trickCard { top: calc(env(safe-area-inset-top, 0px) + 46px) !important; }   /* (a short screen: higher and smaller, clear of Foxino) */
   html[data-fx="snow"] #trickCard b { font-size: min(clamp(20px, 7.5vh, 32px), calc(90vw / (var(--n, 10) * .62 + 1.7))) !important; }

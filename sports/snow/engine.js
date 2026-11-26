@@ -505,13 +505,27 @@ function renderCombo() {
 // a floating word over a point in the world (PERFECT! / OOPS!) and a coloured edge flash
 const _pv = new THREE.Vector3();
 E.pop = (text, at, cls = 'perfect', small = '') => {
-  _pv.copy(at).project(camera); const x = (_pv.x * 0.5 + 0.5) * innerWidth, y = (-_pv.y * 0.5 + 0.5) * innerHeight;
-  const d = document.createElement('div'); d.className = `ptext ${cls}`; d.style.left = `${clamp(x, 80, innerWidth - 80)}px`; d.style.top = `${clamp(y, 140, innerHeight - 80)}px`;
-  d.innerHTML = `${esc(text)}${small ? `<small>${esc(small)}</small>` : ''}`; $('fxText').appendChild(d); setTimeout(() => d.remove(), 1300); E._popUntil = performance.now() + 1000;
+  _pv.copy(at).project(camera); let x = (_pv.x * 0.5 + 0.5) * innerWidth, y = (-_pv.y * 0.5 + 0.5) * innerHeight;
+  const d = document.createElement('div'); d.className = `ptext ${cls}`;
+  d.innerHTML = `${esc(text)}${small ? `<small>${esc(small)}</small>` : ''}`; $('fxText').appendChild(d); const ew = d.offsetWidth * 1.3, eh = d.offsetHeight * 1.3;
+  // (2026-11-26 night: a word over Foxino goes to a clear spot: above any answer bubbles still showing, else beside them, never on them or the card)
+  const rs = []; bubbles.forEach((b) => { if (!b.mesh.visible || b.s < 0.3) return; const r = ((ASK && ASK.opts.size) || 0.75) * b.s; _pv.copy(b.at).project(camera); const cy = (-_pv.y * 0.5 + 0.5) * innerHeight, cx = (_pv.x * 0.5 + 0.5) * innerWidth;
+    _pv.copy(b.at).setY(b.at.y + r).project(camera); const rp = Math.abs(cy - (-_pv.y * 0.5 + 0.5) * innerHeight); rs.push([cx - rp, cy - rp, cx + rp, cy + rp]); });
+  const cardEl = $('card'), card = cardEl && !cardEl.classList.contains('hidden') ? cardEl.getBoundingClientRect().bottom : 0;
+  if (rs.length) { const top = Math.min(...rs.map((r) => r[1])), bot = Math.max(...rs.map((r) => r[3])), lo = Math.min(...rs.map((r) => r[0])), hi = Math.max(...rs.map((r) => r[2]));
+    if (y + eh / 2 > top - 8 && y - eh / 2 < bot + 8) {
+      if (top - 10 - eh >= card + 8) { x = (lo + hi) / 2; y = top - 10 - eh / 2; }
+      else if (innerWidth - hi >= ew + 20) { x = hi + 10 + ew / 2; y = (top + bot) / 2; }
+      else if (lo >= ew + 20) { x = lo - 10 - ew / 2; y = (top + bot) / 2; }
+      else { x = (lo + hi) / 2; y = Math.max(card + eh / 2 + 6, top - 10 - eh / 2); } } }   /* (never below: that is where Foxino is) */
+  y = Math.max(y, card + eh / 2 + 6);
+  d.style.left = `${clamp(x, ew / 2 + 6, innerWidth - ew / 2 - 6)}px`; d.style.top = `${clamp(y, 60, innerHeight - 60)}px`;
+  setTimeout(() => d.remove(), 1300); E._popUntil = performance.now() + 1000;
   const bn = $('banner'); if (bn && !bn.hidden && bn.innerHTML) bn.classList.add('cm-lift');   /* (a banner already up moves out of its way) */
 };
 E.flash = (col) => { const f = $('flash'); f.style.transition = 'none'; f.style.boxShadow = `inset 0 0 120px 30px ${col}`; f.style.opacity = '1'; void f.offsetWidth; f.style.transition = 'opacity .6s'; f.style.opacity = '0'; };
 E.juice = (r, at, extra = '') => {
+  bubbles.forEach((b) => { if (!b.target) b.s = Math.min(b.s, 0.25); });   /* (2026-11-26 night: the answered bubbles snap away as the word pops, so it never sits on them) */
   if (r.ok) { const w = { perfect: 'PERFECT!', great: 'GREAT!', good: 'GOOD!' }[r.grade] || 'GOOD!'; E.pop(w, at, r.grade === 'perfect' ? 'perfect' : 'good', extra); E.flash('rgba(120,255,170,.55)'); E.shake(0.35); sfx.star && sfx.star(Math.min(3, E.combo)); }
   else { E.pop('OOPS!', at, 'bad', extra); E.flash('rgba(255,80,100,.6)'); E.shake(0.6); sfx.thud && sfx.thud(); }
 };

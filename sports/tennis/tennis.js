@@ -497,6 +497,7 @@ function popBubbles(k, ok) {
   const g = labelGen; setTimeout(() => { if (g === labelGen) labelEls.forEach((l) => { l.style.opacity = '0'; }); }, 700);
   if (k >= 0) sfx.pop && sfx.pop();
 }
+function clearBubbles() { labelGen++; bubbles.forEach((b) => { if (b.mesh.visible && b.state !== 'off' && b.state !== 'fade') { b.state = 'fade'; b.t = 0; } }); labelEls.forEach((l) => { l.style.opacity = '0'; }); }
 function revealRight(k) { if (labelEls[k]) { labelEls[k].classList.remove('wrong'); labelEls[k].classList.add('right'); }
   const b = bubbles[k]; if (b && b.mesh.visible) { b.u.uGlow.value = 1; b.u.uAlpha.value = 1; b.state = 'right'; b.t = 0; b.word.userData.draw(labelEls[k].firstChild.textContent, '#b9ffcf'); } }
 function updateBubbles(dt, t) {
@@ -557,7 +558,7 @@ const COURT = {
     else if (k >= 0) doHit(w, k, ok);
     if (q && this.who === w) { const g = labelGen; if (!ok) setTimeout(() => { if (g === labelGen) revealRight(q.correct); }, 350); cardResult(ok, k, q, right); timerStop(); }
   },
-  point(w, label, sub) { banner(label, sub); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); P[w].mood = 'cheer'; P[w].moodT = 0; P[other(w)].mood = 'sad'; P[other(w)].moodT = 0; COURT.pointN = (COURT.pointN || 0) + 1; },
+  point(w, label, sub) { clearBubbles(); banner(label, sub); CROWD.cheer = 1; sfx.cheer && sfx.cheer(); P[w].mood = 'cheer'; P[w].moodT = 0; P[other(w)].mood = 'sad'; P[other(w)].moodT = 0; COURT.pointN = (COURT.pointN || 0) + 1; },
   idle() { $('hud').classList.add('hidden'); bubbles.forEach((b) => { b.mesh.visible = false; }); labelEls.forEach((l) => { l.style.opacity = '0'; }); B.mode = 'hold'; B.holder = 'a'; },
 };
 COURT.pointN = 0;
@@ -693,8 +694,17 @@ const vib = (pat) => { try { navigator.vibrate && navigator.vibrate(pat); } catc
 let combo = 0;
 function popText(pos, text, cls) {
   _v4.copy(pos).project(camera); const el = document.createElement('div'); el.className = 'ptext ' + cls; el.textContent = text;
-  el.style.left = `${(_v4.x * 0.5 + 0.5) * innerWidth}px`; el.style.top = `${(-_v4.y * 0.5 + 0.5) * innerHeight}px`;
-  $('fxText').appendChild(el); setTimeout(() => el.remove(), 1100);
+  let x = (_v4.x * 0.5 + 0.5) * innerWidth, y = (-_v4.y * 0.5 + 0.5) * innerHeight;
+  // (2026-11-26 night: the result word sits in a clear spot just above the answer bubbles, never on top of them)
+  $('fxText').appendChild(el); const ew = el.offsetWidth * 1.3, eh = el.offsetHeight * 1.3;   /* (room for the pop-in overshoot and the tilt) */
+  const up = labelEls.filter((l) => l.style.opacity !== '0' && l.offsetParent !== null).map((l) => l.getBoundingClientRect()).filter((r) => r.width > 0);
+  if (up.length) { const top = Math.min(...up.map((r) => r.top)), bot = Math.max(...up.map((r) => r.bottom)), lo = Math.min(...up.map((r) => r.left)), hi = Math.max(...up.map((r) => r.right)), card = $('card') ? $('card').getBoundingClientRect().bottom : 0;
+    if (top - 12 - eh >= card + 8) { x = (lo + hi) / 2; y = top - 12 - eh / 2; }   // (room above the bubbles)
+    else if (innerWidth - hi >= ew + 24) { x = hi + 12 + ew / 2; y = (top + bot) / 2; }   // (else beside them, on the right)
+    else if (lo >= ew + 24) { x = lo - 12 - ew / 2; y = (top + bot) / 2; }   // (or on the left)
+    else { x = (lo + hi) / 2; y = bot + 12 + eh / 2; } }   // (or just below them)
+  el.style.left = `${clamp(x, ew / 2 + 6, innerWidth - ew / 2 - 6)}px`; el.style.top = `${y}px`;
+  setTimeout(() => el.remove(), 1100);
 }
 function flashScreen(cls) { const f = $('flash2'); f.className = ''; void f.offsetWidth; f.className = cls; }
 function renderCombo() { const c = $('combo'); c.hidden = combo < 2; if (combo >= 2) { c.innerHTML = `🔥 <b>${combo}</b> in a row`; c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); } }
