@@ -111,3 +111,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (max-width: 520px) { .toplogo { height: 44px; } .play span { font-size: 34px; padding: 14px 36px; } .hint { display: none; } }
 /* (2026-11-24) on phones the names fit in full ("Streetball", "Ski Jump"): the general .nm rule above came after the phone one and won */
 @media (max-width: 600px) { .act .nm { font-size: clamp(11px, 3.4vw, 14px); letter-spacing: 0; padding: 22px 2px 8px; white-space: nowrap; overflow: visible; text-overflow: clip; } }
+
+/* (2026-11-27) five sports on a phone: three on top, two centred below (a 6-column grid, each card two columns wide) */
+@media (max-width: 600px) { .acts.five { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; width: min(420px, 100%); } .acts.five .act { grid-column: span 2; } .acts.five .act:nth-child(4) { grid-column: 2 / span 2; } .acts.five .act:nth-child(5) { grid-column: 4 / span 2; } }

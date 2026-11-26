@@ -35,7 +35,7 @@ const SPEED = clamp(+Q.get('speed') || 1, 0.25, 8), BOT = Q.get('bot');   // (te
 const TINTS = [0xff6fb5, 0xffcd1c, 0x48d8ff], CSS_TINTS = ['#ff8fc4', '#ffd84a', '#6fe2ff'];
 export const WINTER_KIT = { shirt: '#ffcd2e', trim: '#7b3fd1', shorts: '#4a2a8c', socks: '#4a2a8c', boots: '#36d6e0' };
 export const FRIEND_KIT = { shirt: '#ff7d22', trim: '#ffffff', shorts: '#2b3a7a', socks: '#2b3a7a', boots: '#ffffff' };
-const NAMES = { slalom: 'SLALOM', halfpipe: 'HALFPIPE', skijump: 'SKI JUMP', sled: 'SLED RUN', biathlon: 'SNOWBALL BIATHLON' };
+const NAMES = { slalom: 'SLALOM', halfpipe: 'HALFPIPE', skijump: 'SKI JUMP', sled: 'SLED RUN', biathlon: 'SNOWBALL BIATHLON', paddling: 'PADDLING' };
 
 // ---------- renderer, scene, camera ----------
 const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, powerPreference: 'high-performance' });
@@ -691,7 +691,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 26, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 26, skijump: 12, sled: 3, biathlon: 3, paddling: 9 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};

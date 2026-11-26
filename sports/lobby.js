@@ -26,6 +26,8 @@ const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e
 // art stay (snow/slalom.js, sled.js, biathlon.js): take an id out of HIDDEN_ACTS to bring it back
 // (2026-11-25, the user: "Remove game street ball from foxino sports") Streetball out the same way (streetball/ stays; ?dev still opens it there)
 const HIDDEN_ACTS = new Set(['slalom', 'sled', 'biathlon', 'streetball']);
+// (2026-11-27, Paddling P1: Michal "New + Paddling") the new dragon-boat race is behind ?paddling=1 (or ?dev=1) until it has its questions (P2/P3)
+if (!/[?&](paddling|dev)=1/.test(location.search)) HIDDEN_ACTS.add('paddling');
 const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
@@ -34,6 +36,7 @@ const ACTS = [
   { id: 'slalom', name: 'Slalom', tag: 'SKI', pic: 'art/card-slalom.webp?v=2', snow: true },
   { id: 'halfpipe', name: 'Halfpipe', tag: 'SNOWBOARD', pic: 'art/card-halfpipe.webp?v=2', snow: true },
   { id: 'skijump', name: 'Ski Jump', tag: 'SKI JUMP', pic: 'art/card-skijump.webp?v=2', snow: true },
+  { id: 'paddling', name: 'Paddling', tag: 'PADDLE', pic: 'art/card-paddling.webp?v=1', snow: true },   // (2026-11-27: the 5th sport, a summer lake; runs in the snow engine: snow/paddling.js)
   { id: 'sled', name: 'Sled Run', tag: 'SLED', pic: 'art/card-sled.webp?v=2', snow: true },
   { id: 'biathlon', name: 'Biathlon', tag: 'SNOWBALLS', pic: 'art/card-biathlon.webp?v=2', snow: true },
 ].filter((a) => !HIDDEN_ACTS.has(a.id));
@@ -299,7 +302,7 @@ let SEL = (store.get('sports-sel', null) || ['halfpipe', 'skijump']).filter((id)
 if (!SEL.length) SEL = ACTS.map((a) => a.id);
 function renderPicker(view) {
   $('acts').classList.toggle('view', !!view);
-  $('acts').classList.toggle('two', ACTS.length === 4);
+  $('acts').classList.toggle('two', ACTS.length === 4); $('acts').classList.toggle('five', ACTS.length === 5);   // (five: 3 + 2 centred on a phone)
   $('acts').innerHTML = ACTS.map((a) => { const i = SEL.indexOf(a.id); return `<button class="act${i >= 0 ? ' on' : ''}" type="button" data-id="${a.id}"><span class="pic" style="background-image:url('${a.pic}')"></span><span class="tag">${a.tag}</span>${a.snow ? '<span class="new">NEW</span>' : ''}${i >= 0 && SEL.length > 1 ? `<span class="num">${ordinal(i)}</span>` : ''}<span class="tick">✓</span><span class="nm">${a.name}</span></button>`; }).join('');
   $('pickPlay').disabled = !SEL.length;
   $('pickPlay').hidden = !!view; $('pickBack').hidden = !!view;
