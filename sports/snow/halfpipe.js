@@ -18,10 +18,9 @@ const FEAT = [   // the open-slope features in order (s/a: metres down the hill)
   { k: 'kick', id: 'k3', name: 'GAP JUMP', s: 268, len: 5, lip: 1.5, w: 4.4, back: 1.6, T: 1.35, H: 1.9, lipC: 0x9a5cf0, spon: 'red', gap: true },
   { k: 'kick', id: 'k4', name: 'STEP-UP', s: 298, len: 4, lip: 1.15, w: 4, back: 1.4, T: 1.15, H: 1.6, lipC: 0x2fbf6a, spon: 'face' },
   { k: 'big', id: 'big', name: 'BIG AIR' }];
-const KICK = FEAT[0];
 const BIG = { k: 'big', id: 'big', s: 344, len: 12, lip: 4.6, w: 9, back: 5, T: 3.6, H: 8.5, spon: 'red' };    // the BIG air kicker (out on the open slope below the pipe)
 const RAIL = FEAT[1], KICKS = FEAT.filter((f) => f.k === 'kick'), RAILS = FEAT.filter((f) => f.k === 'rail');
-const PIPE_A = 136, PIPE_B = 216, DECK = 4.5, STOP_Z = 446, COURSE_END = 458, GAP = 9.6;   // (the halfpipe from / to; its decks; where the run stops; the friend's distance behind: the kicker's air, so they take off as you land)
+let PIPE_A = 136, PIPE_B = 216, STOP_Z = 446, COURSE_END = 458; const DECK = 4.5, GAP = 9.6;   // (the halfpipe from / to; its decks; where the run stops; the friend's distance behind: the kicker's air, so they take off as you land)
 // (2026-11-25, the user: "time pressure: when the time runs out or you answer wrong, you fall, then get up, and you lose the streak · better streak =
 // more points and a bit faster · faster answering = more points") every question has a clock; a miss = a wipeout; the streak multiplies the points
 // and the speed; the quicker the answer, the bigger the speed bonus
@@ -43,6 +42,35 @@ const W = () => S.FLAT + S.R;
 const SLA = () => Math.atan(S.SL), LEAN = 0.09, FRONT = /[?&]front=-1/.test(location.search) ? -1 : 1;   // (FRONT: which way his nose (and so his front hand and his look) points)   // (the slope; Foxino leans a little forward over the board, down the hill)
 function pipeY(ad) { if (ad <= S.FLAT) return 0; if (ad <= W()) { const x = ad - S.FLAT; return S.R - Math.sqrt(Math.max(0, S.R * S.R - x * x)); } return S.R + S.WALLV; }
 function wallAng(ad) { if (ad <= S.FLAT) return 0; return Math.asin(Math.min(1, (ad - S.FLAT) / S.R)); }
+// (2026-11-26, R2, Michal: "make the map randomly generated every time that one time you can have uramp first and one time the big jump
+// first and really random") every run lays the 9 sections out in a new order: the 4 kickers, the rail, the box, the rainbow rail, the
+// halfpipe (3 airs) and the BIG AIR (2 questions) = always 12 questions. Never 3 kickers or 3 rails in a row; never the same order twice
+// in a row (solo: remembered on this phone; a party: both phones build the SAME course from the party code + round; ?seed=123 repeats one).
+// Each section gets the room its airs need (the run-in for the question, the air in slow motion, the landing), so the joins are always rideable.
+const SECT = FEAT.slice(), RLEN = Object.fromEntries(RAILS.map((r) => [r.id, r.b - r.a]));
+const rng32 = (a) => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const hashStr = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+const okOrder = (o) => { for (let i = 2; i < o.length; i++) if (o[i].k === o[i - 1].k && o[i].k === o[i - 2].k) return false; return true; };
+const orderKey = (o) => o.map((f) => f.id).join(',');
+function shuffleOrder(seed) { const r = rng32(seed); for (let n = 0; n < 400; n++) { const o = SECT.slice(); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } if (okOrder(o)) return o; } return SECT.slice(); }
+function pickOrder(runN) {
+  const q = new URLSearchParams(location.search), fixed = q.get('seed'); let last = ''; try { last = localStorage.getItem('hp-order') || ''; } catch (e) {}
+  if (fixed != null) return shuffleOrder(hashStr('seed:' + fixed));
+  if (/^(host|join)$/.test(q.get('mp') || '')) {   // (a party: the same seed on both phones; the round before is worked out the same way, so it never repeats)
+    const party = q.get('mps') || [q.get('name') || '', q.get('fname') || ''].map((x) => x.slice(0, 12)).sort().join('|'), sd = (r) => hashStr(`${party}|${r}|${q.get('mpi') || 0}|${runN}`), r0 = +(q.get('mpr') || 0);
+    const prev = orderKey(shuffleOrder(sd(r0 - 1))); let o = shuffleOrder(sd(r0)); for (let k = 1; orderKey(o) === prev && k < 9; k++) o = shuffleOrder(sd(r0) + k); return o; }
+  let o; for (let k = 0; k < 12; k++) { o = shuffleOrder((Math.random() * 4294967296) >>> 0); if (orderKey(o) !== last) break; } return o;
+}
+function layout(o) {
+  let z = 6;
+  o.forEach((F, i) => { const last = i === o.length - 1;
+    if (F.k === 'kick') { F.s = z + 12; z = F.s + F.len + (F.table || 0) + F.back + F.T * 11 + 4; }
+    else if (F.k === 'rail') { F.a = z + 6; F.b = F.a + RLEN[F.id]; z = F.b + 12; }
+    else if (F.k === 'pipe') { PIPE_A = z + 14; PIPE_B = PIPE_A + 80; z = PIPE_B + 12; }
+    else { BIG.s = z + 32; z = BIG.s + BIG.len + 96 + (last ? 20 : 22); }   /* (the big air: up to ~95 m of flight at full speed with slow-motion tricks) */ });
+  STOP_Z = z; COURSE_END = STOP_Z + 12; FEAT.length = 0; FEAT.push(...o); S.order = orderKey(o); S.L = COURSE_END; S.lastF = o[o.length - 1];
+  try { if (!new URLSearchParams(location.search).has('seed')) localStorage.setItem('hp-order', S.order); } catch (e) {}
+}
 
 export const _S = S; export const _fx = { trickCard: (...a) => trickCard(...a), scoreFly: (...a) => scoreFly(...a) };   /* (tests: the pop-up gallery) */
 // (2026-11-25) the Snowboard Foxino with his own clips: ?nb=1 while it is tested (the old rider stays the default until then)
@@ -207,7 +235,7 @@ function gridMesh(THREE, xs, zs, f, mat) {
   const m = new THREE.Mesh(g, mat); m.receiveShadow = true; return m;
 }
 function makeGround(THREE, snowM, pisteM) {
-  const zs = []; for (let z = -90; z <= 560; z += 10) zs.push(z);
+  const zs = []; for (let z = -90; z <= 720; z += 10) zs.push(z);   /* (R2: a course is up to ~520 m long now) */
   const side = [14, 17, 21, 26, 32, 40, 50, 62, 78, 98, 124], xs = [...side.map((x) => -x).reverse(), ...side];
   const grp = new THREE.Group(); grp.add(gridMesh(THREE, xs, zs, gY, snowM));
   const strip = gridMesh(THREE, [-14, -7, 0, 7, 14], zs, (x, z) => gY(x, z) + 0.02, pisteM); grp.add(strip);   // (the groomed course: piste lines)
@@ -259,28 +287,11 @@ export default {
     let snowM = null, pisteM = null; for (const [o, n] of names) { if (n === 'Snow' && !snowM) snowM = o.material; if (n === 'Piste' && !pisteM) pisteM = o.material; }
     snowM = snowM || new THREE.MeshStandardMaterial({ color: 0xeef2fd, roughness: 0.88 }); pisteM = pisteM || new THREE.MeshStandardMaterial({ color: 0xe4ebfb, roughness: 0.8 });
     const wallM = pisteM.clone(); wallM.side = THREE.DoubleSide; wallM.onBeforeCompile = pisteM.onBeforeCompile;
-    E.scene.add(makeGround(THREE, snowM, pisteM), makePipe(THREE, wallM)); prog(30, 'Planting the trees…');
-    // trees, rocks and floodlights round the course (the same props as before, placed for the new slope)
-    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const trees = [], rocks = [], lights = [];
-    // (2026-11-25, the user: "surrounded by deep forest") a thick wall of pines on both sides all the way down, thinning out into the hills
-    // (the detailed pines: one row along the course; behind them the deep forest of cheap low-poly firs, see makeForest)
-    for (let z = -80; z < COURSE_END + 70; z += 12) for (const sd of [-1, 1]) { const near = (z > PIPE_A - 3 && z < PIPE_B + 3 ? W() + DECK + 4 : 16.5), x = sd * (near + rnd() * 5), zz = z + rnd() * 4; trees.push([1 + Math.floor(rnd() * 3), x, gY(x, zz) - 0.15, zz, rnd() * 6.28, 0.85 + rnd() * 0.6]); }
-    E.scene.add(makeForest(THREE, rnd));
-    for (let i = 0; i < 40; i++) { const sd = rnd() < 0.5 ? -1 : 1, x = sd * (17 + rnd() * 60), z = -50 + rnd() * (COURSE_END + 60); rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
-    for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { const x = sd * (z > PIPE_A - 3 && z < PIPE_B + 3 ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
-    E.scene.add(E.instanceField(trees, (t) => `Pine${t}`)); E.scene.add(E.instanceField(rocks, (t) => `Rock${t}`)); E.scene.add(E.instanceField(lights, () => 'Floodlight', 400));
-    // the floodlights' glow on the snow: a few warm point lights down the course (no shadows)
-    for (const [i, z] of [14, 82, 160, 236, 300, 370, 430].entries()) { const pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(i % 2 ? 9 : -9, -z * S.SL + 12, z); E.scene.add(pl); }
-    // the features: the kicker, the rail, the BIG kicker; arches over the pipe's entrance, the big air and the finish
-    const snow = new THREE.MeshStandardMaterial({ color: 0xf2f5ff, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }), lip = new THREE.MeshStandardMaterial({ color: 0x36b5e0, roughness: 0.5, emissive: 0x0d3a52 }), sideM = new THREE.MeshStandardMaterial({ color: 0x9fb4f2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide });
-    const bigLip = new THREE.MeshStandardMaterial({ color: 0xff4d8d, roughness: 0.5, emissive: 0x5a0d2a });
-    for (const K of KICKS) E.scene.add(makeKicker(THREE, K, snow, new THREE.MeshStandardMaterial({ color: K.lipC, roughness: 0.5, emissive: new THREE.Color(K.lipC).multiplyScalar(0.25) }), sideM));
-    E.scene.add(makeKicker(THREE, BIG, snow, bigLip, sideM)); for (const R of RAILS) E.scene.add(makeRail(THREE, R));
-    E.scene.add(makeBlueLines(THREE));
-    E.scene.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), makeArch(E, 'RED FOX BIG AIR', '#ff5a1f', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#0f3d44', STOP_Z + 8, 9, 6.5));
-    // the sponsor boards down both edges of the open slopes (the parody brands, taking turns)
-    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) E.scene.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
+    E.scene.add(makeGround(THREE, snowM, pisteM)); prog(30, 'Planting the trees…');
+    let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); const rocks = [];
+    for (let i = 0; i < 46; i++) { const sd = rnd() < 0.5 ? -1 : 1, x = sd * (17 + rnd() * 60), z = -50 + rnd() * 640; rocks.push([1 + Math.floor(rnd() * 2), x, gY(x, z) - 0.3, z, rnd() * 6.28, 0.9 + rnd() * 0.7]); }
+    E.scene.add(E.instanceField(rocks, (t) => `Rock${t}`));
+    S.wallM = wallM; this.course(E);   // (R2: the pipe, the features and everything round them, for this run's order)
     await E.addMountains(-240, 0x8890c8);
     prog(60, 'Waxing the board…');
     S.a = NB ? await E.makeBoarder({ url: RIDER_URL }) : await E.makeActor({ gear: 'board' });
@@ -289,12 +300,41 @@ export default {
     E.drawDist = E.MP.on ? 118 : 155;   /* (2026-11-25: the longer course in deep forest: the far rows are the cheap firs; under 100k a frame) */
     this.reset(E);
   },
+  // (2026-11-26, R2) the course for one run: lays the sections out in a new order, then builds everything that depends on where they are
+  // (the pipe, the kickers and rails, the blue lines, the arches, the boards, the trees and lights next to the pipe, the Christmas kit) in one
+  // group, so PLAY AGAIN gets a new course without reloading. The ground, the rocks (all outside the pipe's decks) and the mountains stay.
+  course(E) {
+    const { THREE } = E; if (S.cg) E.scene.remove(S.cg);
+    layout(pickOrder(S.runN || 0)); S.L = COURSE_END;
+    const g = new THREE.Group(); S.cg = g; g.add(makePipe(THREE, S.wallM));
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const trees = [], lights = [], inPipe = (z) => z > PIPE_A - 3 && z < PIPE_B + 3;
+    // (2026-11-25, the user: "surrounded by deep forest") a thick wall of pines on both sides all the way down, thinning out into the hills
+    // (the detailed pines: one row along the course; behind them the deep forest of cheap low-poly firs, see makeForest)
+    for (let z = -80; z < COURSE_END + 70; z += 12) for (const sd of [-1, 1]) { const near = (inPipe(z) ? W() + DECK + 4 : 16.5), x = sd * (near + rnd() * 5), zz = z + rnd() * 4; trees.push([1 + Math.floor(rnd() * 3), x, gY(x, zz) - 0.15, zz, rnd() * 6.28, 0.85 + rnd() * 0.6]); }
+    g.add(makeForest(THREE, rnd));
+    for (let z = 6; z < COURSE_END; z += 40) for (const sd of [-1, 1]) { const x = sd * (inPipe(z) ? W() + DECK + 2.5 : 12.5); lights.push([0, x, gY(x, z), z, sd < 0 ? 0 : Math.PI, 1]); }
+    g.add(E.instanceField(trees, (t) => `Pine${t}`), E.instanceField(lights, () => 'Floodlight', 400));
+    // the floodlights' glow on the snow: 7 warm point lights spread down the course (no shadows; always 7, so no shader rebuild)
+    for (let i = 0; i < 7; i++) { const z = 14 + i * (STOP_Z - 14) / 6, pl = new THREE.PointLight(0xffe2b0, 60, 55, 1.6); pl.position.set(i % 2 ? 9 : -9, -z * S.SL + 12, z); g.add(pl); }
+    // the features: the kickers, the rails, the BIG kicker; arches over the pipe's entrance, the big air and the finish
+    const M = S.fm || (S.fm = { snow: new THREE.MeshStandardMaterial({ color: 0xf2f5ff, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }), sideM: new THREE.MeshStandardMaterial({ color: 0x9fb4f2, roughness: 0.8, flatShading: true, side: THREE.DoubleSide }), bigLip: new THREE.MeshStandardMaterial({ color: 0xff4d8d, roughness: 0.5, emissive: 0x5a0d2a }) });
+    for (const K of KICKS) g.add(makeKicker(THREE, K, M.snow, new THREE.MeshStandardMaterial({ color: K.lipC, roughness: 0.5, emissive: new THREE.Color(K.lipC).multiplyScalar(0.25) }), M.sideM));
+    g.add(makeKicker(THREE, BIG, M.snow, M.bigLip, M.sideM)); for (const R of RAILS) g.add(makeRail(THREE, R));
+    g.add(makeBlueLines(THREE));
+    g.add(makeArch(E, 'DROP IN', '#36b5e0', PIPE_A - 3, W() + DECK + 0.3, 9.5), makeArch(E, 'RED FOX BIG AIR', '#ff5a1f', BIG.s - 10, 8, 7.5), makeArch(E, 'FINISH', '#0f3d44', STOP_Z + 8, 9, 6.5));
+    // the sponsor boards down both edges of the open slopes (the parody brands, taking turns)
+    let bi = 0; for (const [a, b] of [[8, PIPE_A - 10], [PIPE_B + 10, STOP_Z - 6]]) for (let z = a; z < b; z += 26) for (const sd of [-1, 1]) g.add(makeBoard(THREE, (bi++ + (sd > 0 ? 1 : 0)) % 2 ? 'red' : 'face', sd * 12, z));
+    E.scene.add(g);
+    if (S.X) this.xmas(E, S.X);   // (a new run: the Christmas kit again, round the new course)
+  },
   // Christmas: lights along the pipe's lips and down both edges of the open slopes, trees, gifts and snowmen beside the course
   xmas(E, X) {
-    if (!X.ok) return; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z), G = (x, z, dy = 0) => new THREE.Vector3(x, gY(x, z) + dy, z);
-    for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 32) { const posts = []; for (let z = z0; z <= Math.min(PIPE_B, z0 + 32); z += 6.4) posts.push(P(sd * (W0 + 0.45), z, 1.15)); X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
-    for (const [a, b] of [[-6, PIPE_A - 6], [PIPE_B + 4, STOP_Z + 6]]) for (const sd of [1, -1]) for (let z0 = a; z0 < b; z0 += 30) { const posts = []; for (let z = z0; z <= Math.min(b, z0 + 30); z += 6) posts.push(G(sd * 11, z, 1.0)); X.lights(posts, { sag: 0.25, per: 6, size: 0.13, glow: 1.1 }); }
-    for (const [z, i] of [[8, 0], [34, 1], [62, 2], [92, 3], [122, 4], [228, 5], [262, 6], [290, 7], [326, 8], [400, 9]]) { const sd = i % 2 ? 1 : -1;
+    S.X = X; if (!X.ok) return; const n0 = E.scene.children.length; const { THREE } = E, W0 = W(), deckY = (z) => -z * S.SL + S.R + S.WALLV, P = (x, z, dy = 0) => new THREE.Vector3(x, deckY(z) + dy, z), G = (x, z, dy = 0) => new THREE.Vector3(x, gY(x, z) + dy, z);
+    for (const sd of [1, -1]) for (let z0 = PIPE_A; z0 < PIPE_B; z0 += 32) { const posts = []; for (let z = z0; z <= Math.min(PIPE_B, z0 + 32); z += 6.4) posts.push(P(sd * (W0 + 0.45), z, 1.15)); if (posts.length > 1) X.lights(posts, { sag: 0.25, per: 6, size: 0.14, glow: 1.1 }); }
+    for (const [a, b] of [[-6, PIPE_A - 6], [PIPE_B + 4, STOP_Z + 6]]) for (const sd of [1, -1]) for (let z0 = a; z0 < b - 3; z0 += 30)   /* (R2: never a string with one post: the stretches have any length now) */ { const posts = []; for (let z = z0; z <= Math.min(b, z0 + 30); z += 6) posts.push(G(sd * 11, z, 1.0)); if (posts.length > 1) X.lights(posts, { sag: 0.25, per: 6, size: 0.13, glow: 1.1 }); }
+    const spots = []; for (let z = 8, i = 0; z < STOP_Z - 10; z += 31) if (z < PIPE_A - 14 || z > PIPE_B + 6) spots.push([z, i++]);   /* (R2: beside the open slopes of this run's course, never on the pipe's decks) */
+    for (const [z, i] of spots) { const sd = i % 2 ? 1 : -1;
       X.put(i % 2 ? 'XmasTree_Small' : 'XmasTree_Big', G(sd * 15, z), i, i % 2 ? 1.9 : 1.3); X.put('XmasTree_Small', G(-sd * 14, z + 10), -i, 1.8);
       X.put(['Gift_A', 'Gift_B', 'Gift_C'][i % 3], G(sd * 13, z - 1.5), i); X.put('Gift_B', G(sd * 13.3, z + 1.4), -i);
       if (i % 2 === 0) X.put('Snowman', G(-sd * 13, z - 6), sd * 1.2); }
@@ -302,10 +342,12 @@ export default {
     X.put('Sleigh', G(8, STOP_Z + 2), 2.4);   // (2026-11-26, Michal: "Make sure the tree at the finish line is removed": the big tree that stood on the line past the stop is gone; the finish is open)
     for (const sd of [1, -1]) { const posts = []; for (let i = 0; i <= 8; i++) { const z = BIG.s + (BIG.len + 0.35) * i / 8; posts.push(new THREE.Vector3(sd * (BIG.w / 2 + 0.1), -z * S.SL + kickH(BIG, z) + 0.5, z)); } X.lights(posts, { sag: 0.1, per: 4, size: 0.12, glow: 1.2 }); }
     for (const R of RAILS) { X.put('CandyCane', G(1.2, R.a - 1), 1); X.put('CandyCane', G(-1.2, R.b + 1), -1); }
+    if (S.cg) for (const o of E.scene.children.slice(n0)) S.cg.add(o);   // (R2: the kit joins this run's course group: a new run rebuilds it)
   },
-  reset(E) { Object.assign(S, { pend: null, nextTrick: null, airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, done: {}, kick: null, rail: null, fall: 0, fr: 0, railFall: false, railSide: 1, head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false }); E.snapCam(); },
+  reset(E) { Object.assign(S, { pend: null, nextTrick: null, airN: 0, pN: 0, s: 1, d: 0, side: 1, phase: 'menu', u: 0, air: 0, trick: null, airTr: [], bOops: false, spin: 0, flip: 0, cork: 0, pts: 0, shown: null, due: 0, hit: 0, v: 4, wob: 0, landT: 0, shotT: 0, asking: false, k1: 0, r1: 0, p1: 0, b1: 0, done: {}, kick: null, rail: null, fall: 0, fr: 0, railFall: false, railSide: 1, head: 0, fbuf: [], fAt: 0, fTrickK: '', gOn: false, fin: false }); E.snapCam(); },
   menu() { S.phase = 'menu'; },
   async run(E) {
+    if (S.ran) { S.runN = (S.runN || 0) + 1; this.course(E); } S.ran = true;   // (R2: PLAY AGAIN = a new order)
     this.reset(E); S.phase = 'drop';
     E.banner('3', '', 700); await E.wait(0.8); E.banner('2', '', 700); await E.wait(0.8); E.banner('1', '', 700); await E.wait(0.8);
     E.banner('GO!', `${QN} QUESTIONS · KICKERS · RAILS · PIPE · BIG AIR`, 900); S.phase = 'line';
@@ -352,7 +394,7 @@ export default {
           E.send({ p: Math.min(0.95, S.s / STOP_Z), v: `${S.pts}` });
         }
       } else if (F.k === 'big') {   // the BIG AIR: question 1 on the run-in (slow motion to the lip), question 2 at the top of the flight (a slow float)
-        await E.until(() => S.phase === 'line' && S.pN >= HITS && S.s >= BIG.s + BIG.len - Math.max(4, S.v) * 1.25); let due = 0, failed = false;
+        await E.until(() => S.phase === 'line' && S.s >= BIG.s + BIG.len - Math.max(4, S.v) * 1.25); let due = 0, failed = false;
         { const c0 = E.combo; S.asking = true; const r = await ask('BIG AIR 1', slowTo((BIG.s + BIG.len - S.s) / Math.max(3, S.v))); S.asking = false; S.hit++;
           if (r.ok) { const T = ladder(r), sc = score(r, T[5]); giveTrick({ T, f0: 0.1, f1: 0.46 }, false, 'bair'); due += sc.pts; trickCard(T[0], E.combo, false, sc.chip); }
           else { failed = true; giveTrick(S.a.isClip ? { T: failTrick(c0), f0: 0.1, f1: 0.995, fail: true } : null, true, 'bair'); trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
@@ -364,10 +406,11 @@ export default {
             else { if (S.a.isClip) S.airTr.push({ T: failTrick(c0), f0: f + 0.02, f1: 0.995, fail: true }); S.bOops = true; trickCard(r.timeout ? 'TOO SLOW!' : 'WIPEOUT!', 0, true); }
             react(r); } }
         else S.hit++;   /* (a crash on question 1: no second trick in that air) */
-        await E.until(() => S.phase !== 'bair'); if (due) free(due); await chain;
+        await E.until(() => S.phase !== 'bair'); if (due) free(due);   /* (R2: no waiting for the count-ups here: a section can follow the big air) */
       }
     }
-    E.send({ p: 1, v: `${S.pts}` });
+    S.fin = true;   // (R2: every section done: he rides out to the finish and stops, whatever came last)
+    await chain; E.send({ p: 1, v: `${S.pts}` });
     await E.until(() => S.phase === 'stop');
     E.banner(`${S.pts}`, 'POINTS', 1800); { const bn = document.getElementById('banner'); if (bn) bn.classList.add('cm-lift'); }   /* (2026-11-26: the finish is clear: the points call-out sits high, over the sky, so his cheer shows) */ E.cine(true); E.shake(0.3);
     await E.wait(2.4); E.cine(false);
@@ -393,7 +436,7 @@ export default {
     if (S.fall > 0) { S.fall = Math.max(0, S.fall - dt); const k = 1 - S.fall / FALL; S.fr = a.isClip && (a.clips || []).includes('wipeout') ? 0 : 1.35 * (k < 0.18 ? k / 0.18 : k < 0.62 ? 1 : 1 - (k - 0.62) / 0.38); } else S.fr = 0;   // (down, sliding, back up)
     if (S.phase === 'cross' || S.phase === 'out') {
       // from one lip across the flat to the other lip (u: 0 -> 1)
-      S.u += dt / 1.55 * (S.fall > 0 ? 0.55 : 1);
+      S.u += dt / 1.55 * (S.fall > 0 ? 0.55 : 1); S.v = E.damp(S.v, 6.5 * (1 + Math.min(6, E.combo) * 0.025), 2.5, dt);   /* (R2: a fast entry (after the big air) settles to the pipe's speed) */
       const u = Math.min(1, S.u);
       S.d = -S.side * W() * Math.cos(Math.PI * u);
       y = pipeY(Math.abs(S.d)); roll = Math.sign(S.d) * wallAng(Math.abs(S.d));
@@ -416,7 +459,7 @@ export default {
       if (f >= 1) { S.phase = 'cross'; S.u = 0; S.side = -S.side; S.spin = 0; S.flip = 0; S.landT = 0.25; E.shake(0.25); E.spray.emit(a.g.position, 20, 0, 2.5, 0, 2); if (S.trick === OOPS || (S.trick && S.trick.fail)) { S.fallBack = !S.trick[1]; this.wipe(E); } S.tc = null; }
     } else if (S.phase === 'line' || S.phase === 'rail' || S.phase === 'end') {
       // the course down the middle: speed up for the kickers, steady over the rail, slower into the pipe, flat out to the big air
-      const z = S.s, late = S.pN >= HITS && z > 316; let tv = z < KICK.s + KICK.len ? 9 : z < PIPE_A - 4 ? 8.5 : S.pN < HITS ? 6.5 : late ? 15 : 8.5; if (S.phase === 'end') tv = 0;
+      const z = S.s, late = !S.b1 && z > BIG.s - 32 && z < BIG.s + BIG.len; let tv = late ? 15 : z >= PIPE_A - 4 && S.pN < HITS ? 6.5 : 8.5; if (S.phase === 'end') tv = 0;   /* (R2: flat out on the big air's run-in, slower into the pipe, wherever they are) */
       tv *= (1 + Math.min(6, E.combo) * 0.025) * (S.fall > 0 ? 0.4 : 1);   // (the streak: up to 15 % faster; a wipeout: slowed right down)
       S.v = S.v < tv ? Math.min(tv, S.v + (late ? 3.6 : 3) * dt) : Math.max(tv, S.v - (S.phase === 'end' ? 6 : S.fall > 0 ? 7 : 3) * dt);
       S.d = E.damp(S.d, 0, 3, dt); y = pipeY(Math.abs(S.d)); S.wob = Math.max(0, S.wob - dt);
@@ -433,7 +476,8 @@ export default {
         if (K) { S.done[K.id] = 1; S.kick = K; this.takeoff(E, 'kair', K); }
         else if (R) { S.done[R.id] = 1; S.rail = R; S.phase = 'rail'; }
         else if (!S.p1 && z >= PIPE_A) { S.p1 = 1; S.phase = 'cross'; S.u = 0.5; S.side = 1; }
-        else if (!S.b1 && S.pN >= HITS && z >= BIG.s + BIG.len) { S.b1 = 1; this.takeoff(E, 'bair', BIG); }
+        else if (!S.b1 && z >= BIG.s + BIG.len) { S.b1 = 1; this.takeoff(E, 'bair', BIG); }
+        else if (S.fin && z >= STOP_Z - 12) S.phase = 'end';   // (R2: past the last section: slow down to the finish)
         if (S.phase === 'kair' || S.phase === 'bair') y = pipeY(0) + S.lip;
       } else if (S.v < 0.4) { S.phase = 'stop'; S.v = 0; }
       P = S.fall > 0 ? this.ridePose(t, 1) : S.wob > 0 ? E.SP.wobble(t) : S.phase === 'stop' ? E.SP.cheer(t) : this.ridePose(t, crouch);
@@ -449,7 +493,7 @@ export default {
           S.tc = w >= 1 ? (tr.fail ? S.tc : [early || f <= 0.82 ? 'air_tuck' : 'spot_land', 1]) : [cl, (a.dur && a.dur[cl] || 1) / Math.max(0.12, TT.frac * (tr.f1 - tr.f0) * S.airT / slowFor(tr.f1 - tr.f0))]; }
         if (tr.fail) S.fallBack = !tr.T[1]; S.spin += tr.T[1] * Math.PI * 2 * k; S.flip += (tr.T[2] + (a.isClip ? tr.T[3] : 0)) * Math.PI * 2 * k; S.cork += tr.T[3] * 0.55 * Math.sin(Math.PI * k); if (k > 0.02 && k < 0.99) act = { T: tr.T, k }; }
       P = act && act.T[4] && act.k > 0.08 && act.k < 0.93 ? this.grabPose(t, act.T[4], Math.min(1, Math.sin(Math.PI * act.k) * 1.6)) : this.ridePose(t, 0.6 + (f < 0.12 || f > 0.88 ? 0.4 : 0));
-      if (f >= 1) { const big = S.phase === 'bair'; S.phase = big ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
+      if (f >= 1) { const big = S.phase === 'bair'; S.phase = big && S.lastF && S.lastF.k === 'big' ? 'end' : 'line'; S.spin = 0; S.flip = 0; S.cork = 0; S.landT = 0.25; S.wob = 0; if (S.bOops) this.wipe(E); E.shake(big ? 0.5 : 0.3); E.spray.emit(a.g.position, big ? 40 : 22, 0, 2.5, 3, 2.4); }
     } else { P = E.SP.cheer(t); y = pipeY(Math.abs(S.d)); }
     // place: on the wall the board stands on the wall (roll), on a kicker it tips up, in the air the trick turns him
     a.g.position.set(S.d, -S.s * S.SL + y, S.s);
@@ -468,8 +512,8 @@ export default {
     E.mpSend({ ph: S.phase, s: S.s, d: S.d, y: a.g.position.y + S.s * S.SL, roll, head: S.head, pitch: S.pitch, fr: S.fr || 0, spin: S.spin, flip: S.flip, cork: S.cork || 0, tr: act ? act.T[0] : S.phase === 'air' && S.trick === OOPS ? 'OOPS' : '', gk: act && act.T[4] ? act.T[4] : '', gkk, pts: S.pts, n: S.airN || 0, cl: S.clip || '', cs: S.clipSt ? clipFor(S.clipSt)[1] : 1 });
     if (S.ghost && E.MP.on) this.friendGhost(E, t, rdt);
     else if (S.ghost && E.friend && E.friend.p != null) { const gs = E.friend.p * S.L; S.ghost.g.visible = true; S.ghost.g.position.set(-S.d * 0.8, -gs * S.SL + pipeY(Math.abs(S.d * 0.8)), gs); S.ghost.g.rotation.set(0, 0, -Math.sign(S.d) * wallAng(Math.abs(S.d * 0.8))); S.ghost.pose(this.ridePose(t + 1, 0.5), 8, rdt); S.ghost.update(); }
-    const nx = FEAT.find((f) => (f.k === 'pipe' ? !(S.pN >= HITS && S.phase !== 'cross' && S.phase !== 'air') : f.k === 'big' ? true : !S.done[f.id] || (S.kick === f && S.phase === 'kair') || (S.rail === f && S.phase === 'rail')));
-    const where = !nx || nx.k === 'big' ? 'BIG AIR' : nx.k === 'pipe' ? `HALFPIPE · AIR ${Math.min(HITS, S.pN + (S.phase === 'air' ? 0 : 1))} OF ${HITS}` : nx.name;
+    const nx = FEAT.find((f) => (f.k === 'pipe' ? !(S.pN >= HITS && S.phase !== 'cross' && S.phase !== 'air') : f.k === 'big' ? !S.b1 || S.phase === 'bair' : !S.done[f.id] || (S.kick === f && S.phase === 'kair') || (S.rail === f && S.phase === 'rail')));
+    const where = !nx ? 'FINISH' : nx.k === 'big' ? 'BIG AIR' : nx.k === 'pipe' ? `HALFPIPE · AIR ${Math.min(HITS, S.pN + (S.phase === 'air' ? 0 : 1))} OF ${HITS}` : nx.name;
     E.hud(`${Math.round(S.shown ?? S.pts)}`, where); E.progress(Math.min(1, S.s / STOP_Z));
     this.camera(E, rdt);
   },
@@ -534,7 +578,7 @@ export default {
       pos = new THREE.Vector3(P.x - 2.6, P.y + 1.6, P.z - 3.6); look = P.clone().setY(P.y + 0.8); k = 3; fov = 50;   // (behind him on the side he faces: his cheer and face still show)
     } else {
       // following down the course, a little above (higher and further back on the run-in to the huge kicker, so it towers ahead)
-      const big = S.pN >= HITS && S.phase === 'line' && S.s > PIPE_B;
+      const big = !S.b1 && S.phase === 'line' && S.s > BIG.s - 40;   /* (R2: the big air's run-in, wherever it is) */
       const inPipe = S.phase === 'cross';
       // behind him, following his line across the pipe (a little less than he moves, so the walls still read), and aimed THROUGH him:
       // the look point is on the line from the camera through Foxino, so he sits in the horizontal centre on the walls, in the air,
