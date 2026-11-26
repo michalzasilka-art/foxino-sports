@@ -234,8 +234,8 @@ const ballTex = (() => { const c = document.createElement('canvas'); c.width = 1
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
 const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 14), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.65, emissive: 0x3a4a00, emissiveIntensity: 0.25 }));
 ball.castShadow = true; scene.add(ball);
-const trail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 1, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xf2ff9a, transparent: true, opacity: 0.35, depthWrite: false }));
-trail.geometry.translate(0, -0.5, 0); trail.geometry.rotateX(Math.PI / 2); scene.add(trail);
+// (2026-11-26 night, the user: "In tennis remove the transparent stuff coming out of the ball when shooting": the see-through cone behind the
+// ball is gone on every shot; the ball reads by its own look and its shadow on the court)
 function makeRacket(color) {
   const g = new THREE.Group();
   const hm = new THREE.MeshStandardMaterial({ color: 0x23233a, roughness: 0.5 }), fm = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.2 });
@@ -444,7 +444,6 @@ function updateBall(dt, t) {
     const tb = (t * 1.6) % 1, y = 0.1 + 1.0 * 4 * tb * (1 - tb);
     ball.position.set(p.x + (B.holder === 'a' ? -0.35 : 0.35), y, p.z - s * 0.5);
     B.serveAt = new THREE.Vector3(p.x + (B.holder === 'a' ? 0.4 : -0.4), 2.5, p.z - s * 0.4);
-    trail.visible = false;
   } else if (B.mode === 'fly') {
     const A = B.arcs[B.i];
     if (!A) { B.mode = 'dead'; return; }
@@ -471,12 +470,8 @@ function updateBall(dt, t) {
     }
     arcPos(B.arcs[B.i] || A, B.i < B.arcs.length ? B.u : 1, ball.position);
     if (B.netAt && B.i === 0 && B.u > 0.95 && !B.netDone) { B.netDone = true; sfx.net && sfx.net(); }
-    // the trail behind a fast ball
-    _bp.copy(ball.position); const A2 = B.arcs[B.i] || A; const nx = arcPos(A2, Math.min(1, B.u + 0.02), new THREE.Vector3());
-    _dir.subVectors(nx, _bp); const sp = _dir.length();
-    trail.visible = sp > 0.004 && B.scale > 0.4; if (trail.visible) { trail.position.copy(_bp); trail.lookAt(_bp.clone().sub(_dir)); trail.scale.set(1, 1, Math.min(1.6, sp * 40)); }
     ball.rotation.x += dt * 14 * B.scale;
-  } else { trail.visible = false; ball.position.y = Math.max(0.1, ball.position.y - dt * 3); }
+  } else { ball.position.y = Math.max(0.1, ball.position.y - dt * 3); }
   blob.position.set(ball.position.x, 0.012, ball.position.z); blob.material.opacity = clamp(0.35 - ball.position.y * 0.08, 0.08, 0.35);
 }
 
@@ -717,7 +712,6 @@ function juice(ok, ms, k) {
     combo = 0; popText(at, k < 0 ? 'TOO SLOW!' : 'OOPS!', 'bad'); flashScreen('bad'); vib([70, 40, 70]); SHAKE = 0.5;
   }
   renderCombo();
-  trail.material.color.set(combo >= 3 ? 0xff9a3c : 0xf2ff9a); trail.material.opacity = combo >= 3 ? 0.6 : 0.35;
 }
 
 // ---------- play a friend (2026-11-17, the user: "add a join part where you can join your friend with a QR code or a code") ----------
