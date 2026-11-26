@@ -434,6 +434,7 @@ let ASK = null;
 // (universal content) the word labels stay on screen, below the sentence card and apart from each other, whatever their length
 const LAY = [0, 1, 2].map(() => ({ x: 0, y: 0, on: false }));
 function layoutLabels() {
+  if (document.body.classList.contains('tabs')) { for (const el of labelEls) el.style.transform = ''; return; }   // (2026-11-26, H33: the answers as buttons: the sport's CSS lays them out)
   const W = innerWidth, H = innerHeight, cardEl = $('card'), top = (!cardEl.classList.contains('hidden') ? cardEl.getBoundingClientRect().bottom : 60) + 8, bot = H - 50, gap = 6;
   const L = LAY.map((p, i) => ({ i, x: p.x, y: p.y, w: labelEls[i].offsetWidth || 80, h: labelEls[i].offsetHeight || 50, on: p.on && !labelEls[i].hidden })).filter((p) => p.on);
   if (!L.length) return;
@@ -468,11 +469,11 @@ E.ask = (opts = {}) => new Promise((resolve) => {
   $('sentence').innerHTML = `${hints(q.before)}<span class="gap">&nbsp;</span>${hints(q.after)}`;
   $('note').className = ''; $('note').textContent = opts.note || 'Tap the right word';
   $('cardWho').textContent = opts.who || 'TAP THE RIGHT WORD'; $('cardNum').textContent = opts.num || '';
-  $('card').classList.remove('hidden'); document.body.classList.add('asking');
+  const tabs = !!opts.tabs; document.body.classList.toggle('tabs', tabs); if (!tabs) $('card').classList.remove('hidden'); document.body.classList.add('asking');   // (H33: opts.tabs = no card, no bubbles: buttons)
   q.words.forEach((w, i) => { const el = labelEls[i]; el.querySelector('span').textContent = w.text; el.classList.toggle('long', w.text.length > 12); el.className = el.className.replace(/\b(right|wrong|off)\b/g, '').trim(); el.classList.add('on'); el.hidden = false; });
   for (let i = q.words.length; i < 3; i++) labelEls[i].hidden = true;
-  bubbles.forEach((b, i) => { b.target = i < q.words.length ? 1 : 0; b.u.uGlow.value = 0; b.u.uAlpha.value = 1; });
-  E.slow = opts.slow ?? 0.06;
+  bubbles.forEach((b, i) => { b.target = !tabs && i < q.words.length ? 1 : 0; b.u.uGlow.value = 0; b.u.uAlpha.value = 1; });
+  E.slow = opts.slow ?? 0.06; if (opts.onQ) { try { opts.onQ(q); } catch (e) { console.warn(e); } }
   sfx.bubble && sfx.bubble();
   // (tests) the bot answers by itself: right, except every 4th question (?bot=1), or always wrong (?bot=wrong)
   if (BOT) setTimeout(() => { if (ASK && ASK.q === q && !ASK.done) answer(BOT === 'wrong' ? (q.correct + 1) % q.words.length : (BOT === '1' && E.asked % 4 === 0) ? (q.correct + 1) % q.words.length : q.correct); }, 900 / SPEED);
@@ -480,7 +481,7 @@ E.ask = (opts = {}) => new Promise((resolve) => {
 // (2026-11-24) a question can be closed unanswered (Ski Jump: the ramp ends while it is up): it counts neither way
 window.MPBOT = { q: () => (ASK && !ASK.done ? { id: 's' + E.asked, correct: ASK.q.correct, n: ASK.q.words.length } : null), answer: (k) => answer(k) };   // (tests: the two-player bot)
 E.cancelAsk = () => { const A = ASK; if (!A) return; A.done = true; labelEls.forEach((el) => el.classList.remove('on')); bubbles.forEach((b) => { b.target = 0; });
-  $('card').classList.add('hidden'); document.body.classList.remove('asking'); E.slow = 1; ASK = null; A.resolve({ ok: false, cancelled: true, skipped: true }); };
+  $('card').classList.add('hidden'); document.body.classList.remove('asking', 'tabs'); E.slow = 1; ASK = null; A.resolve({ ok: false, cancelled: true, skipped: true }); };
 E.sfx = sfx;
 function answer(k) {
   const A = ASK; if (!A || A.done) return; A.done = true;
@@ -494,7 +495,7 @@ function answer(k) {
   setTimeout(() => {
     if (ASK !== A) return;   // (a newer question is up already)
     labelEls.forEach((el) => el.classList.remove('on')); bubbles.forEach((b) => { b.target = 0; });
-    $('card').classList.add('hidden'); document.body.classList.remove('asking'); E.slow = 1; ASK = null;
+    $('card').classList.add('hidden'); document.body.classList.remove('asking', 'tabs'); E.slow = 1; ASK = null;
   }, ok ? 650 : 1500);
   A.resolve({ ok, k, secs, q, grade: !ok ? 'bad' : secs < 4 ? 'perfect' : secs < 8 ? 'great' : 'good' });
 }
@@ -655,7 +656,7 @@ $('muteBtn').classList.toggle('muted', isMuted());
   $('loadTitle').textContent = NAMES[SPORT] || 'SNOW SPORTS';
   try {
     bar(10, 'Grooming the snow…');
-    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 13, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
+    MOD = (await import(`./${SPORT}.js?v=${({ slalom: 9, halfpipe: 14, skijump: 12, sled: 3, biathlon: 3 })[SPORT] || 2}`)).default;   // (per-sport cache versions: bump one sport without the others)
     await loadProps();
     bar(35, 'Building the course…');
     const L = MOD.light || {};
