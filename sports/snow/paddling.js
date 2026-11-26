@@ -6,7 +6,7 @@
 // crew's rhythm: every boat's speed AND how in time its paddlers are come from ONE number, its consistency (0..1).
 // P1 (this file now): the boats, the crews, the course and the race with a placeholder rule (steady consistency). P2: the questions, the timing
 // bar (green = the middle 50 % of the answer time) and the rival AI. P3+: polish.
-import { askRhythm, trickCardAfter as trickCard, signPlace, fxRoot } from './askfx.js?v=3';
+import { askRhythm, trickCardAfter as trickCard, signPlace, fxRoot } from './askfx.js?v=6';
 import { isMuted } from '/penalty/sound.js';
 const L = 300, LANE = 7, NB = 5;   // (the race length in metres, the lane width, the boats)
 // (P2) ten questions, one every 27 m; each has a 6-second rhythm bar, green from 1.5 s to 4.5 s. How an answer moves the crew's consistency:
@@ -303,7 +303,7 @@ export default {
   cheerPose(t) { const p = this.paddlePose(t, 1, 0), w = Math.sin(t * 7); p.spine = [-0.1, 0, 0]; p.armR = [-2.7 + 0.15 * w, 0, -0.35]; p.armL = [-2.7 - 0.15 * w, 0, 0.35]; p.elbowR = [-0.2, 0, 0]; p.elbowL = [-0.2, 0, 0]; p.head = [-0.15, 0, 0]; return p; },   // (both arms up: he won it / he made it)
   placePaddle(E) {
     const A = S.a, bones = A.fox.bones, v1 = S.pv1 || (S.pv1 = new E.THREE.Vector3()), v2 = S.pv2 || (S.pv2 = new E.THREE.Vector3()), up = S.pup || (S.pup = new E.THREE.Vector3(0, 1, 0));
-    S.paddle.visible = !S.me.fin; if (!bones.RightHand || !bones.LeftHand || S.me.fin) return; A.g.updateMatrixWorld(true);   // (he lets go of it to cheer) bones.RightHand.getWorldPosition(v1); bones.LeftHand.getWorldPosition(v2);
+    S.paddle.visible = !S.me.fin; if (!bones.RightHand || !bones.LeftHand || S.me.fin) return; A.g.updateMatrixWorld(true);   /* (he lets go of it to cheer) */ bones.RightHand.getWorldPosition(v1); bones.LeftHand.getWorldPosition(v2);
     const dir = v2.clone().sub(v1); if (dir.lengthSq() < 1e-4) dir.set(-0.5, -1, 0.2); dir.normalize(); if (dir.y > -0.35) { dir.y = -0.35; dir.normalize(); }   // (always down to the water)
     S.paddle.position.copy(v1).addScaledVector(dir, -0.12); S.paddle.quaternion.setFromUnitVectors(up, dir.clone().negate()); S.paddle.userData.sh.scale.y = 1.6; S.paddle.userData.sh.position.y = -0.8; S.paddle.userData.bl.position.y = -1.55;
   },

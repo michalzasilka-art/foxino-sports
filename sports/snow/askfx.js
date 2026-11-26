@@ -88,7 +88,9 @@ body.tabs .blabel.long span{font-size:clamp(15px,4vw,22px)} body.tabs .blabel.on
 @keyframes tcIn{to{opacity:1;transform:translateX(-50%) scale(1)}}`;
   document.head.appendChild(st); FX = document.createElement('div'); FX.id = 'trickCard'; document.body.appendChild(FX); return FX; }
 let CARDN = 0;
-export function trickCard(name, streak = 0, kind = 'good', extra = '') { const c = fxRoot(); c.className = ''; c.dataset.gen = String(++CARDN); void c.offsetWidth;
+export function trickCard(name, streak = 0, kind = 'good', extra = '') { const c = fxRoot(); c.className = '';
+  { const h = document.getElementById('hudMain'), r = h && h.getBoundingClientRect(); c.style.setProperty('top', `${Math.max(r && r.height ? 20 : 84, r && r.height ? r.bottom + 12 : 0)}px`, 'important'); }   /* (P3: always below the HUD's title, never over it) */
+  c.dataset.gen = String(++CARDN); void c.offsetWidth;
   c.innerHTML = `<b>${name}</b>${streak >= 2 ? `<i>🥁 ${streak} in rhythm</i>` : ''}${extra ? `<i class="x">${extra}</i>` : ''}`;
   c.classList.add('go', kind); const gen = c.dataset.gen; setTimeout(() => { if (c.dataset.gen === gen) c.classList.add('out'); }, 1900); }
 

@@ -26,8 +26,7 @@ const vib = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e
 // art stay (snow/slalom.js, sled.js, biathlon.js): take an id out of HIDDEN_ACTS to bring it back
 // (2026-11-25, the user: "Remove game street ball from foxino sports") Streetball out the same way (streetball/ stays; ?dev still opens it there)
 const HIDDEN_ACTS = new Set(['slalom', 'sled', 'biathlon', 'streetball']);
-// (2026-11-27, Paddling P1: Michal "New + Paddling") the new dragon-boat race is behind ?paddling=1 (or ?dev=1) until it has its questions (P2/P3)
-if (!/[?&](paddling|dev)=1/.test(location.search)) HIDDEN_ACTS.add('paddling');
+// (2026-11-27, Paddling P3: open to everyone: the 5th sport; it was behind ?paddling=1 during P1/P2)
 const ACTS = [
   { id: 'penalty', name: 'Penalties', tag: 'FOOTBALL', pic: 'art/card-penalties.webp?v=1' },
   { id: 'tennis', name: 'Tennis', tag: 'TENNIS', pic: 'art/card-tennis.webp?v=1' },
