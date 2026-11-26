@@ -330,7 +330,7 @@ function runList(list, round) {
   $('game').hidden = false; nextSport();
 }
 function srcFor(id, i) {
-  const mp = inParty() ? `&mp=${PT.host ? 'host' : 'join'}&name=${encodeURIComponent(myName || 'Player')}&fname=${encodeURIComponent(PT.friend.name)}&mpr=${RUN.round}&mpi=${i}` : '';
+  const mp = inParty() ? `&mp=${PT.host ? 'host' : 'join'}&name=${encodeURIComponent(myName || 'Player')}&fname=${encodeURIComponent(PT.friend.name)}&mpr=${RUN.round}&mpi=${i}&mps=${encodeURIComponent(PT.code || '')}` : '';   /* (2026-11-26, R2: mps = the party code: a shared seed, e.g. the same random Snowboard course on both phones) */
   if (id === 'penalty') return '/penalty/?list=1' + mp;
   if (id === 'tennis') return 'tennis/?list=1' + mp;
   if (id === 'streetball') return 'streetball/?list=1' + mp;
