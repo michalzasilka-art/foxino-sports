@@ -109,7 +109,7 @@ def bake_material(name, seed=0.0):
     vdist = vor.outputs["Distance"]
     # strata: stretched noise along z for layered rock
     strata_map = _n(nt, "ShaderNodeMapping", (-1250, -900))
-    strata_map.inputs["Scale"].default_value = (0.25, 0.25, 2.4)
+    strata_map.inputs["Scale"].default_value = (0.3, 0.3, 1.3)
     L.new(obj, strata_map.inputs["Vector"])
     strata = _n(nt, "ShaderNodeTexNoise", (-1050, -900))
     strata.inputs["Scale"].default_value = 0.8
@@ -132,9 +132,9 @@ def bake_material(name, seed=0.0):
     ice_m = _math(nt, (-450, 300), "MULTIPLY", ice_m0, _math(nt, (-550, 200), "SUBTRACT", 1.0, snow_m))
 
     # colours (no pure black or white)
-    rock = _mixc(nt, (-300, -100), n2, (0.15, 0.18, 0.24), (0.30, 0.34, 0.41))
-    rock = _mixc(nt, (-150, -100), _maprange_out(nt, (-300, -250), strata, 0.35, 0.65), rock, (0.36, 0.40, 0.47))
-    crev = _maprange_out(nt, (-300, -400), vdist, 0.0, 0.22, 0.55, 1.0)
+    rock = _mixc(nt, (-300, -100), n2, (0.17, 0.21, 0.29), (0.31, 0.37, 0.46))  # blue-grey rock
+    rock = _mixc(nt, (-150, -100), _maprange_out(nt, (-300, -250), strata, 0.5, 0.72), rock, (0.40, 0.46, 0.55))
+    crev = _maprange_out(nt, (-300, -400), vdist, 0.0, 0.22, 0.62, 1.0)
     rock = _mixc_mul(nt, (0, -150), rock, crev)
     ice_t = _maprange_out(nt, (-300, 150), _math(nt, (-450, 150), "ADD", n2, _math(nt, (-550, 100), "MULTIPLY", a_ice, 0.25)), 0.4, 0.85)
     ice = _mixc(nt, (-150, 150), ice_t, (0.05, 0.20, 0.42), (0.32, 0.70, 0.86))

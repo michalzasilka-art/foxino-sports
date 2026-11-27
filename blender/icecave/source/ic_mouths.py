@@ -49,13 +49,24 @@ def _normals(pts):
 NRM = _normals(RING)
 
 STYLES = {
-    # H*: cliff top height (right/left), flat*: half-width of the flat top, foot*: where the snow shoulder meets the ground
-    "entrance": dict(seed=1, HR=8.7, HL=8.8, flatR=8.2, flatL=8.0, footR=15.0, footL=15.2, spur=0.0, spur_x=0.0,
-                     sil_noise=0.35, lean=0.35, shoulder=3.2, relief=0.85, cornice=1.0, bulge=0.32, lipflare=0.75,
-                     icicles="fringe"),
-    "exit": dict(seed=7, HR=8.1, HL=8.5, flatR=7.0, flatL=9.0, footR=14.2, footL=16.0, spur=0.9, spur_x=-5.2,
-                 sil_noise=0.5, lean=0.7, shoulder=2.5, relief=1.15, cornice=0.75, bulge=0.38, lipflare=0.85,
-                 icicles="clusters"),
+    # base/tilt: ridge base height and left-right tilt; peaks: (x, extra height, width, rock poking through 0/1)
+    # ledges: (z height, outward jut m, x0, x1); cracks: (column, t0, t1, depth m)
+    "entrance": dict(seed=1, base=7.75, tilt=0.03, flat=5.5, footR=15.0, footL=15.2,
+                     peaks=((-10.0, 0.55, 1.6, 1), (-5.6, 1.05, 1.4, 1), (-1.6, 0.45, 2.0, 0), (2.2, 0.75, 1.7, 0),
+                            (6.3, 1.1, 1.3, 1), (10.6, 0.5, 1.5, 1)),
+                     ledges=((3.0, 0.75, -14.0, -9.0), (5.4, 0.65, -12.5, -7.5), (7.45, 0.55, -6.0, 3.5),
+                             (4.2, 0.7, 8.6, 13.5), (6.4, 0.6, 5.0, 11.5)),
+                     cracks=((12, 0.18, 0.9, 0.75), (23, 0.12, 0.8, 0.65), (33, 0.2, 0.95, 0.8)),
+                     sil_noise=0.22, lean=0.35, shoulder=3.2, relief=0.9, cornice=1.0, bulge=0.32, lipflare=0.75,
+                     icicles="fringe", cornice_icicles=10),
+    "exit": dict(seed=7, base=7.65, tilt=-0.06, flat=4.5, footR=14.2, footL=16.0,
+                 peaks=((-7.2, 1.75, 1.9, 1), (-3.2, 0.7, 1.2, 1), (1.4, 0.35, 2.4, 0), (4.6, 0.95, 1.5, 0),
+                        (8.8, 1.2, 1.2, 1)),
+                 ledges=((2.4, 0.8, 8.5, 14.0), (4.9, 0.7, 7.0, 12.5), (6.9, 0.6, -3.5, 6.5),
+                         (3.6, 0.75, -14.5, -9.0), (6.0, 0.65, -11.5, -5.0)),
+                 cracks=((9, 0.15, 0.85, 0.8), (17, 0.25, 0.95, 0.7), (27, 0.12, 0.75, 0.75), (35, 0.3, 0.9, 0.6)),
+                 sil_noise=0.3, lean=0.7, shoulder=1.9, relief=1.2, cornice=0.75, bulge=0.38, lipflare=0.85,
+                 icicles="clusters", cornice_icicles=8),
 }
 
 
@@ -75,21 +86,29 @@ def smooth(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
+def rock_poke(x, st):
+    """0..1: how much bare rock pokes through the snow on the ridge at x."""
+    v = 0.0
+    for px, hh, w, rock in st["peaks"]:
+        if rock:
+            v = max(v, math.exp(-((x - px) / (0.75 * w)) ** 2))
+    return v
+
+
 def outline_h(x, st):
-    """cliff outline height above the floor at x: flat rock top, rounded shoulders, snow foot at the sides.
-    Left/right parameters blend smoothly across the middle (no crease)."""
-    w = smooth(-4.0, 4.0, x)
+    """cliff outline height above the floor at x: a varied ridge line of rounded knobs and saddles
+    (no flat slab top), rounded shoulders, snow foot at the sides."""
     ax = abs(x)
-    H = st["HL"] + (st["HR"] - st["HL"]) * w
-    flat = st["flatL"] + (st["flatR"] - st["flatL"]) * w
+    w = smooth(-4.0, 4.0, x)
     foot = st["footL"] + (st["footR"] - st["footL"]) * w
     if ax >= foot:
         return 0.0
-    k = smooth(flat, foot, ax)
-    h = H * (1 - k) ** 1.4
-    h += st["spur"] * math.exp(-((x - st["spur_x"]) / 1.8) ** 2) * (1 - k)
-    h += st["sil_noise"] * fbm(x * 0.28, 0.3, 0.0, st["seed"] + 3, 3) * 2 * (1 - k)
-    return h
+    k = smooth(st["flat"], foot, ax)
+    h = st["base"] + st["tilt"] * x
+    for px, hh, wd, rock in st["peaks"]:
+        h += hh * math.exp(-((x - px) / wd) ** 2)
+    h += st["sil_noise"] * fbm(x * 0.45, 0.3, 0.0, st["seed"] + 3, 3) * 2
+    return max(0.0, h * (1 - k) ** 1.35)
 
 
 def silhouette(th, st):
@@ -119,7 +138,7 @@ def column_rows(j, st, S, M):
         z = pz + nz * r
         if edge:
             z = 0.0
-        rows.append([px + nx * r, d, z, kind, prm])
+        rows.append([px + nx * r, d, z, kind, prm, None, None])
 
     # ice lining: bulges outward only (rider space stays clear)
     for d in (0.0, 0.75, 1.5, 2.2):
@@ -131,39 +150,63 @@ def column_rows(j, st, S, M):
         b = st["bulge"] * 0.5 * smooth(0.0, 1.2, d)
         at_r(r + b * (1 - prm), d, "lip", prm)
     lipx, lipd, lipz = rows[-1][0], rows[-1][1], rows[-1][2]
-    # cliff face
+    # sculpted cliff face: rounded rock masses, ledges with snowy shelves, deep ice cracks
     sx, sz = S[j]
     c4 = math.cos(th) ** 4
     dS = None
-    for t in (0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9, 1.0):
-        e = t ** 1.15
+    for t in (0.07, 0.15, 0.24, 0.33, 0.42, 0.51, 0.6, 0.69, 0.78, 0.88, 1.0):
+        e = t ** 1.1
         x = lipx + (sx - lipx) * e
         z = lipz + (sz - lipz) * e
-        bump = math.sin(math.pi * t)
+        bump = math.sin(math.pi * t) ** 0.8
         d = lipd + st["lean"] * t * math.sin(th) + st["shoulder"] * c4 * t ** 1.5
-        d += st["relief"] * fbm(x * 0.22, z * 0.22, 3.0, seed + 2, 3) * bump * 1.6
-        x += 0.45 * fbm(x * 0.3, z * 0.3, 11.0, seed + 4, 2) * bump
+        d += st["relief"] * (1.15 * fbm(x * 0.12, z * 0.12, 3.0, seed + 2, 2)
+                             + 0.45 * fbm(x * 0.33, z * 0.33, 5.0, seed + 8, 2)) * bump * 1.5
+        x += 0.4 * fbm(x * 0.3, z * 0.3, 11.0, seed + 4, 2) * bump
+        ice = snow = None
+        shelf_top = 0.0
+        for h, A, x0, x1 in st["ledges"]:
+            wx = smooth(x0 - 1.2, x0 + 1.2, x) * (1 - smooth(x1 - 1.2, x1 + 1.2, x))
+            hz = h + 0.25 * fbm(x * 0.4, h, 2.0, seed + 11, 2)
+            jut = smooth(hz - 1.5, hz - 0.15, z) * (1 - smooth(hz - 0.05, hz + 0.45, z))
+            d += A * wx * jut * smooth(0.05, 0.2, t)
+            shelf_top = max(shelf_top, wx * smooth(hz - 0.35, hz - 0.05, z) * (1 - smooth(hz + 0.3, hz + 0.6, z)))
+        if shelf_top > 0.3:
+            snow = 0.38 + 0.3 * shelf_top  # dusting: the noise in the shader breaks it up
+        for cj, t0, t1, depth in st["cracks"]:
+            if t0 <= t <= t1:
+                fall = math.sin(math.pi * (t - t0) / (t1 - t0)) ** 0.5
+                if j == cj:
+                    d -= depth * fall
+                    ice = 1.0
+                    snow = 0.0
+                elif abs(j - cj) == 1:
+                    d -= 0.22 * depth * fall
+                    ice = max(ice or 0.0, 0.35)
         if edge:
             z = -0.25 * t
         else:
-            z += 0.45 * fbm(x * 0.3, z * 0.3, 23.0, seed + 5, 2) * bump
+            z += 0.35 * fbm(x * 0.3, z * 0.3, 23.0, seed + 5, 2) * bump
             if pz < 1.5:  # ground-level columns: keep the shoulder foot on / just under the ground
                 z = max(-0.25, min(z, z * smooth(0.0, 1.5, pz) + (1 - smooth(0.0, 1.5, pz)) * (-0.2 * t)))
-        rows.append([x, d, z, "face", t])
+        rows.append([x, d, z, "face", t, ice, snow])
         dS = d
-    # snow cornice, roll-over top and back slope
+    # natural ridge: soft snow cornice, varied crest, bare rock knobs poking through
     mx, mz = M[j]
     top = max(0.0, math.sin(th)) ** 2
-    cf = st["cornice"] * top * (1 + 0.35 * fbm(sx * 0.4, 5.0, sz * 0.4, seed + 6, 2))
     sx, sz = rows[-1][0], rows[-1][2]
-    rim = ((0.30, dS + 0.25 + 0.55 * cf, -0.10 * cf, 0.0), (0.72, dS + 0.15 + 0.30 * cf, 0.0, 0.25),
-           (0.98, dS - 0.45, 0.0, 0.5), (1.08, 0.5 * dS + 0.9, 0.0, 0.75), (0.88, 1.05, 0.0, 0.9),
-           (0.58, 0.58, 0.0, 1.0))
+    rp = rock_poke(sx, st) * top
+    cf = st["cornice"] * top * (1 + 0.35 * fbm(sx * 0.4, 5.0, sz * 0.4, seed + 6, 2)) * (1 - 0.8 * rp)
+    uj = 1 + 0.22 * fbm(sx * 0.5, 9.0, 0.0, seed + 9, 2) + 0.35 * rp
+    rim = ((0.28, dS + 0.25 + 0.55 * cf, -0.10 * cf, 0.0), (0.65, dS + 0.15 + 0.30 * cf, 0.0, 0.2),
+           (0.95 * uj, dS - 0.35, 0.0, 0.4), (1.10 * uj, 0.62 * dS + 0.7, 0.0, 0.6),
+           (1.0 * uj, 0.35 * dS + 0.9, 0.0, 0.75), (0.80, 1.0, 0.0, 0.9), (0.55, 0.58, 0.0, 1.0))
     for u, d, dz, prm in rim:
         z = sz + mz * u + dz
         if edge:
             z = -0.25
-        rows.append([sx + mx * u, d, z, "rim", prm])
+        snow = 1.0 - 0.95 * rp * (0.4 if prm in (0.0, 1.0) else 1.0)
+        rows.append([sx + mx * u, d, z, "rim", prm, None, snow])
     # back plate toward the ring
     bx, bd, bz = rows[-1][0], rows[-1][1], rows[-1][2]
     for t in (0.4, 0.75):
@@ -172,7 +215,7 @@ def column_rows(j, st, S, M):
         d = bd + (0.10 - bd) * t
         if edge:
             z = -0.25 * (1 - t)
-        rows.append([x, d, z, "back", t])
+        rows.append([x, d, z, "back", t, None, 0.25 + 0.75 * smooth(5.5, 7.8, z)])
     return rows
 
 
@@ -234,13 +277,15 @@ def build_icicles(st, cols, kind):
         else:
             step = 0.8
         pos += step
-    # cornice icicles: under the snow nose on the top
+    # cornice icicles: under the snow nose on the top (not where bare rock pokes through)
+    RIM0 = [r[3] for r in cols[NC // 2]].index('rim')
     pos = 6.0
     cnt = 0
+    ncorn = 0
     while pos < NC - 7.0:
         j = int(pos)
         f = pos - j
-        a, b = cols[j][16], cols[j + 1][16]  # first rim row = cornice nose
+        a, b = cols[j][RIM0], cols[j + 1][RIM0]  # first rim row = cornice nose
         x = a[0] + (b[0] - a[0]) * f
         d = a[1] + (b[1] - a[1]) * f - 0.05
         z = a[2] + (b[2] - a[2]) * f
@@ -250,8 +295,9 @@ def build_icicles(st, cols, kind):
                 L = rnd.uniform(0.35, 0.9)
             else:
                 L = rnd.uniform(0.3, 1.3) if cnt % 3 != 2 else 0.0
-            if L > 0.3:
+            if L > 0.3 and rock_poke(x, st) < 0.3 and ncorn < st["cornice_icicles"]:
                 specs.append((Vector((x, d, z + 0.14)), L, 0.09 + 0.10 * L, d))
+                ncorn += 1
             cnt += 1
         pos += rnd.uniform(1.1, 1.9) if st["icicles"] == "fringe" else rnd.uniform(0.8, 2.6)
     return specs
@@ -271,7 +317,7 @@ def build_mouth(kind, name=None):
     V = [[None] * NC for _ in range(NR)]
     for j in range(NC):
         for r in range(NR):
-            x, d, z, kd, prm = cols[j][r]
+            x, d, z, kd, prm, ice_o, snow_o = cols[j][r]
             v = bm.verts.new(frame(x, d, z, kind))
             v[a_kind] = kinds[kd]
             ice = snow = 0.0
@@ -282,11 +328,15 @@ def build_mouth(kind, name=None):
             elif kd == "face":
                 ice = max(0.0, 0.45 - prm * 1.6)
                 th = math.atan2(RING[j][1], RING[j][0])
-                snow = smooth(0.6, 0.95, prm) * (0.35 + 0.65 * math.cos(th) ** 2)
+                snow = smooth(0.82, 1.0, prm) * (0.35 + 0.65 * math.cos(th) ** 2)
             elif kd == "rim":
                 snow = 1.0
             elif kd == "back":
                 snow = 0.6 - 0.4 * prm
+            if ice_o is not None:
+                ice = max(ice, ice_o)
+            if snow_o is not None:
+                snow = snow_o if kd != "face" else max(snow, snow_o)
             v[a_ice] = ice
             v[a_snow] = snow
             V[r][j] = v
