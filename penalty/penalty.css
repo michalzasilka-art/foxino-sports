@@ -103,6 +103,7 @@ button { font: inherit; cursor: pointer; border: 0; color: inherit; }
   text-shadow: 0 2px 0 rgba(20, 10, 60, 0.6);
   box-shadow: 0 0 14px var(--c, #fff), inset 0 0 8px rgba(255, 255, 255, 0.25);
   overflow-wrap: anywhere; letter-spacing: 0.02em;
+  width: max-content;   /* (2026-11-27: as wide as the word, up to the space the font was fitted to (max-width set in game.js), not the bubble's own width: "waren" stays on one line) */
 }
 .blabel:hover span { transform: scale(1.06); }
 .blabel.picked span { background: rgba(255, 125, 34, 0.85); border-color: #fff; }

@@ -1303,7 +1303,7 @@ function updateLabels() {
     // as big as the space between two bubbles allows (the words matter more than the bubbles)
     const colPx = (r / Math.max(b.mesh.scale.x, 0.01)) * GAP * 1.05;
     const maxW = Math.max(72, Math.min(colPx - 6, W * 0.42));
-    const fs = Math.floor(clamp(Math.min(Math.max(r * 0.62, 21), (maxW - 16) / (0.56 * longest + 0.3)), 15, 38));
+    const fs = Math.floor(clamp(Math.min(Math.max(r * 0.62, 21), (maxW - 16) / (0.6 * longest + 1.15)), 15, 38));   /* (2026-11-27: + the label's own padding, so a longer word (German: hattest, Bundesländer) stays on one line) */
     el.style.width = el.style.height = Math.round(box) + 'px';
     el.style.fontSize = fs + 'px';
     el.firstChild.style.maxWidth = Math.round(maxW) + 'px';

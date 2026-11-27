@@ -273,8 +273,8 @@ function onParty(m) {
   if (m.t === 'ping') return;
   if (m.t === 'mp') { if (RUN && RUN.round === m.r && RUN.i === m.i && MPB.ready === m.i) mpToFrame(m.d); else if (!RUN || m.r >= RUN.round) MPB.q.push(m); return; }
   if (m.t === 'bye') { PT.byed = true; const nm = PT.friend && PT.friend.name; friendGone(nm ? `${esc(nm)} left the party` : ''); return; }
-  if (m.t === 'pick' && !PT.host) { if (m.open) openPicker(m.sel, true); else closePicker(); return; }
-  if (m.t === 'start' && !PT.host) { closePicker(); runList(m.list, m.round); return; }
+  if (m.t === 'pick' && !PT.host) { if (m.lang) LANG = m.lang === 'de' ? 'de' : 'en'; if (m.open) openPicker(m.sel, true); else closePicker(); return; }
+  if (m.t === 'start' && !PT.host) { closePicker(); runList(m.list, m.round, m.lang === 'de' ? 'de' : 'en'); return; }
   if (m.t === 'score') { if (RUN) { RUN.their[m.i] = m.r; if (RUN.waitTheirs === m.i) showResult(m.i); } return; }
   if (m.t === 'snow') { if (RUN && RUN.i === m.i) { try { $('frame').contentWindow.postMessage({ snowFriend: m.st, sport: m.sport, name: PT.friend ? PT.friend.name : '' }, '*'); } catch (e) {} } return; }
   if (m.t === 'next' && !PT.host) { if (RUN && RUN.i === m.i) nextSport(); return; }
@@ -299,7 +299,17 @@ function renderMode() {
 // ---------- choose the sports ----------
 let SEL = (store.get('sports-sel', null) || ['halfpipe', 'skijump']).filter((id) => ACTS.some((a) => a.id === id));
 if (!SEL.length) SEL = ACTS.map((a) => a.id);
+// (2026-11-27, the user: German vocabulary as a content option, "when selected there's no English"): ENGLISH = each sport's own
+// English packages as before; DEUTSCH = Meine Freunde Lektion 10 (packages-de.js) in every sport, passed as ?pk=… (shared/content.js)
+let LANG = store.get('sports-lang', 'en') === 'de' ? 'de' : 'en';
+const DE_IDS = ['DE-L10-V1', 'DE-L10-V2', 'DE-L10-G1', 'DE-L10-G2', 'DE-L10-G3'];
+function renderLang(view) { document.querySelectorAll('#langSeg [data-l]').forEach((b) => { const on = b.dataset.l === LANG; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); b.disabled = !!view; }); }
+$('langSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-l]'); if (!b || b.disabled || b.dataset.l === LANG) return;
+  LANG = b.dataset.l; store.set('sports-lang', LANG); sfx.pick && sfx.pick(); vib(15); renderLang(false); send({ t: 'pick', open: true, sel: SEL, lang: LANG });
+});
 function renderPicker(view) {
+  renderLang(view);
   $('acts').classList.toggle('view', !!view);
   $('acts').classList.toggle('two', ACTS.length === 4); $('acts').classList.toggle('five', ACTS.length === 5);   // (five: 3 + 2 centred on a phone)
   $('acts').innerHTML = ACTS.map((a) => { const i = SEL.indexOf(a.id); return `<button class="act${i >= 0 ? ' on' : ''}" type="button" data-id="${a.id}"><span class="pic" style="background-image:url('${a.pic}')"></span><span class="tag">${a.tag}</span>${a.snow ? '<span class="new">NEW</span>' : ''}${i >= 0 && SEL.length > 1 ? `<span class="num">${ordinal(i)}</span>` : ''}<span class="tick">✓</span><span class="nm">${a.name}</span></button>`; }).join('');
@@ -310,33 +320,34 @@ function renderPicker(view) {
 const ordinal = (i) => ['1ST', '2ND', '3RD'][i] || `${i + 1}TH`;
 function openPicker(sel, view) { if (sel) SEL = sel.filter((id) => ACTS.some((x) => x.id === id)); renderPicker(view); $('picker').hidden = false; }
 function closePicker() { $('picker').hidden = true; }
-$('playBtn').onclick = () => { unlock(); if (!leader()) return; sfx.click && sfx.click(); vib(20); openPicker(null, false); send({ t: 'pick', open: true, sel: SEL }); };
+$('playBtn').onclick = () => { unlock(); if (!leader()) return; sfx.click && sfx.click(); vib(20); openPicker(null, false); send({ t: 'pick', open: true, sel: SEL, lang: LANG }); };
 $('acts').addEventListener('click', (e) => {
   const b = e.target.closest('.act'); if (!b || $('acts').classList.contains('view')) return;
   const id = b.dataset.id, i = SEL.indexOf(id);
   if (i >= 0) SEL.splice(i, 1); else { SEL.push(id); SEL.sort((x, y) => ACTS.findIndex((a) => a.id === x) - ACTS.findIndex((a) => a.id === y)); }
-  store.set('sports-sel', SEL); sfx.pick && sfx.pick(); vib(15); renderPicker(false); send({ t: 'pick', open: true, sel: SEL });
+  store.set('sports-sel', SEL); sfx.pick && sfx.pick(); vib(15); renderPicker(false); send({ t: 'pick', open: true, sel: SEL, lang: LANG });
 });
 $('pickBack').onclick = () => { sfx.click && sfx.click(); closePicker(); send({ t: 'pick', open: false }); };
 $('pickPlay').onclick = () => {
   if (!SEL.length) return; unlock(); sfx.whistle && sfx.whistle(); vib([20, 30, 40]);
   closePicker(); PT.round++;
-  const list = SEL.slice(); if (inParty()) send({ t: 'start', list, round: PT.round });
-  runList(list, PT.round);
+  const list = SEL.slice(); if (inParty()) send({ t: 'start', list, round: PT.round, lang: LANG });
+  runList(list, PT.round, LANG);
 };
 
 // ---------- playing the chosen sports one after another ----------
 let RUN = null;
-function runList(list, round) {
-  MPB.q = MPB.q.filter((m) => m.r === round); RUN = { list, round, i: -1, mine: [], their: [], waitTheirs: -1 };
+function runList(list, round, lang) {
+  MPB.q = MPB.q.filter((m) => m.r === round); RUN = { list, round, lang: lang === 'de' ? 'de' : 'en', i: -1, mine: [], their: [], waitTheirs: -1 };
   $('game').hidden = false; nextSport();
 }
 function srcFor(id, i) {
   const mp = inParty() ? `&mp=${PT.host ? 'host' : 'join'}&name=${encodeURIComponent(myName || 'Player')}&fname=${encodeURIComponent(PT.friend.name)}&mpr=${RUN.round}&mpi=${i}&mps=${encodeURIComponent(PT.code || '')}` : '';   /* (2026-11-26, R2: mps = the party code: a shared seed, e.g. the same random Snowboard course on both phones) */
-  if (id === 'penalty') return '/penalty/?list=1' + mp;
-  if (id === 'tennis') return 'tennis/?list=1' + mp;
-  if (id === 'streetball') return 'streetball/?list=1' + mp;
-  if (isSnow(id)) return `snow/index.html?sport=${id}&list=1${inParty() ? '&party=1' : ''}${mp}`;
+  const pk = RUN.lang === 'de' ? `&pk=${DE_IDS.join(',')}` : '';   /* (German: only the Lektion 10 packages, see packages-de.js) */
+  if (id === 'penalty') return '/penalty/?list=1' + mp + pk;
+  if (id === 'tennis') return 'tennis/?list=1' + mp + pk;
+  if (id === 'streetball') return 'streetball/?list=1' + mp + pk;
+  if (isSnow(id)) return `snow/index.html?sport=${id}&list=1${inParty() ? '&party=1' : ''}${mp}${pk}`;
   return 'about:blank';
 }
 function nextSport() {
@@ -400,6 +411,7 @@ function showResult(i) {
   else if (!inParty() || PT.host) btns = `<div class="btns"><button class="big" type="button" id="rNext">NEXT: ${ACTS.find((a) => a.id === RUN.list[i + 1]).name.toUpperCase()} ›</button></div>`;
   else btns = `<p class="line">Waiting for ${esc(fname)}…</p>`;
   $('rcard').innerHTML = body + btns; $('result').hidden = false;
+  if (RUN.lang === 'de' && window.FUGIO_DE && FUGIO_DE.walk) FUGIO_DE.walk($('rcard'));   /* (German run: the result card in German too) */
   if ((id === 'penalty' && !r.shootout && (r.stars || 0) >= 2) || r.won || (r.medal || 0) >= 2) { sfx.cheer && sfx.cheer(); vib([30, 40, 60]); }
   const n = $('rNext'); if (n) n.onclick = () => { sfx.click && sfx.click(); send({ t: 'next', i: RUN.i }); nextSport(); };
   const d = $('rDone'); if (d) d.onclick = () => { sfx.click && sfx.click(); stopList(); ME.cheerT = 0; };
