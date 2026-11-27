@@ -49,7 +49,9 @@ if __name__ == "__main__":
     ent = plane_ring(f"{D}/SM_IceCave_Entrance.glb", 3.0)
     ext = plane_ring(f"{D}/SM_IceCave_Exit.glb", 0.0)
     out = {}
-    for tag in ("A", "B"):
+    import glob, os
+    tags = sorted(os.path.basename(f)[len("SM_IceCave_Segment_"):-4] for f in glob.glob(f"{D}/SM_IceCave_Segment_*.glb"))
+    for tag in tags:
         p = f"{D}/SM_IceCave_Segment_{tag}.glb"
         out[f"Entrance(z3)->Segment_{tag}(z0)"] = seam(ent, plane_ring(p, 0.0))
         out[f"Segment_{tag}(z10)->Exit(z0)"] = seam(plane_ring(p, 10.0), ext)
