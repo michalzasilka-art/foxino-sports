@@ -309,14 +309,14 @@ function caveTex(THREE) {
 }
 let CAVE_FLOOR = null;
 function caveFloorMat(THREE) {   // (W2 rev) lane D's frozen cave floor (base colour, normal, roughness; one repeat = 4 m); the code texture until they have loaded
-  if (CAVE_FLOOR) return CAVE_FLOOR; const m = CAVE_FLOOR = new THREE.MeshStandardMaterial({ map: floorTex(THREE), vertexColors: true, roughness: 0.32, metalness: 0.04, emissive: 0x0d2340, emissiveIntensity: 0.3 }), tl = new THREE.TextureLoader();
+  if (CAVE_FLOOR) return CAVE_FLOOR; const m = CAVE_FLOOR = new THREE.MeshStandardMaterial({ map: floorTex(THREE), vertexColors: true, transparent: true, roughness: 0.32, metalness: 0.04, emissive: 0x0d2340, emissiveIntensity: 0.3 }), tl = new THREE.TextureLoader();
   const ld = (n, f) => tl.load(`models/icecave/T_CaveFloor_${n}.jpg?v=1`, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; f(t); m.needsUpdate = true; }, undefined, () => {});
   ld('BaseColor', (t) => { t.colorSpace = THREE.SRGBColorSpace; m.map = t; m.color.setScalar(1.25); }); ld('Normal', (t) => { m.normalMap = t; }); ld('Roughness', (t) => { m.roughnessMap = t; m.roughness = 1; });
   return m;
 }
 function makeIceCave(E, g, Z) {
   S.caveCode = {}; const { THREE } = E, C = S.cave, m1 = C.m1, m2 = C.m2, ring = caveRing(), K = ring.length, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V3 = new THREE.Vector3(), One = new THREE.Vector3(1, 1, 1);
-  const fy = (z) => gY(X(z), z), up = (x, z) => gY(x, z) - CV(z) * caveMask(Math.abs(x - X(z))), tex = caveTex(THREE);
+  const fy = (z) => gY(X(z), z), up = (x, z) => gYU(x, z), tex = caveTex(THREE);
   const add = (m, far = true) => { m.userData.noCast = true; m.castShadow = false; m.receiveShadow = true; g.add(m); if (far) E.far(m); return m; };
   const iceWall = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0x3f86e0, emissiveIntensity: 0.26, roughness: 0.35, metalness: 0.05, side: THREE.DoubleSide });
   // the shell: rows down the cave, each the ring, its walls bulging smoothly in and out (none at the mouths, so the rock faces fit)
@@ -327,23 +327,24 @@ function makeIceCave(E, g, Z) {
   for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < K - 1; k++) { const a = r * K + k, b2 = a + 1, c = a + K, d = c + 1; idx.push(a, b2, c, b2, d, c); }
   { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals(); S.caveCode.shell = add(new THREE.Mesh(geo, iceWall)); }
   // the floor (icy snow) and the snow cap over the cave (the slope's own surface)
-  const grid = (xs, zs, f, mat, wf = () => 1, col = null) => { const P = [], I = [], Cs = []; for (const z of zs) for (const x of xs) { const wx = X(z) + x * wf(z); P.push(wx, f(wx, z), z); if (col) { const c = col(x, z); Cs.push(c, c, c * 1.04); } } for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b2 = a + 1, c = a + xs.length, d = c + 1; I.push(a, c, b2, b2, c, d); }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); if (col) geo.setAttribute('color', new THREE.Float32BufferAttribute(Cs, 3));
+  const grid = (xs, zs, f, mat, wf = () => 1, col = null, al = null) => { const P = [], I = [], Cs = []; for (const z of zs) for (const x of xs) { const wx = X(z) + x * wf(z); P.push(wx, f(wx, z), z); if (col) { const c = col(x, z); Cs.push(c, c, c * 1.04); if (al) Cs.push(al(x, z)); } } for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b2 = a + 1, c = a + xs.length, d = c + 1; I.push(a, c, b2, b2, c, d); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); if (col) geo.setAttribute('color', new THREE.Float32BufferAttribute(Cs, al ? 4 : 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(zs.flatMap((z) => xs.map((x) => [x * wf(z) / 4, z / 4])).flat(), 2)); geo.setIndex(I); geo.computeVertexNormals(); return add(new THREE.Mesh(geo, mat)); };
   const zsC = []; for (let z = m1; z < m2; z += 2.5) zsC.push(z); zsC.push(m2);
   grid([-14, -11.3, -8.6, -4.3, 0, 4.3, 8.6, 11.3, 14], zsC, (x, z) => up(x, z) + 0.02, S.snowM);   // (the snow over the cave: the slope's own surface)
-  S.caveCode.floor = grid([-8.4, -6.6, -4.6, -2.6, -1.2, 0, 1.2, 2.6, 4.6, 6.6, 8.4], [m1 - 0.6, ...zsC, m2 + 0.6], (x, z) => gY(x, z) + 0.03, caveFloorMat(THREE), caveW, (x) => Math.abs(x) < 2.7 ? 1 : 0.62);   // (frozen ground, rock showing; the ride line a little lighter)
+  { const zf = [m1 - 4.5, m1 - 3, m1 - 1.5, ...zsC, m2 + 1.5, m2 + 3, m2 + 4.5], fade = (x, z) => Math.min(1, ss5((z - (m1 - 4.5)) / 4), ss5((m2 + 4.5 - z) / 4));   // (W2 rev: past each mouth the frozen floor fades into the snow in ~4 m)
+    S.caveCode.floor = grid([-8.4, -6.6, -4.6, -2.6, -1.2, 0, 1.2, 2.6, 4.6, 6.6, 8.4], zf, (x, z) => gY(x, z) + 0.03, caveFloorMat(THREE), caveW, (x) => Math.abs(x) < 2.7 ? 1 : 0.62, fade); }   // (frozen ground, rock showing; the ride line a little lighter)
   // the two rock faces with the opening (the arch, no bulges) and the flanks down into the trench; a snow cornice along each top
   const rockM = new THREE.MeshStandardMaterial({ map: floorTex(THREE), color: 0x8a7f76, roughness: 0.85, metalness: 0, side: THREE.DoubleSide });   // (W2 rev: the rock faces' sides: dark grey-brown rock, behind the lanes' cliff)
   const snowLip = new THREE.MeshStandardMaterial({ color: 0xf1f6ff, roughness: 0.85 }), iceM = new THREE.MeshStandardMaterial({ color: 0xc8eeff, roughness: 0.12, metalness: 0.08, emissive: 0x2a6fc0, emissiveIntensity: 0.55 });
   const tips = [], crys = [], drops = [], lamps = [], glows = [];
-  S.caveCode.mouth = []; for (const [mm, dir] of [[m1, -1], [m2, 1]]) { const m = mm - dir * 1.2, cx = X(m), b = fy(m), P = [], I = [], vs = [];   // (the rock face 0.6 m into the hill: the cap's snow overhangs it)
+  S.caveCode.mouth = []; for (const [mm, dir] of [[m1, -1], [m2, 1]]) { const m = mm - dir * 1.4, cx = X(m), b = fy(m), P = [], I = [], vs = [];   // (the rock face 0.6 m into the hill: the cap's snow overhangs it)
     const arch = ring.slice(1, -1).map(([px, py]) => [px, b + py]);   // (+8 … −8 over the top)
     const cols = [...[14, 12.5, 11, 9.6].map((x) => [x, gY(cx + x, m)]), ...arch, ...[9.6, 11, 12.5, 14].map((x) => [-x, gY(cx - x, m)])];
-    cols.forEach(([x, y]) => { const zz = Math.abs(x) > 9 ? mm - dir * 0.15 : m, yb = Math.abs(x) > 9 ? gY(X(zz) + x, zz) : y; vs.push([X(zz) + x, yb - 0.05, zz], [X(zz) + x, up(X(zz) + x, zz) + 0.05, zz]); });   // (W2 rev: the sides right at the mouth line, closing the hill beside the lanes' cliff)
+    cols.forEach(([x, y]) => { const side = Math.abs(x) > 9, zb = side ? mm - dir * 0.4 : m, zt = side ? mm - dir * 3.6 : m, yb = side ? gY(X(zb) + x, zb) : y; vs.push([X(zb) + x, yb - 0.3, zb], [X(zt) + x, up(X(zt) + x, zt) + 0.05, zt]); });   // (W2 rev: the sides lean back into the hill: a snowy slope above the lanes' cliff shoulders)
     vs.forEach((v) => P.push(...v)); for (let i = 0; i < cols.length - 1; i++) { const a = i * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setIndex(I);
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(cols.flatMap(([x, y]) => [x / 6.7, (y - b) / 6.7, x / 6.7, (up(cx + x, m) - b) / 6.7]), 2)); geo.computeVertexNormals(); add(new THREE.Mesh(geo, rockM));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(cols.flatMap(([x, y]) => [x / 6.7, (y - b) / 6.7, x / 6.7, (up(cx + x, m) - b) / 6.7]), 2)); geo.computeVertexNormals(); add(new THREE.Mesh(geo, S.snowM || rockM));
     const lip = new THREE.CatmullRomCurve3([-9.5, -6, -3, 0, 3, 6, 9.5].map((x, i, A) => new THREE.Vector3(cx + x, up(cx + x, m) - (i === 0 || i === A.length - 1 ? 0.5 : 0.05), m + dir * 0.35)));
     { const lg = new THREE.TubeGeometry(lip, 30, 0.6, 10, false); lg.scale(1, 0.7, 1); S.caveCode.mouth.push(add(new THREE.Mesh(lg, snowLip))); }   // (a soft snow overhang just over the opening, sinking into the snow at its ends)
     for (let x = -5.6; x <= 5.61; x += 0.7) { const ay = CAVE_PROF.reduce((y, [px, py], i) => { const q = CAVE_PROF[i + 1]; return q && Math.abs(x) <= px && Math.abs(x) >= q[0] ? py + (q[1] - py) * (px - Math.abs(x)) / (px - q[0]) : y; }, 6.2), room = ay - 4.3;
@@ -368,6 +369,10 @@ function makeIceCave(E, g, Z) {
     const rocks = []; for (let z = m1 + 1.5; z < m2 - 1; z += 2.3) for (const sd of [-1, 1]) if (hsh(z, sd + 21) > 0.3) rocks.push([X(z) + sd * (8 * caveW(z) - 0.55 - hsh(z, sd) * 0.5), fy(z) - 0.1, z, 0.45 + hsh(sd, z + 1) * 0.6, hsh(z, 5) * 6.3]);
     const rkM = new THREE.MeshStandardMaterial({ color: 0x5a524c, roughness: 0.78, metalness: 0 }), rkI = new THREE.InstancedMesh(rg, rkM, rocks.length);
     rocks.forEach(([x, y, z, s2, r], i) => rkI.setMatrixAt(i, M4.compose(V3.set(x, y, z), Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r), new THREE.Vector3(s2 * 1.3, s2, s2)))); S.caveCode.rocks = add(rkI); }   // (grey-brown rubble along the wall base)
+  { const bk = []; for (const [za, zb] of [[m1 - 26, m1 - 6], [m2 + 6, m2 + 26]]) for (let z = za; z < zb; z += 2.1) for (const sd of [-1, 1]) { if (hsh(z, sd + 31) < 0.42) continue; const ax = CHW + 0.6 + hsh(z, sd + 32) * 2.6, x = X(z) + sd * ax; { const s3 = 0.55 + hsh(sd, z + 3) * 0.75; bk.push([x, gY(x, z) - s3 * 0.45, z, s3, hsh(z, 7) * 6.3]); } }
+    const bg2 = new THREE.IcosahedronGeometry(1, 1), bp = bg2.attributes.position, W0 = new THREE.Vector3(); for (let i = 0; i < bp.count; i++) { W0.fromBufferAttribute(bp, i); const w = 1 + 0.2 * Math.sin(W0.x * 2.7 + W0.z * 1.9) + 0.12 * Math.sin(W0.y * 5.1); bp.setXYZ(i, W0.x * w * 1.15, W0.y * w * 0.9, W0.z * w); } bg2.computeVertexNormals();
+    const bkI = new THREE.InstancedMesh(bg2, new THREE.MeshStandardMaterial({ color: 0x5f5852, roughness: 0.85 }), bk.length);
+    bk.forEach(([x, y, z, s2, r], i) => bkI.setMatrixAt(i, M4.compose(V3.set(x, y, z), Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r), new THREE.Vector3(s2, s2, s2)))); bkI.receiveShadow = true; bkI.castShadow = false; g.add(bkI); E.far(bkI); }   // (W2 rev: rock showing low on the gully's banks)
   const lm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffc070, toneMapped: false }), Math.max(1, lamps.length)); lamps.forEach(([x, y, z], i) => lm.setMatrixAt(i, M4.makeTranslation(x, y, z))); lm.count = lamps.length; add(lm); S.caveCode.lm = lm;
   const spr = (col, a) => { const c = document.createElement('canvas'); c.width = c.height = 64; const x2 = c.getContext('2d'), gr = x2.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(1, `rgba(${col},0)`); x2.fillStyle = gr; x2.fillRect(0, 0, 64, 64); return new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, fog: false }); };
   const warm = spr('255,184,96', 0.85), cool = spr('110,200,255', 0.45);
@@ -455,8 +460,9 @@ function pickRoute(sd, loc = LOCS[0]) {
 const PZ0 = -140, PST = 0.25, PN = Math.round((1000 - PZ0) / PST) + 1, PX = new Float32Array(PN), PV = new Float32Array(PN);
 const tab = (T, z) => { const f = Math.max(0, Math.min(PN - 1.001, (z - PZ0) / PST)), i = f | 0; return T[i] + (T[i + 1] - T[i]) * (f - i); };
 const PC = new Float32Array(PN), CV = (z) => tab(PC, z), CAVE_D = -8.3, CHW = 8.6, CAVE_RAMP = 26;   // (W2) the ice cave's depth under the slope (0, or down to CAVE_D through the cave)
-const gYU = (x, z) => gY(x, z) - (S.cave ? CV(z) * caveMask(Math.abs(x - X(z))) : 0);   // (W2: the slope's own surface, as if there were no cave)
-const caveMask = (ax) => ax <= CHW ? 1 : ax >= CHW + 5.4 ? 0 : 1 - ss5((ax - CHW) / 5.4);   // (W2: only the course's strip sinks; the trench walls rise to the slope by 14 m out)
+const gYU = (x, z) => gY(x, z) - (S.cave ? CV(z) * caveMask(Math.abs(x - X(z)), z, Math.sign(x - X(z)) || 1) : 0);   // (W2: the slope's own surface, as if there were no cave)
+const caveNear = (z) => { const C = S.cave; if (!C) return 0; const d = Math.min(Math.abs(z - C.m1), Math.abs(z - C.m2)); return 1 - ss5((d - 3) / 15); };
+const caveMask = (ax, z = 0, sd = 1) => { if (ax <= CHW) return 1; const n = caveNear(z), bw = (10.5 + (1 - n) * (1.1 * Math.sin(z * 0.21 + sd * 1.3) + 0.6 * Math.sin(z * 0.53 + sd * 2.1))) * (1 - n) + 6.3 * n; const t = (ax - CHW) / bw; return t >= 1 ? 0 : 1 - ss5(t); };   // (W2 rev: a gully with soft rounded shoulders, its edges wandering)   // (W2: only the course's strip sinks; the trench walls rise to the slope by 14 m out)
 const X = (z) => tab(PX, z), routeX = X, V = (z) => tab(PV, z) + tab(PC, z), Xd = (z) => X(z + 0.5) - X(z - 0.5), Xdd = (z) => (X(z + 2) - 2 * X(z) + X(z - 2)) / 4, Vd = (z) => V(z + 0.5) - V(z - 0.5);
 const bankAt = (z) => Math.max(-0.14, Math.min(0.14, 0.5 * Math.atan(72 * Xdd(z) / 9.8)));   // (the piste banks a little into a turn)
 const ss5 = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * t * (t * (t * 6 - 15) + 10); };
@@ -712,7 +718,7 @@ function makeForest(THREE, rnd) {
 const fz = (z) => { const F = S.forest; return F ? ss5((z - (F.zA - 14)) / 12) * (1 - ss5((z - (F.zB + 4)) / 12)) : 0; };
 const riverDip = (z) => { const R = S.river; return R ? 1.9 * ss5((z - (R.a - 1.6)) / 1.6) * (1 - ss5((z - R.b) / 1.6)) : 0; };
 const inRiver = (z, m = 0) => !!S.river && z > S.river.a - 1.6 - m && z < S.river.b + 1.6 + m;
-function gY(x, z) { const lx = x - X(z), ax = Math.abs(lx), f = fz(z), fw = 14 - 8.4 * f, k = Math.max(0, Math.min(1, (ax - fw) / 12)), bk = f ? f * 1.1 * Math.pow(Math.max(0, Math.min(1, (ax - fw) / 3)), 2) : 0; return -z * S.SL + tab(PV, z) + (S.cave ? CV(z) * caveMask(ax) : 0) - Math.sign(lx) * Math.min(ax, 16) * Math.tan(bankAt(z)) + k * k * (3 - 2 * k) * ((ax - fw) * 0.16 + Math.sin(x * 0.13 + z * 0.07) * 0.9 + Math.sin(x * 0.05 - z * 0.11) * 1.3) * (S.wild ? 2.3 : 1) + bk - (S.river ? riverDip(z) : 0); }   // (R3: along the route: its swing X, its rolls V, banked a little in the turns)
+function gY(x, z) { const lx = x - X(z), ax = Math.abs(lx), f = fz(z), fw = 14 - 8.4 * f, k = Math.max(0, Math.min(1, (ax - fw) / 12)), bk = f ? f * 1.1 * Math.pow(Math.max(0, Math.min(1, (ax - fw) / 3)), 2) : 0; return -z * S.SL + tab(PV, z) + (S.cave ? CV(z) * caveMask(ax, z, Math.sign(lx) || 1) : 0) - Math.sign(lx) * Math.min(ax, 16) * Math.tan(bankAt(z)) + k * k * (3 - 2 * k) * ((ax - fw) * 0.16 + Math.sin(x * 0.13 + z * 0.07) * 0.9 + Math.sin(x * 0.05 - z * 0.11) * 1.3) * (S.wild ? 2.3 : 1) + bk - (S.river ? riverDip(z) : 0); }   // (R3: along the route: its swing X, its rolls V, banked a little in the turns)
 function gridMesh(THREE, xs, zs, f, mat, xo = () => 0) {
   const pos = [], idx = []; for (const z of zs) { const o = xo(z); for (const x of xs) pos.push(o + x, f(o + x, z), z); }
   for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) { const a = j * xs.length + i, b = a + 1, c = a + xs.length, d = c + 1; idx.push(a, c, b, b, c, d); }
@@ -725,11 +731,12 @@ function makeGround(THREE, snowM, pisteM) {   // (R3: in 50 m pieces that follow
     const R = S.river, F = S.forest, inF = F && z0 + 50 > F.zA - 30 && z0 < F.zB + 22;   // (S5: the forest's banks and the river's channel need the extra rows)
     if (R) { for (const q of [R.a - 1.6, R.a - 0.8, R.a, R.b, R.b + 0.8, R.b + 1.6]) if (q > z0 && q < z0 + 50) zs.push(q); zs.sort((a, b) => a - b); }
     const C = S.cave, inC = C && z0 + 50 > C.m1 - 40 && z0 < C.m2 + 40;   // (W2: the trench down to the cave and up from it)
-    if (C) { for (const q of [C.m1, C.m2]) if (q > z0 && q < z0 + 50) zs.push(q); zs.sort((a, b) => a - b); }
+    if (C) { for (const q of [C.m1, C.m2]) if (q > z0 && q < z0 + 50) zs.push(q); if (inC) for (let q = z0 + 1.25; q < z0 + 50; q += 2.5) if ((q > C.m1 - 34 && q < C.m1) || (q > C.m2 && q < C.m2 + 34)) zs.push(q);   /* (only along the gully's banks) */ zs.sort((a, b) => a - b); }
     if (!inC) grp.add(gridMesh(THREE, inF ? xsF : xs, zs, gY, snowM, X));
-    else { grp.add(gridMesh(THREE, side.map((x) => -x).reverse(), zs, gY, snowM, X), gridMesh(THREE, side, zs, gY, snowM, X));   // (W2: the slopes either side, whole)
-      for (const r of [zs.filter((z) => z <= C.m1 + 1e-6), zs.filter((z) => z >= C.m2 - 1e-6)]) if (r.length > 1) grp.add(gridMesh(THREE, [-14, -11.3, -CHW, -4.3, 0, 4.3, CHW, 11.3, 14], r, gY, snowM, X)); }   // (the middle follows the trench down; none over the cave: its roof is makeIceCave's)
-    const pxs = inF ? [-14, ...mid, 14] : inC ? [-14, -11.3, -CHW, -4.3, 0, 4.3, CHW, 11.3, 14] : [-14, -7, 0, 7, 14];
+    else { const sC = [14, 15.3, 16.6, 18, 19.5, 21, 26, 32, 40, 50, 62, 78, 98, 124], fC = (x, z) => (z > C.m1 + 0.01 && z < C.m2 - 0.01 ? gYU(x, z) : gY(x, z));
+      grp.add(gridMesh(THREE, sC.map((x) => -x).reverse(), zs, fC, snowM, X), gridMesh(THREE, sC, zs, fC, snowM, X));   // (W2: the slopes either side, whole; the gully's upper banks)
+    }   // (the middle is the piste's: no second layer under it)   // (the middle follows the trench down; none over the cave: its roof is makeIceCave's)
+    const pxs = inF ? [-14, ...mid, 14] : inC ? [-14, -12.6, -11.3, -10, -CHW, -6, -3, 0, 3, 6, CHW, 10, 11.3, 12.6, 14] : [-14, -7, 0, 7, 14];
     const runs = C ? [zs.filter((z) => z <= C.m1 + 1e-6), zs.filter((z) => z >= C.m2 - 1e-6)] : [zs];   // (none over the cave: its roof is the snow cap)
     for (const r of runs) if (r.length > 1) grp.add(gridMesh(THREE, pxs, r, (x, z) => gY(x, z) + 0.02, pisteM, X)); }   // (the groomed course: piste lines)
   return grp;
@@ -1217,7 +1224,7 @@ export default {
       if (!dv && k > 0) { const cvs = E.renderer.domElement; dv = S.caveDark = document.createElement('div'); dv.style.cssText = 'position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(4,10,24,.25) 30%,rgba(2,6,16,.85) 100%);opacity:0'; cvs.parentNode.insertBefore(dv, cvs.nextSibling); }
       if (dv) dv.style.opacity = (k * 0.85).toFixed(3); }   // (W2 rev: the short darker moment as he rides into the rock)
     if (S.cave && S.caveIn) { const cz = E.camera.position.z; for (const [o, z, big] of S.caveIn) o.visible = z - cz > (big ? -14 : -10) && z - cz < (big ? 46 : 32); }   // (W2: the cave's small pieces only within ~40 m ahead: from outside the mouth nothing deep inside can be seen)
-    if (S.cave && S.dd0) { const cz = E.camera.position.z, C = S.cave; E.drawDist = cz > C.m1 - 5 && cz < C.m2 - 2 ? Math.min(S.dd0, Math.max(50, C.m2 - cz + 45)) : S.dd0; }   // (W2: inside the cave the walls hide the slope: draw only up to a little past the exit)
+    if (S.cave && S.dd0) { const cz = E.camera.position.z, C = S.cave; E.drawDist = cz > C.m1 - 5 && cz < C.m2 - 2 ? Math.min(S.dd0, Math.max(50, C.m2 - cz + 35)) : cz > C.m1 - CAVE_RAMP - 14 && cz <= C.m1 - 5 ? Math.min(S.dd0, 112) : S.dd0; }   /* (W2 rev: down the ramp the ridge over the cave hides the far course: draw a little less) */   // (W2: inside the cave the walls hide the slope: draw only up to a little past the exit)
     if (S.gap && S.gap.kind === 'igloo') { if (IG.t < 0 && S.s >= S.gap.exit - 3.4) iglooSmash(E); iglooTick(E, dt); iglooFire(E, dt); }   // (R6, R8: the campfire)
     const wx = X(S.s) + S.d; a.g.position.set(wx, -S.s * S.SL + y + V(S.s), S.s);   // (R3: on the route: its swing sideways, its rolls)
     const dd = dt > 1e-5 ? (wx - (S.dPrev ?? wx)) / dt : 0; S.dPrev = wx;   // (he faces where he goes: down the route's turns too)
