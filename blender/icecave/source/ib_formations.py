@@ -806,7 +806,8 @@ def export_glb(lo, path):
     bpy.ops.export_scene.gltf(
         filepath=path, export_format="GLB", use_selection=True, use_active_scene=True, export_apply=True,
         export_yup=True, export_texcoords=True, export_normals=True, export_tangents=True,
-        export_materials="EXPORT", export_image_format="AUTO", export_cameras=False,
+        export_materials="EXPORT", export_image_format="JPEG", export_jpeg_quality=85,
+        export_image_quality=85, export_cameras=False,
         export_lights=False, export_animations=False, export_skins=False, export_morph=False,
         export_extras=False, export_draco_mesh_compression_enable=False)
     lo.location = loc
