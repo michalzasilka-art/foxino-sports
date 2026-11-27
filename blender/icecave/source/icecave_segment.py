@@ -35,28 +35,28 @@ CLEAR_X, CLEAR_Y = 6.55, 4.05     # rider clear box (+5 cm margin): no inward bu
 DMAX = 0.60         # wall/ceiling bulge limit (m, either way)
 RUBMAX = 0.90       # floor-line rubble limit (inward, m) -> foot stays at |x| >= 7.1
 TRI_BUDGET = 2500
-ROCK_TARGET = 0.30  # rock share of the inner surface (brief: 25-35 %)
+WALL_TARGET = 0.45  # bare-rock share below y 4.5 (walls + floor line)
+CEIL_TARGET = 0.33  # field target; the baked colour then shows ~27 % bare rock overhead (ice cracks, rims, end blend)
 HF, FLOW, MASS_K = 0.05, 0.16, 1.35
 BAND = 0.15
 ROCK_PROUD = 0.9
-CEIL = 0.10           # icier crown: fewer small rock spots overhead
 EMIT = 0.08         # emissive strength (glTF emissiveFactor), masked to thick ice
 OUTER = [(9.9, 0.0), (9.9, 5.2), (6.6, 8.1), (-6.6, 8.1), (-9.9, 5.2), (-9.9, 0.0)]
 
 # per-segment character: A = buttress + frozen fall, B = strata ledges + curtains, C = rock boss + ice flow
 # heroes: (S as fraction of the arc, Z, width S, width Z, amplitude); falls: (side -1/1, Z, width, lowest y, thickness)
 SEGMENTS = {
-    "A": dict(seed=1101, mass=0.36, ledge=0.20, lper=1.15, lph=0.20, drip=2.3, plinth=0.30, rub_amp=1.0, rub_len=1.0,
+    "A": dict(seed=1101, boss=0.32, mass=0.36, ledge=0.20, lper=1.15, lph=0.20, drip=2.3, plinth=0.30, rub_amp=1.0, rub_len=1.0,
               heroes=[(0.17, 5.0, 1.6, 2.0, 0.34), (0.70, 2.8, 1.8, 1.4, 0.16)],
               falls=[(1, 6.6, 0.9, 0.35, 0.34)]),
-    "B": dict(seed=2202, mass=0.24, ledge=0.36, lper=0.95, lph=0.55, drip=1.7, plinth=0.36, rub_amp=0.85, rub_len=1.2,
+    "B": dict(seed=2202, boss=0.28, mass=0.24, ledge=0.36, lper=0.95, lph=0.55, drip=1.7, plinth=0.36, rub_amp=0.85, rub_len=1.2,
               heroes=[(0.83, 5.4, 1.5, 2.4, 0.22)],
               falls=[(-1, 3.6, 0.6, 1.2, 0.22), (1, 7.8, 0.5, 1.4, 0.20)]),
-    "C": dict(seed=3303, mass=0.40, ledge=0.16, lper=1.30, lph=0.80, drip=2.8, plinth=0.26, rub_amp=1.15, rub_len=0.85,
+    "C": dict(seed=3303, boss=0.34, mass=0.40, ledge=0.16, lper=1.30, lph=0.80, drip=2.8, plinth=0.26, rub_amp=1.15, rub_len=0.85,
               heroes=[(0.56, 5.6, 2.0, 2.2, 0.36), (0.26, 7.6, 1.2, 1.3, 0.18)],
               falls=[(-1, 3.4, 1.3, 0.30, 0.38)]),
 }
-SHARED = dict(seed=7070, mass=0.30, ledge=0.24, lper=1.10, lph=0.40, drip=2.2, plinth=0.30, rub_amp=1.0, rub_len=1.0,
+SHARED = dict(seed=7070, boss=0.30, mass=0.30, ledge=0.24, lper=1.10, lph=0.40, drip=2.2, plinth=0.30, rub_amp=1.0, rub_len=1.0,
               heroes=[], falls=[])
 
 
@@ -190,7 +190,7 @@ def rubble(S, Z, p):
     return R
 
 
-def scal(S, Z, p, ice_off=0.0):
+def scal(S, Z, p, ice_off=0.0, ceil_off=None):
     """Macro fields of one pattern (seeded): rock relief, ice thickness, curtains, rubble."""
     sd = p["seed"]
     y = np.interp(S, SC, PC[:, 1])
@@ -215,7 +215,13 @@ def scal(S, Z, p, ice_off=0.0):
     saw = sstep(0.0, 0.75, tt) * (1 - sstep(0.80, 0.96, tt))
     on = sstep(0.42, 0.58, fbm(S, Z, 0.15, 5, 2, sd + 5)) * sstep(0.7, 1.2, y) * (1 - sstep(3.3, 4.3, y))
     ledges = p["ledge"] * saw * on
-    Rhigh = np.maximum(masses, ledges)
+    # ceiling bosses: big rounded rock masses breaking through the ice overhead
+    cz = sstep(4.0, 5.0, y)
+    B1, _ = worley(S + 2.0 * wb, Z + 2.0 * wa, 0.22, 3, sd + 15)
+    boss = np.clip(1 - 1.25 * B1, 0, 1)
+    boss = boss * boss * (3 - 2 * boss)
+    bosses = p["boss"] * cz * (0.5 + 1.0 * sstep(5.2, 6.05, y)) * boss * (0.7 + 0.6 * mf)   # favour the crown
+    Rhigh = np.maximum(np.maximum(masses, ledges), bosses)
     # ice: thicker with height, flows, fingered drip curtains, frozen falls
     hfac = sstep(0.6, 4.8, y)
     streak = fbm(S, Z, 0.30, 36, 2, sd + 8)
@@ -223,7 +229,9 @@ def scal(S, Z, p, ice_off=0.0):
     yd = p["drip"] + 1.3 * (2 * fbm(S, Z, 0.08, 14, 2, sd + 9) - 1) + 0.35 * (2 * streak - 1)
     curt = sstep(yd - 0.08, yd + 0.40, y) * (1 - sstep(4.2, 5.4, y))
     jag = 2 * fbm(S, Z, 1.1, 11, 2, sd + 14) - 1          # ragged ice edges
-    t = ice_off + HF * hfac + CEIL * sstep(5.0, 6.1, y) + flow + curt * (0.04 + 0.12 * streak) + 0.05 * jag
+    if ceil_off is None:
+        ceil_off = p.get("ceil_off", 0.0)
+    t = ice_off + HF * hfac + ceil_off * cz + flow + curt * (0.04 + 0.12 * streak) + 0.05 * jag
     for side, z0, wz, ybot, a in p["falls"]:
         sm = (S > L / 2) if side > 0 else (S < L / 2)
         g = np.exp(-((Z - z0) / wz) ** 2) * sm * sstep(ybot, ybot + 0.7, y) * (1 - sstep(4.0, 5.2, y))
@@ -236,19 +244,29 @@ def scal(S, Z, p, ice_off=0.0):
 
 
 def calibrate(p, n=220):
-    """Ice offset so ROCK_TARGET of the surface is bare rock; D centre offset so walls keep the mean ring."""
+    """Ice offsets so WALL_TARGET / CEIL_TARGET of walls / ceiling are bare rock; D centre offset so walls keep the mean ring."""
     S, Z = np.meshgrid((np.arange(n) + 0.5) / n * L, (np.arange(n) + 0.5) / n * LEN)
-    base = scal(S, Z, p, 0.0)
-    lo, hi = -0.8, 1.2
-    for _ in range(30):
-        mid = 0.5 * (lo + hi)
-        share = float(((base["t"] + mid - base["Rhigh"]) < 0).mean())
-        if share > ROCK_TARGET:
-            lo = mid
-        else:
-            hi = mid
-    p["ice_off"] = 0.5 * (lo + hi)
-    ti = base["t"] + p["ice_off"]
+    base = scal(S, Z, p, 0.0, 0.0)
+    cz = sstep(4.0, 5.0, base["y"])
+    wall, ceil = base["y"] < 4.5, base["y"] >= 4.5
+
+    def solve(fixed, region, target, which):
+        lo, hi = -1.2, 1.2
+        for _ in range(30):
+            mid = 0.5 * (lo + hi)
+            io, co = (mid, fixed) if which == "ice" else (fixed, mid)
+            share = float(((base["t"] + io + co * cz - base["Rhigh"]) < 0)[region].mean())
+            if share > target:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi)
+    io, co = 0.0, 0.0
+    for _ in range(4):
+        io = solve(co, wall, WALL_TARGET, "ice")
+        co = solve(io, ceil, CEIL_TARGET, "ceil")
+    p["ice_off"], p["ceil_off"] = io, co
+    ti = base["t"] + io + co * cz
     surf = base["Rlow"] + smax(base["Rhigh"] + ROCK_PROUD * np.maximum(base["Rhigh"] - ti, 0.0), ti, 0.06)
     p["c0"] = float(surf[base["sF"] > 1.4].mean())
     return p
@@ -298,7 +316,7 @@ def tex_fields(S, Z, p):
     hn = y / 6.2
     th = f["t"] - f["Rhigh"]                     # ice thickness over the rock (m)
     M = sstep(-0.012, 0.012, th)                 # ice cover
-    thick = sstep(0.0, 0.07, th)
+    thick = sstep(0.0, 0.10, th)
     # fine detail: one common pattern for every segment (no seam), periodic in Z
     fine = fbm(S, Z, 3.0, 30, 3, 501)
     lum = fbm(S, Z, 1.1, 11, 3, 502)
@@ -310,8 +328,8 @@ def tex_fields(S, Z, p):
     pebble = np.abs(2 * fbm(S, Z, 1.6, 16, 3, 509) - 1)          # ridged grain: soft facets, no tiles
     strata = np.sin(2 * np.pi * (y * 1.7 + 0.8 * fbm(S, Z, 0.3, 3, 2, 506)))
     # rock: dark grey-brown, lighter on protrusions and boulders, dark creases and recesses
-    rdark, rlight = np.array([0.11, 0.10, 0.093]), np.array([0.40, 0.36, 0.32])
-    rt = np.clip(0.18 + 0.75 * (lum - 0.5) + 0.20 * f["dome"] + 0.40 * sstep(0.0, 0.22, -th) + 0.25 * (fine - 0.5) + 0.18 * pebble
+    rdark, rlight = np.array([0.12, 0.104, 0.09]), np.array([0.42, 0.365, 0.315])
+    rt = np.clip(0.22 + 0.75 * (lum - 0.5) + 0.20 * f["dome"] + 0.40 * sstep(0.0, 0.22, -th) + 0.25 * (fine - 0.5) + 0.18 * pebble
                  + 0.25 * sstep(0.05, 0.45, f["rub"]) + 0.25 * f["ledge_on"], 0, 1)
     rock = rdark + (rlight - rdark) * rt[..., None]
     rock = rock * (1 + 0.06 * strata)[..., None] * (1 - 0.30 * f["crease"] - 0.35 * crack)[..., None]
@@ -324,7 +342,9 @@ def tex_fields(S, Z, p):
     v1 = np.clip(v * 2, 0, 1)[..., None]
     v2 = np.clip(v * 2 - 1, 0, 1)[..., None]
     body = deep + (mid - deep) * v1 + (cyan - mid) * v2
-    glaze = rock * 0.45 + np.array([0.09, 0.30, 0.44]) * 0.55
+    # ice flowing off the rock: the thin rim is a lighter frozen flow, streaked down-slope
+    glaze = rock * 0.35 + np.array([0.08, 0.30, 0.45]) * 0.65
+    glaze = glaze + (np.array([0.16, 0.44, 0.60]) - glaze) * (0.6 * sstep(0.45, 0.75, f["streak"]))[..., None]
     icec = glaze + (body - glaze) * thick[..., None]
     frost = np.array([0.46, 0.73, 0.85])
     icec = icec + (frost - icec) * (0.45 * f["lip"] * f["curt"])[..., None]
@@ -332,11 +352,16 @@ def tex_fields(S, Z, p):
     rough = 0.75 + 0.03 * (fine - 0.5)
     rough_i = 0.20 + (0.12 + 0.06 * f["streak"] - 0.20) * thick
     rough = rough + (rough_i - rough) * M
+    # cracks in the rock filled with ice (common pattern, periodic in Z)
+    K1, K2 = worley(S + 1.2 * cw, Z - 1.2 * cw, 0.42, 4, 511)
+    icrack = (1 - sstep(0.0, 0.03, K2 - K1)) * sstep(0.38, 0.52, fbm(S, Z, 0.25, 3, 2, 512))         * (1 - M) * sstep(0.8, 1.5, y)
+    col = col + (np.array([0.10, 0.36, 0.55]) - col) * (0.9 * icrack)[..., None]
+    rough = rough + (0.15 - rough) * icrack
     emis = M * sstep(0.10, 0.30, th)
     # height for the normal map (m): rock grain and cracks, smooth glassy ice with flow ridges and drip lips
     Hr = 0.06 * (lumps - 0.5) - 0.025 * pebble + 0.015 * (fine - 0.5) - 0.012 * crack - 0.02 * f["crease"] + 0.008 * strata
     Hi = 0.035 + 0.012 * (2 * f["streak"] - 1) * (0.3 + f["curt"]) + 0.010 * (rip - 0.5) + 0.016 * f["lip"]
-    H = Hr + (Hi - Hr) * M
+    H = Hr + (Hi - Hr) * M - 0.012 * icrack
     return dict(col=col, rough=rough, emis=emis, H=H, M=M)
 
 

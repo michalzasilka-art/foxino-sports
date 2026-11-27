@@ -112,6 +112,32 @@ def main(d):
         seams[f"{a}->{b}"] = dict(max_pos_gap_mm=float(pos_gap * 1000), unmatched=int(unmatched_b),
                                   max_normal_angle_deg=float(ang))
     out["seams"] = seams
+    # mouths: entrance inner opening (z = 3) -> segment start (z 0); segment end (z 10) -> exit inner opening (z = 0)
+    mouths = {}
+    for mname, mz, seg_z in (("SM_IceCave_Entrance", 3.0, 0.0), ("SM_IceCave_Exit", 0.0, 10.0)):
+        try:
+            js, acc, _ = load(f"{d}/{mname}.glb")
+        except OSError:
+            continue
+        pts = []
+        for mi, mesh in enumerate(js["meshes"]):
+            for prim in mesh["primitives"]:
+                P = acc(prim["attributes"]["POSITION"]).astype(np.float64)
+                # node translation (if any) of the node using this mesh
+                for nd in js["nodes"]:
+                    if nd.get("mesh") == mi:
+                        P = P + np.array(nd.get("translation", [0, 0, 0]))
+                pts.append(P)
+        P = np.concatenate(pts)
+        ring = P[(np.abs(P[:, 2] - mz) < 1e-3)]
+        ring = ring[seg_dist(ring[:, :2], POLY) < 2e-3][:, :2]
+        for tag in TAGS:
+            sp = ends[tag][seg_z][0]
+            dm = np.linalg.norm(sp[:, None] - ring[None], axis=2)
+            mouths[f"{mname}<->{tag}"] = dict(mouth_ring_verts=int(len(ring)),
+                                              max_gap_seg_to_mouth_mm=float(dm.min(1).max() * 1000),
+                                              max_gap_mouth_to_seg_mm=float(dm.min(0).max() * 1000) if len(ring) else None)
+    out["mouths"] = mouths
     print(json.dumps(out, indent=1))
 
 
