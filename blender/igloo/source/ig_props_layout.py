@@ -169,6 +169,47 @@ def overlaps(hulls):
     return [(a, b) for i, a in enumerate(names) for b in names[i + 1:] if not sep(hulls[a], hulls[b])]
 
 
+def shell_fit(shell_obs, placed):
+    """against lane A's real shell: how far any prop vertex pokes past the inner wall (ray from the dome
+    axis at the vertex height), and the gap between the shelf back and the wall."""
+    from mathutils.bvhtree import BVHTree
+    dg = bpy.context.evaluated_depsgraph_get()
+    vs, tris = [], []
+    for o in shell_obs:
+        if o.type != "MESH":
+            continue
+        me = o.evaluated_get(dg).to_mesh()
+        me.calc_loop_triangles()
+        off = len(vs)
+        vs += [o.matrix_world @ v.co for v in me.vertices]
+        tris += [tuple(i + off for i in t.vertices) for t in me.loop_triangles]
+        o.evaluated_get(dg).to_mesh_clear()
+    bvh = BVHTree.FromPolygons(vs, tris)
+    out = {}
+    for name, (root, new) in placed.items():
+        worst, gaps = -1e9, []
+        for o in new:
+            if o.type != "MESH":
+                continue
+            for v in o.data.vertices:
+                w = o.matrix_world @ v.co
+                orig = Vector((0, 0, w.z))
+                d = (w - orig)
+                if d.length < 1e-6:
+                    continue
+                hit, _, _, dist = bvh.ray_cast(orig, d.normalized())
+                if hit is None:
+                    continue
+                worst = max(worst, d.length - dist)
+                if name == "SM_Igloo_Shelf" and abs(d.length - math.sqrt(max(R_IN ** 2 - w.z ** 2, 0))) < 0.02:
+                    gaps.append(dist - d.length)
+        rec = {"max_poke_past_wall_m": round(worst, 4)}
+        if gaps:
+            rec["shelf_back_gap_m"] = [round(min(gaps), 4), round(max(gaps), 4)]
+        out[name] = rec
+    return out
+
+
 # ------------------------------------------------------------------ stand-ins and lights
 def mat(name, rgb, rough=0.8, emis=None, es=0.0):
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
@@ -316,7 +357,16 @@ def run(render_inside=True, render_turn=True):
         rig = bpy.data.collections.new("PreviewRig")
         sc.collection.children.link(rig)
         if os.path.exists(SHELL):
-            import_glb(sc, SHELL, "P_Shell")
+            _, shell_obs = import_glb(sc, SHELL, "P_Shell")
+            plug = os.path.join(ROOT, "SM_Igloo_ExitPlug.glb")
+            if os.path.exists(plug):
+                import_glb(sc, plug, "P_ExitPlug")
+            bpy.context.view_layer.update()
+            fit = shell_fit(shell_obs, placed)
+            data["shell_fit"] = fit
+            summary["shell_fit"] = fit
+            with open(os.path.join(ROOT, "igloo_props_layout.json"), "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=1)
             bpy.ops.mesh.primitive_circle_add(vertices=64, radius=R_IN + 0.3, fill_type="NGON")
             fl = bpy.context.active_object
             fl.data.materials.append(mat("StandIn_FloorSnow", (0.8, 0.85, 0.92), 0.85))

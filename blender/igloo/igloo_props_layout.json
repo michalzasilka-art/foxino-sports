@@ -1209,5 +1209,35 @@
   }
  ],
  "all_ok": true,
- "footprint_overlaps": []
+ "footprint_overlaps": [],
+ "shell_fit": {
+  "SM_Igloo_Rug_1": {
+   "max_poke_past_wall_m": -3.5372
+  },
+  "SM_Igloo_Rug_2": {
+   "max_poke_past_wall_m": -1.2037
+  },
+  "SM_Igloo_Rug_3": {
+   "max_poke_past_wall_m": -3.2958
+  },
+  "SM_Igloo_Pots": {
+   "max_poke_past_wall_m": -2.4199
+  },
+  "SM_Igloo_Table": {
+   "max_poke_past_wall_m": -1.516
+  },
+  "SM_Igloo_SleepFurs": {
+   "max_poke_past_wall_m": -2.84
+  },
+  "SM_Igloo_Shelf": {
+   "max_poke_past_wall_m": 0.0098,
+   "shelf_back_gap_m": [
+    -0.0098,
+    0.0193
+   ]
+  },
+  "SM_Igloo_Lantern": {
+   "max_poke_past_wall_m": -1.426
+  }
+ }
 }
