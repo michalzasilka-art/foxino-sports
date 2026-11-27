@@ -1,0 +1,179 @@
+{
+ "SM_Rail_Cane": {
+  "bytes": 41408,
+  "tris": 1032,
+  "nodes": [
+   "SM_Rail_Cane"
+  ],
+  "node_trs": [
+   {}
+  ],
+  "materials": [
+   "CandyStripe",
+   "PostMetal",
+   "Snow"
+  ],
+  "images": [
+   "image/jpeg"
+  ],
+  "cameras": 0,
+  "lights": false,
+  "extensionsUsed": [],
+  "attributes": [
+   "NORMAL",
+   "POSITION",
+   "TEXCOORD_0"
+  ],
+  "bounds_gltf": [
+   [
+    -0.1395,
+    -0.05,
+    -0.06
+   ],
+   [
+    0.1542,
+    0.5,
+    13.06
+   ]
+  ],
+  "samples": 1301,
+  "misses": 0,
+  "worst_dev_m": 0.0,
+  "worst_at_z": 0.01,
+  "import_objects": [
+   "SM_Rail_Cane"
+  ]
+ },
+ "SM_Box": {
+  "bytes": 13024,
+  "tris": 324,
+  "nodes": [
+   "SM_Box"
+  ],
+  "node_trs": [
+   {}
+  ],
+  "materials": [
+   "BoxPurple",
+   "BoxYellow",
+   "BoxBase"
+  ],
+  "images": [],
+  "cameras": 0,
+  "lights": false,
+  "extensionsUsed": [],
+  "attributes": [
+   "NORMAL",
+   "POSITION",
+   "TEXCOORD_0"
+  ],
+  "bounds_gltf": [
+   [
+    -0.35,
+    -0.05,
+    -0.03
+   ],
+   [
+    0.35,
+    0.42,
+    13.03
+   ]
+  ],
+  "samples": 1301,
+  "misses": 0,
+  "worst_dev_m": 1e-06,
+  "worst_at_z": 0.0,
+  "import_objects": [
+   "SM_Box"
+  ]
+ },
+ "SM_Rail_Rainbow": {
+  "bytes": 33620,
+  "tris": 1088,
+  "nodes": [
+   "SM_Rail_Rainbow"
+  ],
+  "node_trs": [
+   {}
+  ],
+  "materials": [
+   "RainbowStripe",
+   "PostMetal"
+  ],
+  "images": [
+   "image/jpeg"
+  ],
+  "cameras": 0,
+  "lights": false,
+  "extensionsUsed": [],
+  "attributes": [
+   "NORMAL",
+   "POSITION",
+   "TEXCOORD_0"
+  ],
+  "bounds_gltf": [
+   [
+    -0.075,
+    -0.05,
+    -0.0454
+   ],
+   [
+    0.075,
+    1.45,
+    14.0454
+   ]
+  ],
+  "samples": 1401,
+  "misses": 0,
+  "worst_dev_m": -0.001203,
+  "worst_at_z": 6.78,
+  "import_objects": [
+   "SM_Rail_Rainbow"
+  ]
+ },
+ "SM_FunBox": {
+  "bytes": 33240,
+  "tris": 588,
+  "nodes": [
+   "SM_FunBox"
+  ],
+  "node_trs": [
+   {}
+  ],
+  "materials": [
+   "FunTop",
+   "FunSide",
+   "FunTrim"
+  ],
+  "images": [
+   "image/jpeg"
+  ],
+  "cameras": 0,
+  "lights": false,
+  "extensionsUsed": [],
+  "attributes": [
+   "NORMAL",
+   "POSITION",
+   "TEXCOORD_0"
+  ],
+  "bounds_gltf": [
+   [
+    -0.8,
+    -0.05,
+    -0.04
+   ],
+   [
+    0.8,
+    0.6,
+    12.04
+   ]
+  ],
+  "samples": 1201,
+  "misses": 0,
+  "worst_dev_m": -0.000942,
+  "worst_at_z": 2.88,
+  "import_objects": [
+   "SM_FunBox"
+  ]
+ }
+}
