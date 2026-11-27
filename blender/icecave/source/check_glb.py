@@ -1,4 +1,4 @@
-"""Read the exported segment GLBs back (no Blender needed) and check the size contract and the seam.
+"""Read the exported segment GLBs (A, B, C) back (no Blender needed) and check the size contract and the seams.
 "C:\\Program Files\\Blender Foundation\\Blender 5.2\\5.2\\python\\bin\\python.exe" check_glb.py <icecave_dir>
 """
 import itertools
@@ -11,6 +11,7 @@ import numpy as np
 PROF = [(8.00, 0.00), (7.95, 0.80), (7.75, 1.70), (7.35, 2.60), (6.75, 3.45), (5.95, 4.25),
         (4.95, 4.95), (3.75, 5.55), (2.45, 5.95), (1.20, 6.15), (0.00, 6.20)]
 POLY = np.array([(-x, y) for x, y in PROF] + [(x, y) for x, y in reversed(PROF[:-1])])
+TAGS = ("A", "B", "C")
 CT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
@@ -49,7 +50,7 @@ def inside_profile(p):
 
 def main(d):
     out, ends = {}, {}
-    for tag in ("A", "B"):
+    for tag in TAGS:
         js, acc, size = load(f"{d}/SM_IceCave_Segment_{tag}.glb")
         prim = js["meshes"][0]["primitives"][0]
         P = acc(prim["attributes"]["POSITION"]).astype(np.float64)
@@ -82,15 +83,25 @@ def main(d):
         r["min_y"] = float(P[:, 1].min())
         r["floor_faces_inside"] = 0
         tri = P[idx.reshape(-1, 3)]
-        flat = (np.abs(tri[:, :, 1]) < 1e-4).all(1) & (np.abs(tri[:, :, 0]) < 8 - 1e-3).any(1)
-        r["floor_faces_inside"] = int(flat.sum())
+        fn = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+        flat = (np.abs(tri[:, :, 1]) < 1e-4).all(1) & (np.abs(tri[:, :, 0]) < 8 - 1e-3).any(1) & (fn[:, 1] > 0)
+        r["floor_faces_inside"] = int(flat.sum())          # up-facing faces lying on the game floor
+        foot = Pi[Pi[:, 1] < 1e-4]
+        r["foot_min_abs_x"] = float(np.abs(foot[:, 0]).min())
+        # offset from the end ring (the profile extruded): + inward, - outward
+        off = seg_dist(Pi[:, :2], POLY) * np.where(inside_profile(Pi), 1, -1)
+        wall = Pi[:, 1] > 0.9
+        r["bulge_m"] = dict(in_max=float(off[wall].max()), out_max=float(-off[wall].min()),
+                            floor_band_in_max=float(off[~wall].max()))
+        ez = np.minimum(Pi[:, 2], 10 - Pi[:, 2])
+        r["bulge_within_0.5m_of_ends_max"] = float(np.abs(off[ez < 0.5]).max())
         box = (Pi[:, 1] < 4.0) & (np.abs(Pi[:, 0]) < 6.5)
         r["clear_box_verts"] = int(box.sum())
         r["clear_box_verts_inward_of_profile"] = int((box & inside_profile(Pi)).sum())
         out[tag] = r
-    # seam: every pairing (A->A, A->B, B->A, B->B): end of first at z10 vs start of second at z0
+    # seam: all 9 pairings: end of first at z10 vs start of second at z0
     seams = {}
-    for a, b in itertools.product("AB", "AB"):
+    for a, b in itertools.product(TAGS, TAGS):
         pa, na = ends[a][10.0]
         pb, nb = ends[b][0.0]
         dmat = np.linalg.norm(pa[:, None] - pb[None], axis=2)

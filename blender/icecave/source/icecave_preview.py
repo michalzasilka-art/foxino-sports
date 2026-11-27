@@ -9,6 +9,7 @@ import numpy as np
 from mathutils import Vector
 
 PREV = "LaneA_IceCave_Preview"
+FILL_W, LANTERN_W = 170, 320
 
 
 def g2b(x, y, z):
@@ -29,7 +30,7 @@ def fresh_scene():
     w = bpy.data.worlds.get("LaneA_CaveWorld") or bpy.data.worlds.new("LaneA_CaveWorld")
     w.use_nodes = True
     bg = w.node_tree.nodes.get("Background")
-    bg.inputs["Color"].default_value = (0.03, 0.05, 0.10, 1)
+    bg.inputs["Color"].default_value = (0.015, 0.025, 0.05, 1)
     bg.inputs["Strength"].default_value = 1.0
     sc.world = w
     return sc
@@ -73,11 +74,12 @@ def camera(sc, pos, target, lens=24, w=720, h=1280):
 
 
 def cave_lights(sc, zs):
-    # dim cool fill along the run + warm lanterns on alternating walls
+    # dark mood: dim cool fill along the run + two warm lantern points on alternating walls
     for i, z in enumerate(zs):
-        light(sc, "POINT", f"prev_fill_{i}", g2b(0, 4.2, z), 300, (0.55, 0.75, 1.0), 4.0)
+        light(sc, "POINT", f"prev_fill_{i}", g2b(0, 4.0, z), FILL_W, (0.50, 0.70, 1.0), 4.0)
+    for i, z in enumerate(zs[:2]):
         side = 1 if i % 2 == 0 else -1
-        light(sc, "POINT", f"prev_lantern_{i}", g2b(6.0 * side, 2.4, z + 3), 400, (1.0, 0.68, 0.36), 0.15)
+        light(sc, "POINT", f"prev_lantern_{i}", g2b(6.3 * side, 2.2, z + 3), LANTERN_W, (1.0, 0.66, 0.34), 0.15)
 
 
 def render(sc, path):
@@ -105,7 +107,7 @@ def floor(sc, z0, z1):
     m = bpy.data.materials.get("prev_snow") or bpy.data.materials.new("prev_snow")
     m.use_nodes = True
     b = m.node_tree.nodes["Principled BSDF"]
-    b.inputs["Base Color"].default_value = (0.62, 0.72, 0.86, 1)
+    b.inputs["Base Color"].default_value = (0.36, 0.42, 0.52, 1)
     b.inputs["Roughness"].default_value = 0.8
     me.materials.append(m)
     ob = bpy.data.objects.new("prev_floor", me)
