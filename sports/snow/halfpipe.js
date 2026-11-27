@@ -284,8 +284,8 @@ const ROUTES = [
 // as it was; Norway (S5) and Alaska (S6) get their own terrain, sky, light, scenery, parts and routes: set ready and fill them in.
 const LOCS = [
   { id: 'austria', name: 'AUSTRIA', sub: 'The Tyrol Alps · night run', flag: ['#ef3340', '#ffffff', '#ef3340'], ready: true, routes: ['straight', 'rockgap', 'tunnel', 'igloo'] },
-  { id: 'norway', name: 'NORWAY', sub: 'Fjord forest · the frozen river', flag: 'norway', ready: true, routes: ['forest'] },   // (S5)
-  { id: 'alaska', name: 'ALASKA', sub: 'Big mountain · the ice cave', flag: 'alaska', ready: true, routes: ['icecave'] }];   // (S6)
+  { id: 'norway', name: 'NORWAY', sub: 'Fjord forest · the frozen river', flag: 'norway', ready: false, routes: ['forest'] },   // (S5; W1 2026-11-27, Michal: "only Austria map on the snowboard, no other": off, even with ?loc=)
+  { id: 'alaska', name: 'ALASKA', sub: 'Big mountain · the ice cave', flag: 'alaska', ready: false, routes: ['icecave'] }];   // (S6; W1: off, see Norway)
 function pickLoc(sd) {
   const want = new URLSearchParams(QALL).get('loc'), forced = want && LOCS.find((l) => l.id === want && l.ready); if (forced) return forced;
   const wr = new URLSearchParams(QALL).get('route'), rl = wr && LOCS.find((l) => l.ready && l.routes.includes(wr)); if (rl) return rl;   // (a test's ?route=igloo: the location that has it)
