@@ -267,11 +267,28 @@ def bake_object(ob, out_dir, prefix):
     L.new(t_bc.outputs[0], bsdf.inputs["Base Color"])
     L.new(t_r.outputs[0], bsdf.inputs["Roughness"])
     L.new(t_e.outputs[0], bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 0.12
+    bsdf.inputs["Emission Strength"].default_value = 0.10  # faint: the game adds its own glow
     L.new(t_n.outputs[0], nm.inputs["Color"])
     L.new(nm.outputs[0], bsdf.inputs["Normal"])
     bsdf.inputs["Metallic"].default_value = 0.0
+    mat.use_backface_culling = True  # single-sided in glTF
     ob.data.materials.clear()
     ob.data.materials.append(mat)
     bpy.data.materials.remove(bmat)
     return {k: v.name for k, v in imgs.items()}
+
+
+def export_glb(ob, path):
+    """Plain GLB (+Y up, no Draco/meshopt), textures as JPEG quality 85."""
+    sc = bpy.context.scene
+    for o in sc.objects:
+        o.select_set(False)
+    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, use_active_scene=True,
+                              export_apply=True, export_yup=True, export_image_format="JPEG",
+                              export_jpeg_quality=85, export_image_quality=85, export_cameras=False, export_lights=False,
+                              export_vertex_color="NONE", export_attributes=False,
+                              export_draco_mesh_compression_enable=False, export_extras=False,
+                              export_animations=False, export_skins=False, export_morph=False)
+    return os.path.getsize(path)
