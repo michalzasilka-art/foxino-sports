@@ -302,7 +302,7 @@ if (!SEL.length) SEL = ACTS.map((a) => a.id);
 // (2026-11-27, the user: German vocabulary as a content option, "when selected there's no English"): ENGLISH = each sport's own
 // English packages as before; DEUTSCH = Meine Freunde Lektion 10 (packages-de.js) in every sport, passed as ?pk=… (shared/content.js)
 let LANG = store.get('sports-lang', 'en') === 'de' ? 'de' : 'en';
-const DE_IDS = ['DE-L10-V1', 'DE-L10-V2', 'DE-L10-G1', 'DE-L10-G2', 'DE-L10-G3'];
+const DE_IDS = ['DE-L10-G1', 'DE-L10-G2', 'DE-L10-G3'];   /* (past tense only: war/hatte, Perfekt haben/sein, the ge- participle) */
 function renderLang(view) { document.querySelectorAll('#langSeg [data-l]').forEach((b) => { const on = b.dataset.l === LANG; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); b.disabled = !!view; }); }
 $('langSeg').addEventListener('click', (e) => {
   const b = e.target.closest('[data-l]'); if (!b || b.disabled || b.dataset.l === LANG) return;
