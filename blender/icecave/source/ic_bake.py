@@ -85,6 +85,7 @@ def bake_material(name, seed=0.0):
     obj = tc.outputs["Object"]
     a_ice = _n(nt, "ShaderNodeAttribute", (-1400, 400), attribute_name="ice").outputs["Fac"]
     a_snow = _n(nt, "ShaderNodeAttribute", (-1400, 250), attribute_name="snow").outputs["Fac"]
+    a_throat = _n(nt, "ShaderNodeAttribute", (-1400, 100), attribute_name="throat").outputs["Fac"]
     geo = _n(nt, "ShaderNodeNewGeometry", (-1400, -300))
     sep = _n(nt, "ShaderNodeSeparateXYZ", (-1200, -300))
     L.new(geo.outputs["Normal"], sep.inputs[0])
@@ -126,27 +127,39 @@ def bake_material(name, seed=0.0):
     up_m = _math(nt, (-650, -300), "MULTIPLY", up, _math(nt, (-750, -400), "SUBTRACT", 1.0, a_ice))
     up_m = _math(nt, (-500, -300), "MULTIPLY", up_m, _maprange_out(nt, (-600, -450), n2, 0.35, 0.55))
     snow_m = _math(nt, (-450, 500), "MAXIMUM", snow_attr_m, up_m)
+    # W2b: no snow inside the throat (it is a dark rock hole)
+    snow_m = _math(nt, (-380, 560), "MULTIPLY", snow_m, _math(nt, (-450, 620), "SUBTRACT", 1.0,
+                                                               _maprange_out(nt, (-560, 620), a_throat, 0.05, 0.3)))
     ice_in = _math(nt, (-800, 300), "ADD", a_ice, _math(nt, (-950, 300), "MULTIPLY", _math(nt, (-1050, 250), "SUBTRACT", n1, 0.5), 0.6))
     ice_m0 = _maprange(nt, (-650, 300), 0.3, 0.55).outputs[0]
     L.new(ice_in, ice_m0.node.inputs[0])
     ice_m = _math(nt, (-450, 300), "MULTIPLY", ice_m0, _math(nt, (-550, 200), "SUBTRACT", 1.0, snow_m))
 
-    # colours (no pure black or white)
-    rock = _mixc(nt, (-300, -100), n2, (0.17, 0.21, 0.29), (0.31, 0.37, 0.46))  # blue-grey rock
-    rock = _mixc(nt, (-150, -100), _maprange_out(nt, (-300, -250), strata, 0.5, 0.72), rock, (0.40, 0.46, 0.55))
+    # colours (no pure black or white). W2b: dark grey-brown rock, deep cyan-blue ice, the throat darkens inward
+    rock = _mixc(nt, (-300, -100), n2, (0.12, 0.11, 0.098), (0.245, 0.228, 0.205))  # grey-brown rock
+    rock = _mixc(nt, (-150, -100), _maprange_out(nt, (-300, -250), strata, 0.5, 0.72), rock, (0.305, 0.29, 0.27))
     crev = _maprange_out(nt, (-300, -400), vdist, 0.0, 0.22, 0.62, 1.0)
     rock = _mixc_mul(nt, (0, -150), rock, crev)
     ice_t = _maprange_out(nt, (-300, 150), _math(nt, (-450, 150), "ADD", n2, _math(nt, (-550, 100), "MULTIPLY", a_ice, 0.25)), 0.4, 0.85)
-    ice = _mixc(nt, (-150, 150), ice_t, (0.05, 0.20, 0.42), (0.32, 0.70, 0.86))
+    ice = _mixc(nt, (-150, 150), ice_t, (0.03, 0.13, 0.27), (0.17, 0.48, 0.66))
     snow = _mixc(nt, (-150, 350), n3, (0.70, 0.78, 0.88), (0.83, 0.89, 0.95))
     base = _mixc(nt, (150, 0), ice_m, rock, ice)
     base = _mixc(nt, (300, 0), snow_m, base, snow)
+    dark = _maprange_out(nt, (300, 150), a_throat, 0.0, 1.0, 1.0, 0.45)  # deep in the throat: 45 % of the albedo
+    darkc = _n(nt, "ShaderNodeCombineXYZ", (400, 150))
+    for i in range(3):
+        L.new(dark, darkc.inputs[i])
+    base = _mixc_mul(nt, (450, 0), base, darkc.outputs[0])
     L.new(base, bsdf.inputs["Base Color"])
-    rough = _mixf(nt, (150, -300), ice_m, 0.7, 0.15)
+    rough = _mixf(nt, (150, -300), ice_m, 0.75, 0.15)
     rough = _mixf(nt, (300, -300), snow_m, rough, 0.8)
     L.new(rough, bsdf.inputs["Roughness"])
     bsdf.inputs["Metallic"].default_value = 0.0
-    emis = _mixc(nt, (300, 250), ice_m, (0.0, 0.0, 0.0), (0.40, 0.82, 1.0))
+    # emissive only where the ice is thick (frozen flows in the cracks, icicles), never in the throat
+    thick = _maprange_out(nt, (100, 450), a_ice, 0.7, 0.95)
+    thick = _math(nt, (200, 450), "MULTIPLY", thick, ice_m)
+    thick = _math(nt, (250, 500), "MULTIPLY", thick, _math(nt, (150, 550), "SUBTRACT", 1.0, a_throat))
+    emis = _mixc(nt, (300, 250), thick, (0.0, 0.0, 0.0), (0.40, 0.82, 1.0))
     L.new(emis, bsdf.inputs["Emission Color"])
     bsdf.inputs["Emission Strength"].default_value = 1.0
     # height for bump: rock cells + strata, ice soft ripples, snow fine grain
@@ -267,7 +280,7 @@ def bake_object(ob, out_dir, prefix):
     L.new(t_bc.outputs[0], bsdf.inputs["Base Color"])
     L.new(t_r.outputs[0], bsdf.inputs["Roughness"])
     L.new(t_e.outputs[0], bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 0.10  # faint: the game adds its own glow
+    bsdf.inputs["Emission Strength"].default_value = 0.08  # W2b: faint, thick ice only (the game adds its own glow)
     L.new(t_n.outputs[0], nm.inputs["Color"])
     L.new(nm.outputs[0], bsdf.inputs["Normal"])
     bsdf.inputs["Metallic"].default_value = 0.0

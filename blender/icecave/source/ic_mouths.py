@@ -58,7 +58,7 @@ STYLES = {
                              (4.2, 0.7, 8.6, 13.5), (6.4, 0.6, 5.0, 11.5)),
                      cracks=((12, 0.18, 0.9, 0.75), (23, 0.12, 0.8, 0.65), (33, 0.2, 0.95, 0.8)),
                      sil_noise=0.22, lean=0.35, shoulder=3.2, relief=0.9, cornice=1.0, bulge=0.32, lipflare=0.75,
-                     icicles="fringe", cornice_icicles=10),
+                     icicles="sparse", cornice_icicles=5, face_ice=0.0, throat_ice=0.2),
     "exit": dict(seed=7, base=7.65, tilt=-0.06, flat=4.5, footR=14.2, footL=16.0,
                  peaks=((-7.2, 1.75, 1.9, 1), (-3.2, 0.7, 1.2, 1), (1.4, 0.35, 2.4, 0), (4.6, 0.95, 1.5, 0),
                         (8.8, 1.2, 1.2, 1)),
@@ -66,7 +66,7 @@ STYLES = {
                          (3.6, 0.75, -14.5, -9.0), (6.0, 0.65, -11.5, -5.0)),
                  cracks=((9, 0.15, 0.85, 0.8), (17, 0.25, 0.95, 0.7), (27, 0.12, 0.75, 0.75), (35, 0.3, 0.9, 0.6)),
                  sil_noise=0.3, lean=0.7, shoulder=1.9, relief=1.2, cornice=0.75, bulge=0.38, lipflare=0.85,
-                 icicles="clusters", cornice_icicles=8),
+                 icicles="clusters", cornice_icicles=8, face_ice=0.45, throat_ice=0.2),
 }
 
 
@@ -248,6 +248,7 @@ def build_icicles(st, cols, kind):
     specs = []
     # fringe along the lip, columns of the upper arch
     k = 0
+    cl_left = cl_long = 0
     pos = 3.0
     while pos < NC - 4.0:
         j = int(pos)
@@ -259,7 +260,18 @@ def build_icicles(st, cols, kind):
         nz = NRM[j][1] * (1 - f) + NRM[j + 1][1] * f
         nx = NRM[j][0] * (1 - f) + NRM[j + 1][0] * f
         if nz > 0.45:
-            if st["icicles"] == "fringe":
+            if st["icicles"] == "sparse":  # W2b: a few uneven clusters of 2-4 with wide gaps, never an even row
+                if cl_left <= 0:
+                    cl_left = rnd.choice((2, 3, 3, 4))
+                    cl_long = rnd.randrange(cl_left)
+                    step = rnd.uniform(2.6, 5.2) if k else rnd.uniform(0.0, 2.0)  # the gap before the cluster
+                    pos += step
+                    k += 1
+                    continue
+                L = rnd.uniform(0.95, 1.5) if cl_left - 1 == cl_long else rnd.uniform(0.35, 0.8)
+                step = rnd.uniform(0.3, 0.6)
+                cl_left -= 1
+            elif st["icicles"] == "fringe":
                 L = rnd.uniform(0.55, 1.6) * (1.0 if k % 3 else 1.35)
                 step = rnd.uniform(0.55, 0.85)
             else:  # clusters: 3-5 together, then a gap; a curtain of uneven lengths
@@ -312,6 +324,7 @@ def build_mouth(kind, name=None):
     uvl = bm.loops.layers.uv.new("UVMap")
     a_ice = bm.verts.layers.float.new("ice")
     a_snow = bm.verts.layers.float.new("snow")
+    a_throat = bm.verts.layers.float.new("throat")
     a_kind = bm.verts.layers.int.new("rowkind")
     kinds = {"lining": 0, "lip": 1, "face": 2, "rim": 3, "back": 4, "icicle": 5}
     V = [[None] * NC for _ in range(NR)]
@@ -320,13 +333,15 @@ def build_mouth(kind, name=None):
             x, d, z, kd, prm, ice_o, snow_o = cols[j][r]
             v = bm.verts.new(frame(x, d, z, kind))
             v[a_kind] = kinds[kd]
-            ice = snow = 0.0
-            if kd == "lining":
-                ice = 1.0
+            ice = snow = throat = 0.0
+            if kd == "lining":  # W2b: the throat is dark rock with only a little ice
+                ice = st["throat_ice"]
+                throat = 1.0 - 0.25 * prm  # prm = d / 3 (0 at the ring, ~0.73 at d 2.2)
             elif kd == "lip":
-                ice = 1.0 - 0.55 * prm
+                ice = st["throat_ice"] * (1 - prm)
+                throat = 0.55 * (1 - prm) ** 1.5
             elif kd == "face":
-                ice = max(0.0, 0.45 - prm * 1.6)
+                ice = max(0.0, st["face_ice"] - prm * 1.6)
                 th = math.atan2(RING[j][1], RING[j][0])
                 snow = smooth(0.82, 1.0, prm) * (0.35 + 0.65 * math.cos(th) ** 2)
             elif kd == "rim":
@@ -339,6 +354,7 @@ def build_mouth(kind, name=None):
                 snow = snow_o if kd != "face" else max(snow, snow_o)
             v[a_ice] = ice
             v[a_snow] = snow
+            v[a_throat] = throat
             V[r][j] = v
     # average row arc length for v coords
     seg = []
