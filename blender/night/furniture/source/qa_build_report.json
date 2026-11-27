@@ -1,0 +1,205 @@
+{
+ "SM_Arch_Start": {
+  "tris": {
+   "SM_Arch_Start": 1202,
+   "SignFace": 2
+  },
+  "total": 1204,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -10.85,
+    -0.45,
+    0.0
+   ],
+   [
+    10.85,
+    0.45,
+    7.8
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_Arch_Finish": {
+  "tris": {
+   "SM_Arch_Finish": 1378,
+   "SignFace": 2
+  },
+  "total": 1380,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -12.95,
+    -0.5,
+    0.0
+   ],
+   [
+    12.95,
+    0.68,
+    11.55
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_Board": {
+  "tris": {
+   "SM_Board": 662,
+   "SignFace": 2
+  },
+  "total": 664,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -1.72,
+    -0.4,
+    0.0
+   ],
+   [
+    1.72,
+    0.16,
+    2.415
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_Fence": {
+  "tris": {
+   "SM_Fence": 850
+  },
+  "total": 850,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -2.105,
+    -0.38,
+    0.0
+   ],
+   [
+    2.105,
+    0.42,
+    1.35
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_FlagPole": {
+  "tris": {
+   "SM_FlagPole": 228,
+   "FlagCloth": 144
+  },
+  "total": 372,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -0.5,
+    -0.5,
+    0.0
+   ],
+   [
+    1.552,
+    0.5,
+    6.14
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_StartHut": {
+  "tris": {
+   "SM_StartHut": 1616,
+   "SignFace": 2,
+   "glow": 384
+  },
+  "total": 2002,
+  "budget": 3000,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -1.85,
+    -1.57,
+    0.0
+   ],
+   [
+    1.85,
+    1.57,
+    3.57
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ },
+ "SM_Floodlight": {
+  "tris": {
+   "SM_Floodlight": 1024,
+   "glow": 48
+  },
+  "total": 1072,
+  "budget": 1500,
+  "qa_pass": true,
+  "qa_errors": [],
+  "qa_warnings": [],
+  "bounds_blender": [
+   [
+    -1.2,
+    -0.36,
+    0.0
+   ],
+   [
+    1.2,
+    0.7413,
+    10.0
+   ]
+  ],
+  "qa_detail": {
+   "zfighting": [],
+   "floating": [],
+   "enclosed": [],
+   "back_to_back": []
+  }
+ }
+}
