@@ -1,0 +1,463 @@
+{
+ "SM_RaceArch": {
+  "size_bytes": 73096,
+  "nodes": [
+   {
+    "name": "SignFace",
+    "trs": [],
+    "children": [],
+    "tris": 2,
+    "prims": [
+     {
+      "material": "SignFace",
+      "tris": 2,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        1.0
+       ]
+      ],
+      "corner_uvs": {
+       "[19.0, 6.199999809265137, -0.0]": [
+        0.0,
+        1.0
+       ],
+       "[-19.0, 6.199999809265137, -0.0]": [
+        1.0,
+        1.0
+       ],
+       "[-19.0, 9.600000381469727, -0.0]": [
+        1.0,
+        0.0
+       ],
+       "[19.0, 9.600000381469727, -0.0]": [
+        0.0,
+        0.0
+       ]
+      },
+      "normal_mean": [
+       0.0,
+       0.0,
+       -1.0
+      ]
+     }
+    ],
+    "min": [
+     -19.0,
+     6.199999809265137,
+     -0.0
+    ],
+    "max": [
+     19.0,
+     9.600000381469727,
+     -0.0
+    ]
+   },
+   {
+    "name": "SM_RaceArch",
+    "trs": [],
+    "children": [
+     "SignFace"
+    ],
+    "tris": 2168,
+    "prims": [
+     {
+      "material": "Tint",
+      "tris": 1704,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        1.0
+       ]
+      ]
+     },
+     {
+      "material": "ArchTrim",
+      "tris": 464,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        0.75
+       ]
+      ]
+     }
+    ],
+    "min": [
+     -21.399999618530273,
+     -0.3499999940395355,
+     -2.200000047683716
+    ],
+    "max": [
+     21.399999618530273,
+     11.300000190734863,
+     2.200000047683716
+    ]
+   }
+  ],
+  "materials": [
+   {
+    "name": "SignFace",
+    "doubleSided": true,
+    "baseTex": false,
+    "normalTex": false,
+    "rough": 0.6000000238418579,
+    "metal": 0,
+    "baseFactor": [
+     0.8600000143051147,
+     0.8600000143051147,
+     0.8600000143051147,
+     1
+    ]
+   },
+   {
+    "name": "Tint",
+    "doubleSided": false,
+    "baseTex": false,
+    "normalTex": false,
+    "rough": 0.41999998688697815,
+    "metal": 0,
+    "baseFactor": [
+     0.800000011920929,
+     0.8100000023841858,
+     0.8299999833106995,
+     1
+    ]
+   },
+   {
+    "name": "ArchTrim",
+    "doubleSided": false,
+    "baseTex": true,
+    "normalTex": false,
+    "rough": 0.5,
+    "metal": 0,
+    "baseFactor": null
+   }
+  ],
+  "images": [
+   {
+    "mime": "image/jpeg",
+    "bytes": 11188
+   }
+  ],
+  "extensions": [],
+  "cameras": 0,
+  "lights": false,
+  "bounds_min": [
+   -21.399999618530273,
+   -0.3499999940395355,
+   -2.200000047683716
+  ],
+  "bounds_max": [
+   21.399999618530273,
+   11.300000190734863,
+   2.200000047683716
+  ],
+  "tris_total": 2170,
+  "check_inside_span_below_6.2": 0,
+  "check_min_abs_x_below_6.2": 19.0,
+  "check_signface_size": [
+   38.0,
+   3.4
+  ],
+  "check_banner_bottom_y": 6.199999809265137,
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_RaceArch: ~99.76% UV overlap (ok only if mirrored/stacked on purpose; bakes break)",
+    "SM_RaceArch: duplicate verts=252 loose verts=0",
+    "asset lowest point z=-0.35 (not resting on ground plane z=0)"
+   ]
+  }
+ },
+ "SM_Pontoon": {
+  "size_bytes": 197840,
+  "nodes": [
+   {
+    "name": "SM_Pontoon",
+    "trs": [],
+    "children": [],
+    "tris": 580,
+    "prims": [
+     {
+      "material": "Pontoon",
+      "tris": 580,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.0,
+        0.008200000040233135
+       ],
+       [
+        1.0,
+        0.9900000095367432
+       ]
+      ]
+     }
+    ],
+    "min": [
+     -3.700000047683716,
+     -0.4000000059604645,
+     -1.100000023841858
+    ],
+    "max": [
+     3.700000047683716,
+     0.40700000524520874,
+     1.100000023841858
+    ]
+   }
+  ],
+  "materials": [
+   {
+    "name": "Pontoon",
+    "doubleSided": false,
+    "baseTex": true,
+    "normalTex": true,
+    "rough": 0.6000000238418579,
+    "metal": 0,
+    "baseFactor": null
+   }
+  ],
+  "images": [
+   {
+    "mime": "image/jpeg",
+    "bytes": 65626
+   },
+   {
+    "mime": "image/jpeg",
+    "bytes": 108729
+   }
+  ],
+  "extensions": [],
+  "cameras": 0,
+  "lights": false,
+  "bounds_min": [
+   -3.700000047683716,
+   -0.4000000059604645,
+   -1.100000023841858
+  ],
+  "bounds_max": [
+   3.700000047683716,
+   0.40700000524520874,
+   1.100000023841858
+  ],
+  "tris_total": 580,
+  "check_x_bounds": [
+   -3.700000047683716,
+   3.700000047683716
+  ],
+  "check_z_bounds": [
+   -1.0999999046325684,
+   1.0999999046325684
+  ],
+  "check_deck_top_y": 0.3499999940395355,
+  "check_tiling_gaps": [
+   -1e-07,
+   -1e-07,
+   -1e-07,
+   -1e-07
+  ],
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_Pontoon: ~25.04% UV overlap (ok only if mirrored/stacked on purpose; bakes break)",
+    "SM_Pontoon: duplicate verts=210 loose verts=0",
+    "asset lowest point z=-0.4 (not resting on ground plane z=0)"
+   ]
+  }
+ },
+ "SM_LanePost": {
+  "size_bytes": 10680,
+  "nodes": [
+   {
+    "name": "SignFace",
+    "trs": [],
+    "children": [],
+    "tris": 2,
+    "prims": [
+     {
+      "material": "SignFace",
+      "tris": 2,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        1.0
+       ]
+      ],
+      "corner_uvs": {
+       "[0.6000000238418579, 1.2999999523162842, -0.0949999988079071]": [
+        0.0,
+        1.0
+       ],
+       "[-0.6000000238418579, 1.2999999523162842, -0.0949999988079071]": [
+        1.0,
+        1.0
+       ],
+       "[-0.6000000238418579, 2.5, -0.0949999988079071]": [
+        1.0,
+        0.0
+       ],
+       "[0.6000000238418579, 2.5, -0.0949999988079071]": [
+        0.0,
+        0.0
+       ]
+      },
+      "normal_mean": [
+       0.0,
+       0.0,
+       -1.0
+      ]
+     }
+    ],
+    "min": [
+     -0.6000000238418579,
+     1.2999999523162842,
+     -0.0949999988079071
+    ],
+    "max": [
+     0.6000000238418579,
+     2.5,
+     -0.0949999988079071
+    ]
+   },
+   {
+    "name": "SM_LanePost",
+    "trs": [],
+    "children": [
+     "SignFace"
+    ],
+    "tris": 122,
+    "prims": [
+     {
+      "material": "LanePost",
+      "tris": 122,
+      "attrs": [
+       "NORMAL",
+       "POSITION",
+       "TEXCOORD_0"
+      ],
+      "uv_range": [
+       [
+        0.019999999552965164,
+        0.013100000098347664
+       ],
+       [
+        0.9800000190734863,
+        0.9800000190734863
+       ]
+      ]
+     }
+    ],
+    "min": [
+     -0.6600000262260437,
+     0.0,
+     -0.1331000030040741
+    ],
+    "max": [
+     0.6600000262260437,
+     2.559999942779541,
+     0.1331000030040741
+    ]
+   }
+  ],
+  "materials": [
+   {
+    "name": "SignFace",
+    "doubleSided": false,
+    "baseTex": false,
+    "normalTex": false,
+    "rough": 0.6000000238418579,
+    "metal": 0,
+    "baseFactor": [
+     0.8600000143051147,
+     0.8600000143051147,
+     0.8600000143051147,
+     1
+    ]
+   },
+   {
+    "name": "LanePost",
+    "doubleSided": false,
+    "baseTex": true,
+    "normalTex": false,
+    "rough": 0.44999998807907104,
+    "metal": 0,
+    "baseFactor": null
+   }
+  ],
+  "images": [
+   {
+    "mime": "image/jpeg",
+    "bytes": 1728
+   }
+  ],
+  "extensions": [],
+  "cameras": 0,
+  "lights": false,
+  "bounds_min": [
+   -0.6600000262260437,
+   0.0,
+   -0.13314999639987946
+  ],
+  "bounds_max": [
+   0.6600000262260437,
+   2.559999942779541,
+   0.13314999639987946
+  ],
+  "tris_total": 124,
+  "check_signface_size": [
+   1.2,
+   1.2
+  ],
+  "check_base_y": 0.0,
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_LanePost: ~50.54% UV overlap (ok only if mirrored/stacked on purpose; bakes break)",
+    "SM_LanePost: duplicate verts=88 loose verts=0"
+   ]
+  }
+ }
+}
