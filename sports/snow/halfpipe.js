@@ -1162,9 +1162,11 @@ function makeArch(E, text, color, z, hw, h, mat = null) {
 // The sign keeps everything the card had: what the question is for and its number, the sentence with its hints "(be)", the gap, then the
 // right word filled in (green) and "Yes!" / "The right word: …"; the answer clock runs just above the buttons. Then it flies off up the hill.
 const SIGN = { m: null, cv: null, tex: null, on: false, t0: 0, out: 0, who: '', q: null, res: null, ar: 3 };
+// (2026-11-28, Michal: "go back to the first design of questions") the question is the H33 3D sign again (v060-v080): a card in the camera's
+// view, high up, flying in and off. The cloud code below (QC, qcBuild, qcBurst, qcBits) is kept but not used.
 function signDraw(E) {
   const { THREE } = E, q = SIGN.q, r = SIGN.res; if (!q) return;
-  let W = 1024; const cv = SIGN.cv || (SIGN.cv = document.createElement('canvas')), g = cv.getContext('2d'), pad = 46, maxW = W - pad * 2;
+  const W = 1024, cv = SIGN.cv || (SIGN.cv = document.createElement('canvas')), g = cv.getContext('2d'), pad = 46, maxW = W - pad * 2;
   const fill = r ? q.right : null, ok = r && r.ok;
   // the words: before / the gap / after; "(hints)" small and grey
   const toks = []; const add = (t) => { for (const part of String(t).split(/(\([^)]*\))/)) { if (!part) continue; if (/^\(.*\)$/.test(part)) toks.push({ t: part, hint: 1 }); else for (const w of part.split(/(\s+)/)) if (w && !/^\s+$/.test(w)) toks.push({ t: w }); } };
@@ -1175,36 +1177,44 @@ function signDraw(E) {
   for (; fs >= 40; fs -= 4) { lines = [[]]; let x = 0; const sp = fs * 0.28;
     for (const tk of toks) { const w = width(tk, fs); if (x > 0 && x + sp + w > maxW) { lines.push([]); x = 0; } lines[lines.length - 1].push({ tk, w }); x += (x > 0 ? sp : 0) + w; }
     if (lines.length <= 3) break; }
-  { let tw = 0; for (const ln of lines) tw = Math.max(tw, ln.reduce((t, it, i) => t + it.w + (i ? fs * 0.28 : 0), 0)); g.font = "700 36px 'Lilita One', 'Arial Black', sans-serif"; const nw = g.measureText(r && !r.ok ? `${r.timeout ? 'Too slow! ' : ''}The right word: ${q.right}` : 'Tap the right word').width;
-    W = Math.round(Math.max(560, Math.min(1024, Math.max(tw, nw) + pad * 2 + 40))); }   // (N14 polish: the canvas hugs the sentence, so short sentences fill the cloud too)
-  const lh = fs * 1.22, headH = 62, noteH = 58, H0 = Math.round(pad * 0.7 + headH + lines.length * lh + noteH + pad * 0.5), PM = 50, H = H0 + PM * 2;   // (N14: room round the card for the cloud's puffs)
+  const lh = fs * 1.22, headH = 62, noteH = 58, H = Math.round(pad * 0.7 + headH + lines.length * lh + noteH + pad * 0.5);
   cv.width = W; cv.height = H; SIGN.ar = W / H;
   const rr = (x, y, w, h, rad) => { g.beginPath(); g.moveTo(x + rad, y); g.arcTo(x + w, y, x + w, y + h, rad); g.arcTo(x + w, y + h, x, y + h, rad); g.arcTo(x, y + h, x, y, rad); g.arcTo(x, y, x + w, y, rad); g.closePath(); };
-  g.clearRect(0, 0, W, H);
-  // (N14, Michal: "3D questions ... cloudy style") the card is a soft cloud: a lavender under-puff, then the white cloud with a coloured glow (purple while asking, green / red once answered)
-  const cloud = (fill, dy, glow) => { const x0 = 46, x1 = W - 46, y0 = PM + 6 + dy, y1 = H - PM - 6 + dy; g.save(); g.fillStyle = fill; if (glow) { g.shadowColor = glow; g.shadowBlur = 34; }
-    const blob = () => { g.beginPath(); rr(x0, y0, x1 - x0, y1 - y0, 70); g.fill(); const n = 6; for (let i = 0; i < n; i++) { const cx = x0 + 80 + i * (x1 - x0 - 160) / (n - 1), rad = 46 + ((i * 37) % 3) * 6; g.beginPath(); g.arc(cx, y0 + 16, rad, 0, 7); g.fill(); }
-      for (let i = 0; i < 5; i++) { const cx = x0 + 120 + i * (x1 - x0 - 240) / 4, rad = 34 + ((i * 53) % 3) * 5; g.beginPath(); g.arc(cx, y1 - 12, rad, 0, 7); g.fill(); }
-      const sr = Math.min(70, (y1 - y0) * 0.3); for (const cx of [x0 + 40, x1 - 40]) { g.beginPath(); g.arc(cx, (y0 + y1) / 2, sr, 0, 7); g.fill(); } };
-    blob(); if (glow) { g.shadowBlur = 0; blob(); } g.restore(); };
-  void cloud; g.save(); g.translate(0, PM); const ft = g.fillText.bind(g); g.fillText = (t2, x2, y2) => { const f2 = +(/(\d+)px/.exec(g.font) || [0, 40])[1]; g.save(); g.lineJoin = 'round'; g.lineWidth = Math.max(7, f2 * 0.2); g.strokeStyle = 'rgba(255,255,255,.95)'; g.shadowColor = 'rgba(70,50,150,.45)'; g.shadowBlur = 10; g.strokeText(t2, x2, y2); g.restore(); ft(t2, x2, y2); };   // (N14 rev: the letters carry a soft white outline and glow: readable on the 3D cloud and against the sky)
+  g.clearRect(0, 0, W, H); rr(8, 8, W - 16, H - 16, 40); g.fillStyle = '#ffffff'; g.fill(); g.lineWidth = 12; g.strokeStyle = r ? (ok ? '#2fbf6a' : '#e8456b') : '#7e34f2'; g.stroke();
   g.fillStyle = '#7e34f2'; g.font = "400 40px 'FoxComic', 'Lilita One', sans-serif"; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText(SIGN.who.toUpperCase(), W / 2, pad * 0.7 + headH / 2);
   let y = pad * 0.7 + headH + lh / 2; const sp = fs * 0.28; g.textAlign = 'left';
   for (const ln of lines) { const tw = ln.reduce((t, it, i) => t + it.w + (i ? sp : 0), 0); let x = (W - tw) / 2;
     for (const { tk, w } of ln) {
-      if (tk.gap) { if (fill) { rr(x, y - fs * 0.62, w, fs * 1.18, 18); g.fillStyle = ok ? '#2fbf6a' : '#2fbf6a'; g.fill(); g.fillStyle = '#ffffff'; g.font = font(fs); (g.fillText === ft || !ft ? g.fillText.bind(g) : ft)(fill, x + fs * 0.25, y + 2); }
+      if (tk.gap) { if (fill) { rr(x, y - fs * 0.62, w, fs * 1.18, 18); g.fillStyle = ok ? '#2fbf6a' : '#2fbf6a'; g.fill(); g.fillStyle = '#ffffff'; g.font = font(fs); g.fillText(fill, x + fs * 0.25, y + 2); }
         else { g.fillStyle = '#ffc23a'; g.fillRect(x, y + fs * 0.42, w, 10); } }
       else { g.fillStyle = tk.hint ? '#7a6fa8' : '#22164f'; g.font = font(fs, tk.hint); g.fillText(tk.t, x, y + 2); }
       x += w + sp; }
     y += lh; }
   g.textAlign = 'center'; g.font = "700 36px 'Lilita One', 'Arial Black', sans-serif";
-  if (!r) { g.fillStyle = '#7a6fa8'; g.fillText('Tap the right word', W / 2, H0 - pad * 0.5 - noteH / 2); }
-  else if (ok) { g.fillStyle = '#1e9e55'; g.fillText('Yes!', W / 2, H0 - pad * 0.5 - noteH / 2); }
-  else { g.fillStyle = '#d23447'; g.fillText(`${r.timeout ? 'Too slow! ' : ''}The right word: ${q.right}`, W / 2, H0 - pad * 0.5 - noteH / 2); }
-  g.restore(); g.fillText = ft;
+  if (!r) { g.fillStyle = '#7a6fa8'; g.fillText('Tap the right word', W / 2, H - pad * 0.5 - noteH / 2); }
+  else if (ok) { g.fillStyle = '#1e9e55'; g.fillText('Yes!', W / 2, H - pad * 0.5 - noteH / 2); }
+  else { g.fillStyle = '#d23447'; g.fillText(`${r.timeout ? 'Too slow! ' : ''}The right word: ${q.right}`, W / 2, H - pad * 0.5 - noteH / 2); }
   if (SIGN.tex && (SIGN.tex.image.width !== W || SIGN.tw !== W || SIGN.th !== H)) { SIGN.tex.dispose(); SIGN.tex = null; }   // (a new size = a new texture: a GPU texture keeps its first size)
   if (!SIGN.tex) { const c2 = document.createElement('canvas'); c2.width = W; c2.height = H; SIGN.tex = new THREE.CanvasTexture(c2); SIGN.tex.colorSpace = THREE.SRGBColorSpace; SIGN.tex.anisotropy = 4; SIGN.tw = W; SIGN.th = H; }
   SIGN.tex.image.getContext('2d').clearRect(0, 0, W, H); SIGN.tex.image.getContext('2d').drawImage(cv, 0, 0); SIGN.tex.needsUpdate = true; if (SIGN.m) { SIGN.m.material.map = SIGN.tex; SIGN.m.material.needsUpdate = true; }
+}
+function signShow(E, who, q) {
+  const { THREE } = E; SIGN.who = who; SIGN.q = q; SIGN.res = null; signDraw(E);
+  if (!SIGN.m) { SIGN.m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: SIGN.tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false, fog: false })); SIGN.m.renderOrder = 30; SIGN.m.frustumCulled = false; SIGN.m.userData.noCast = true; }
+  if (!E.camera.parent) E.scene.add(E.camera); if (SIGN.m.parent !== E.camera) E.camera.add(SIGN.m);
+  SIGN.m.material.map = SIGN.tex; SIGN.m.material.needsUpdate = true; SIGN.on = true; SIGN.t0 = performance.now(); SIGN.out = 0; SIGN.m.visible = true; signPlace(E);
+}
+function signAnswer(E, r) { if (!SIGN.on || !SIGN.q) return; SIGN.res = r; signDraw(E); SIGN.out = performance.now() + (r.ok ? 650 : 1500); }
+function signPlace(E) {   // every frame: where the sign floats in the camera's view (and its fly-in / fly-off)
+  const m = SIGN.m; if (!m || !SIGN.on) return; const now = performance.now(), cam = E.camera, D = 10;
+  const vh = 2 * D * Math.tan(cam.fov * Math.PI / 360), vw = vh * cam.aspect, land = cam.aspect > 1;
+  let w = Math.min(vw * (land ? 0.62 : 0.94), vh * (land ? 0.36 : 0.27) * SIGN.ar), h = w / SIGN.ar;
+  const topPx = (land ? 64 : 86) / innerHeight, fy = Math.max(land ? 0.28 : 0.3, topPx + (h / vh) / 2 + 0.01);
+  const kin = Math.min(1, (now - SIGN.t0) / 420), e = 1 - Math.pow(1 - kin, 3), kout = SIGN.out ? Math.max(0, Math.min(1, (now - SIGN.out) / 380)) : 0;
+  const d = D + (1 - e) * 34 + kout * 22, sway = Math.sin(now / 900) * 0.025;
+  m.position.set(0, vh * (0.5 - fy) * d / D + kout * 3, -d); m.rotation.set(-0.08 * (1 - e) + sway * 0.4, sway, sway * 0.5); m.scale.set(w, h, 1);
+  m.material.opacity = Math.min(1, kin * 2) * (1 - kout); SIGN.botPx = (fy + (h / vh) / 2) * innerHeight;   // (where its bottom edge is on screen: the count-ups stay below it)
+  if (kout >= 1) { SIGN.on = false; m.visible = false; }
 }
 // (N14–N16 rev, Michal: "the questions ... cloudy style, just the text floating in the space above each jump like a cloud, and each time you jump
 // you destroy them after each answer; make the camera centre on them; figure out the U-ramp") the question is a real puffy 3D cloud in the world
@@ -1218,34 +1228,6 @@ function qcBuild(E) {
   for (const [x, y, z, r] of P) { const m = new THREE.Mesh(sg, pm); m.position.set(x, y, z); m.scale.setScalar(r); m.userData.noCast = true; m.castShadow = false; m.renderOrder = 29; body.add(m); }
   const text = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: SIGN.tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false, fog: false })); text.renderOrder = 31; text.frustumCulled = false;
   body.traverse((o) => { o.frustumCulled = false; }); g.add(body, text); g.userData.pm = pm; E.scene.add(g); Object.assign(QC, { g, body, text }); return g;
-}
-function signShow(E, who, q) {
-  const at0 = S.qAt, fn0 = S.qAtFn; if (QC.g) qcBurst(E, true); S.qAt = at0; S.qAtFn = fn0;   // (a cloud still up: it goes at once)
-  SIGN.who = who; SIGN.q = q; SIGN.res = null; signDraw(E); qcBuild(E); QC.text.material.map = SIGN.tex; QC.text.material.needsUpdate = true;
-  QC.pos = (S.qAtFn ? S.qAtFn() : S.qAt ? S.qAt.clone() : null) || S.a.g.position.clone().add(new E.THREE.Vector3(0, 4, 10)); QC.chase = 0;
-  SIGN.m = QC.text; SIGN.on = true; SIGN.t0 = performance.now(); SIGN.out = 0; SIGN.lt = 0; SIGN.ansT = 0; signPlace(E);
-}
-function signAnswer(E, r) { if (!SIGN.on || !SIGN.q) return; SIGN.res = r; signDraw(E); SIGN.ansT = performance.now(); if (QC.g) QC.g.userData.pm.emissive.setHex(r.ok ? 0xc9ffd9 : 0xffd0d8); }
-function signPlace(E) {   // every frame: the cloud's place, size and face; after the answer, it waits for him to fly into it, then bursts
-  const now = performance.now(), dt = SIGN.lt ? Math.min(0.05, (now - SIGN.lt) / 1000) : 0; SIGN.lt = now; qcBits(E, dt);
-  { const fr = fxRoot(), hold = !!(SIGN.on && QC.g); if (fr && fr._held !== hold) { fr._held = hold; fr.style.visibility = hold ? 'hidden' : ''; } }   // (no trick banner over an unburst cloud: it shows the moment the cloud bursts)
-  if (!SIGN.on || !QC.g) { if (SIGN._popHid) { SIGN._popHid = false; for (const el of document.querySelectorAll('.scoreFly')) el.style.visibility = ''; } return; } SIGN._popHid = true; const cam = E.camera, g = QC.g, rp = S.a.g.position;
-  if (SIGN.botPx) for (const el of document.querySelectorAll('.scoreFly')) { const tp = parseFloat(el.style.top) || 0; if (tp < SIGN.botPx + 34) el.style.top = `${SIGN.botPx + 34}px`; const r = el.getBoundingClientRect(); el.style.visibility = r.bottom < SIGN.botPx + 10 ? 'hidden' : ''; }   // (N14 polish: a points pop-up never sits on the cloud)
-  if (S.qAtFn && !QC.chase) { const p2 = S.qAtFn(); if (p2) QC.pos.copy(p2); }   /* (the U-ramp: it rides along 12 m ahead of the lens until he flies into it, so the lens never catches it up) */   // (the U-ramp: it keeps over the wall where his next air will be)
-  if (SIGN.res && !QC.chase) { const late = now - SIGN.ansT, air = (S.phase === 'kair' || S.phase === 'bair' || S.phase === 'air') && S.airT && S.air / S.airT >= 0.26;
-    if (late > (SIGN.res.ok ? 300 : 800) && (air || S.phase === 'rail' || late > 2800)) QC.chase = now; }
-  if (QC.chase) { const tgt = rp.clone().add(new E.THREE.Vector3(0, 2.3, 0.8)); QC.pos.lerp(tgt, 1 - Math.exp(-11 * dt)); if ((now - QC.chase > 260 && QC.pos.distanceTo(tgt) < 1.6) || now - QC.chase > 460) { qcBurst(E); return; } }   /* (v96: it meets him with its lower puffs, the sentence band stays above his head until the burst) */
-  const d = Math.max(2, QC.pos.distanceTo(cam.position)), land = cam.aspect > 1, visW = 2 * d * Math.tan(cam.fov * Math.PI / 360) * cam.aspect;
-  let w = Math.max(7.5, (land ? 0.42 : 0.74) * visW); w = Math.min(w, (land ? 0.62 : 0.78) * visW);   /* (D4: on a phone the whole cloud fits the screen's width, so no word is ever cut at the edge) */ if (QC.chase) { const kc = Math.min(1, (now - QC.chase) / 260); w = w + (Math.min(w, 1.7) - w) * kc; }   // (as it meets him it shrinks to his size, so the burst never fills the screen)   // (a readable size on screen at least; it grows as he comes closer, up to nearly the screen's width)
-  const kin = Math.min(1, (now - SIGN.t0) / 380), e = 1 - Math.pow(1 - kin, 3), bob = Math.sin(now / 650) * 0.06 * w / 8, h = w / SIGN.ar;
-  g.position.copy(QC.pos).y += bob; g.quaternion.copy(cam.quaternion);
-  if (!QC.chase) { const c = (SIGN._c || (SIGN._c = new E.THREE.Vector3())).copy(g.position).project(cam); if (c.z < 1) { const lo = land ? 0.14 : 0.24, hi = land ? 0.5 : 0.46, ny = Math.max(lo, Math.min(hi, c.y)), visH = 2 * d * Math.tan(cam.fov * Math.PI / 360);   // (N14 rev: it always stays on screen, in the upper part: never cut off at the top, never over him or the answer bubbles)
-    if (ny !== c.y) g.position.add((SIGN._u || (SIGN._u = new E.THREE.Vector3())).set(0, 1, 0).applyQuaternion(cam.quaternion).multiplyScalar((ny - c.y) * visH / 2));
-    const wf = Math.min(0.98, (w * 1.28) / visW), lim = Math.max(0, 1 - wf), nx = Math.max(-lim, Math.min(lim, c.x)); if (nx !== c.x) g.position.add(SIGN._u.set(1, 0, 0).applyQuaternion(cam.quaternion).multiplyScalar((nx - c.x) * visW / 2)); } }   /* (and sideways: the whole cloud stays on a narrow screen) */ g.scale.setScalar(0.4 + 0.6 * e); QC.text.scale.set(w * 0.88, h * 0.88, 1); QC.body.scale.set(w * 0.68, h * 0.62 + w * 0.13, w * 0.22);   /* (D4: the sentence stays inside the puffs, ~85% of the cloud's width) */
-  let see = 1; { const rv = (SIGN._r || (SIGN._r = new E.THREE.Vector3())).copy(rp).setY(rp.y + 0.6).project(cam), cv2 = (SIGN._c2 || (SIGN._c2 = new E.THREE.Vector3())).copy(g.position).project(cam), hw = (w * 0.62) / visW, hh = ((h * 0.62 + w * 0.12) * cam.aspect) / visW;
-    if (Math.abs(rv.x - cv2.x) < hw * 2 && Math.abs(rv.y - cv2.y) < hh * 2) see = QC.chase ? 0.22 : 0.4; }   /* (he overlaps it on screen, in front or behind: see-through) */   /* (he is behind the cloud on screen: it turns see-through, so he never disappears) */
-  QC.see = (QC.see ?? 1) + (see - (QC.see ?? 1)) * Math.min(1, dt * 8); QC.text.material.opacity = Math.min(1, kin * 2.5) * (QC.chase ? 0.75 : 1); g.userData.pm.opacity = Math.min(1, kin * 2.5) * QC.see;
-  const v = (SIGN._v || (SIGN._v = new E.THREE.Vector3())).set(0, -(h * 0.62 + w * 0.12) * 0.9, 0).applyQuaternion(cam.quaternion).add(g.position).project(cam); SIGN.botPx = Math.min(innerHeight * 0.6, Math.max(60, (1 - v.y) / 2 * innerHeight));   // (where its bottom edge is on screen: the count-ups stay below it)
 }
 function qcBurst(E, quick = false) {   // the cloud bursts: its puffs fly apart and fade, the sentence breaks into tiles that tumble away
   const { THREE } = E, g = QC.g; if (!g) return; g.updateMatrixWorld(true); const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
