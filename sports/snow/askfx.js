@@ -77,14 +77,14 @@ body.tabs .blabel.long span{font-size:clamp(15px,4vw,22px)} body.tabs .blabel.on
 @media (min-aspect-ratio:3/2) and (max-height:560px){body.tabs #labels{top:0;bottom:0;left:auto;right:0;width:auto;flex-direction:column;justify-content:flex-end;align-items:stretch;gap:8px;padding:0 max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 40px) 0}
  body.tabs .blabel{flex:0 0 auto;width:min(210px,23vw);max-width:none} body.tabs .blabel span{min-height:50px}
  .rBar{left:auto;right:max(12px,env(safe-area-inset-right,0px));width:min(210px,23vw);bottom:calc(env(safe-area-inset-bottom,0px) + 226px)}}
-.pdRes{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(26,12,70,.6),rgba(26,12,70,.25) 70%);animation:pdIn .35s ease-out}
+.pdRes{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(26,12,70,.6),rgba(26,12,70,.25) 70%);animation:pdIn .35s ease-out}
 .pdRes .card{width:min(88vw,420px);padding:16px 18px 14px;border-radius:24px;background:#fff;box-shadow:0 9px 0 #2a0b57,0 0 0 5px #7e34f2,0 18px 40px rgba(0,0,0,.35);font-family:'Lilita One',sans-serif;color:#22164f;text-align:center}
 .pdRes h3{margin:0 0 8px;font:400 clamp(22px,6vw,30px)/1 'FoxComic','Lilita One',sans-serif;color:#7e34f2;letter-spacing:.04em}
 .pdRes ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px} .pdRes li{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:12px;background:#f2eefc;font-size:clamp(14px,4vw,18px)}
 .pdRes li.me{background:#ffe9a8;box-shadow:0 0 0 3px #ffc23a} .pdRes li b{width:34px;text-align:left;color:#7e34f2} .pdRes li i{width:14px;height:14px;border-radius:4px;flex:none} .pdRes li span{flex:1;text-align:left} .pdRes li em{font-style:normal;color:#6a5aa0}
 .pdRes .st{margin-top:10px;font-size:clamp(15px,4.2vw,19px)} .pdRes .st big{display:block;font-size:clamp(28px,8vw,38px);letter-spacing:4px;color:#ffc23a;-webkit-text-stroke:1.5px #2a1e5c;paint-order:stroke fill}
 @media (min-aspect-ratio:3/2) and (max-height:560px){.pdRes .card{padding:10px 14px 10px} .pdRes h3{margin-bottom:4px} .pdRes li{padding:3px 10px} .pdRes .st{margin-top:4px}}
-@keyframes pdIn{from{opacity:0}to{opacity:1}}
+@keyframes pdIn{from{transform:scale(.92)}to{transform:none}}
 @keyframes tcIn{to{opacity:1;transform:translateX(-50%) scale(1)}}`;
   document.head.appendChild(st); FX = document.createElement('div'); FX.id = 'trickCard'; document.body.appendChild(FX); return FX; }
 let CARDN = 0;
