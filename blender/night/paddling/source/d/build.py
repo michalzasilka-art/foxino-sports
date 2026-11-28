@@ -544,8 +544,7 @@ log["zfix_lod1"] = zfix(lod1)
 for nm_, p in L.SEATS.items():
     e = bpy.data.objects.new(nm_, None); link(e); e.empty_display_type = "PLAIN_AXES"; e.empty_display_size = 0.15
     e.location = B(*p)
-    e.parent = tgt_ob
-drum_ob.parent = tgt_ob
+    # seats and Drum stay at root level (siblings of the LODs)
 
 # ---------------------------------------------------------------- 11. clean scene + export
 for ob_ in (hi, liner_src, fit_src, drum_src, ped_src):

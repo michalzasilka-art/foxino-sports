@@ -9,8 +9,8 @@ GLB = sys.argv[sys.argv.index("--") + 1]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=GLB)
 bpy.context.view_layer.update()
-SEATS = {"Seat_L1": (-0.42, 0.36, 2.3), "Seat_R1": (0.42, 0.36, 2.3), "Seat_L2": (-0.42, 0.36, 0.6),
-         "Seat_R2": (0.42, 0.36, 0.6), "Seat_L3": (-0.42, 0.36, -1.1), "Seat_R3": (0.42, 0.36, -1.1),
+SEATS = {"Seat_L1": (0.42, 0.36, 2.3), "Seat_R1": (-0.42, 0.36, 2.3), "Seat_L2": (0.42, 0.36, 0.6),
+         "Seat_R2": (-0.42, 0.36, 0.6), "Seat_L3": (0.42, 0.36, -1.1), "Seat_R3": (-0.42, 0.36, -1.1),
          "Seat_Drum": (0.0, 0.36, 4.0)}
 ROWS = [2.3, 0.6, -1.1]
 def g(v):  # Blender -> glTF
