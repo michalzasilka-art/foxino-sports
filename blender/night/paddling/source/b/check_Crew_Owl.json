@@ -1,0 +1,664 @@
+{
+ "file": "Crew_Owl.glb",
+ "bytes": 572264,
+ "tris": {
+  "Mallet_L": 56,
+  "Mallet_R": 56,
+  "Paddle": 146,
+  "Crew_Owl": 1190,
+  "Crew_Owl_LOD1": 396
+ },
+ "materials": {
+  "Mallet_L": "M_Props_Owl",
+  "Mallet_R": "M_Props_Owl",
+  "Paddle": "M_Props_Owl",
+  "Crew_Owl": "M_Crew_Owl",
+  "Crew_Owl_LOD1": "M_Crew_Owl_LOD1"
+ },
+ "bones": 54,
+ "bones_bad_prefix": [],
+ "bone_names": [
+  "mixamorig:Hips",
+  "mixamorig:LeftUpLeg",
+  "mixamorig:LeftLeg",
+  "mixamorig:LeftFoot",
+  "mixamorig:LeftToeBase",
+  "mixamorig:LeftToe_End",
+  "mixamorig:RightUpLeg",
+  "mixamorig:RightLeg",
+  "mixamorig:RightFoot",
+  "mixamorig:RightToeBase",
+  "mixamorig:RightToe_End",
+  "mixamorig:Spine",
+  "mixamorig:Spine1",
+  "mixamorig:Spine2",
+  "mixamorig:LeftShoulder",
+  "mixamorig:LeftArm",
+  "mixamorig:LeftForeArm",
+  "mixamorig:LeftHand",
+  "mixamorig:LeftHandIndex1",
+  "mixamorig:LeftHandIndex2",
+  "mixamorig:LeftHandIndex3",
+  "mixamorig:LeftHandMiddle1",
+  "mixamorig:LeftHandMiddle2",
+  "mixamorig:LeftHandMiddle3",
+  "mixamorig:LeftHandPinky1",
+  "mixamorig:LeftHandPinky2",
+  "mixamorig:LeftHandPinky3",
+  "mixamorig:LeftHandRing1",
+  "mixamorig:LeftHandRing2",
+  "mixamorig:LeftHandRing3",
+  "mixamorig:LeftHandThumb1",
+  "mixamorig:LeftHandThumb2",
+  "mixamorig:LeftHandThumb3",
+  "mixamorig:Neck",
+  "mixamorig:Head",
+  "mixamorig:RightShoulder",
+  "mixamorig:RightArm",
+  "mixamorig:RightForeArm",
+  "mixamorig:RightHand",
+  "mixamorig:RightHandIndex1",
+  "mixamorig:RightHandIndex2",
+  "mixamorig:RightHandIndex3",
+  "mixamorig:RightHandMiddle1",
+  "mixamorig:RightHandMiddle2",
+  "mixamorig:RightHandMiddle3",
+  "mixamorig:RightHandPinky1",
+  "mixamorig:RightHandPinky2",
+  "mixamorig:RightHandPinky3",
+  "mixamorig:RightHandRing1",
+  "mixamorig:RightHandRing2",
+  "mixamorig:RightHandRing3",
+  "mixamorig:RightHandThumb1",
+  "mixamorig:RightHandThumb2",
+  "mixamorig:RightHandThumb3"
+ ],
+ "skins": 1,
+ "anims": {
+  "paddle_L": 1.0,
+  "paddle_R": 1.0,
+  "cheer": 1.5,
+  "drum": 0.5
+ },
+ "Paddle_parent": "mixamorig:RightHand",
+ "Mallet_L_parent": "mixamorig:LeftHand",
+ "Mallet_R_parent": "mixamorig:RightHand",
+ "extensions": [],
+ "images": [
+  [
+   "T_Crew_Owl_BaseColor",
+   "image/jpeg"
+  ],
+  [
+   "T_Props_Owl",
+   "image/jpeg"
+  ],
+  [
+   "T_Crew_Owl_LOD1_BaseColor",
+   "image/jpeg"
+  ]
+ ],
+ "rest_bounds": {
+  "min": [
+   -0.402,
+   0.196,
+   -0.202
+  ],
+  "max": [
+   0.409,
+   1.062,
+   0.18
+  ]
+ },
+ "rest_hips_y": 0.455,
+ "rest_hips_xz": [
+  0.0,
+  0.0
+ ],
+ "rest_feet_min_y": 0.196,
+ "clips": {
+  "paddle_L": {
+   "frames": 31,
+   "stretch_max": 4.216,
+   "stretch_min": 0.035,
+   "far_max": 1.078,
+   "body_min_y": 0.196,
+   "spike__Owl": [
+    0.0949,
+    "Crew_Owl",
+    1,
+    "mixamorig:LeftShoulder",
+    0.0349,
+    0.1473
+   ],
+   "spike_LOD1": [
+    0.1306,
+    "Crew_Owl_LOD1",
+    1,
+    "mixamorig:LeftShoulder",
+    0.0794,
+    0.2496
+   ],
+   "prop_scale_minmax": {
+    "Paddle": [
+     1.0,
+     1.0
+    ],
+    "Mallet_L": [
+     0.0,
+     0
+    ],
+    "Mallet_R": [
+     0.0,
+     0
+    ]
+   },
+   "hand_to_shaft_max": {
+    "Left": 0.113,
+    "Right": 0.149
+   },
+   "catch": {
+    "7": {
+     "lowest": [
+      0.725,
+      -0.214,
+      0.65
+     ],
+     "blade_c": [
+      0.642,
+      -0.045,
+      0.6
+     ],
+     "blade_min_y": -0.214,
+     "blade_max_y": 0.115
+    },
+    "8": {
+     "lowest": [
+      0.727,
+      -0.235,
+      0.623
+     ],
+     "blade_c": [
+      0.645,
+      -0.064,
+      0.576
+     ],
+     "blade_min_y": -0.235,
+     "blade_max_y": 0.099
+    }
+   },
+   "exit": {
+    "19": {
+     "lowest": [
+      0.721,
+      -0.064,
+      -0.025
+     ],
+     "blade_c": [
+      0.629,
+      0.105,
+      0.002
+     ],
+     "blade_min_y": -0.064,
+     "blade_max_y": 0.265
+    },
+    "20": {
+     "lowest": [
+      0.714,
+      0.012,
+      -0.063
+     ],
+     "blade_c": [
+      0.618,
+      0.179,
+      -0.031
+     ],
+     "blade_min_y": 0.012,
+     "blade_max_y": 0.333
+    },
+    "21": {
+     "lowest": [
+      0.71,
+      0.07,
+      -0.051
+     ],
+     "blade_c": [
+      0.607,
+      0.233,
+      -0.022
+     ],
+     "blade_min_y": 0.07,
+     "blade_max_y": 0.382
+    },
+    "22": {
+     "lowest": [
+      0.708,
+      0.104,
+      0.016
+     ],
+     "blade_c": [
+      0.598,
+      0.262,
+      0.038
+     ],
+     "blade_min_y": 0.104,
+     "blade_max_y": 0.407
+    }
+   },
+   "blade_x_range_in_water": [
+    0.62,
+    0.651
+   ],
+   "in_water_frames": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+   ]
+  },
+  "paddle_R": {
+   "frames": 31,
+   "stretch_max": 3.566,
+   "stretch_min": 0.049,
+   "far_max": 1.075,
+   "body_min_y": 0.196,
+   "spike__Owl": [
+    0.0804,
+    "Crew_Owl",
+    30,
+    "mixamorig:RightShoulder",
+    0.0426,
+    0.1443
+   ],
+   "spike_LOD1": [
+    0.1354,
+    "Crew_Owl_LOD1",
+    1,
+    "mixamorig:RightArm",
+    0.0717,
+    0.2429
+   ],
+   "prop_scale_minmax": {
+    "Paddle": [
+     1.0,
+     1.0
+    ],
+    "Mallet_L": [
+     0.0,
+     0
+    ],
+    "Mallet_R": [
+     0.0,
+     0
+    ]
+   },
+   "hand_to_shaft_max": {
+    "Left": 0.148,
+    "Right": 0.113
+   },
+   "catch": {
+    "7": {
+     "lowest": [
+      -0.726,
+      -0.215,
+      0.65
+     ],
+     "blade_c": [
+      -0.64,
+      -0.048,
+      0.6
+     ],
+     "blade_min_y": -0.215,
+     "blade_max_y": 0.109
+    },
+    "8": {
+     "lowest": [
+      -0.728,
+      -0.236,
+      0.622
+     ],
+     "blade_c": [
+      -0.643,
+      -0.067,
+      0.575
+     ],
+     "blade_min_y": -0.236,
+     "blade_max_y": 0.093
+    }
+   },
+   "exit": {
+    "19": {
+     "lowest": [
+      -0.721,
+      -0.064,
+      -0.025
+     ],
+     "blade_c": [
+      -0.629,
+      0.105,
+      0.004
+     ],
+     "blade_min_y": -0.064,
+     "blade_max_y": 0.265
+    },
+    "20": {
+     "lowest": [
+      -0.715,
+      0.012,
+      -0.063
+     ],
+     "blade_c": [
+      -0.617,
+      0.178,
+      -0.031
+     ],
+     "blade_min_y": 0.012,
+     "blade_max_y": 0.331
+    },
+    "21": {
+     "lowest": [
+      -0.71,
+      0.069,
+      -0.051
+     ],
+     "blade_c": [
+      -0.606,
+      0.232,
+      -0.022
+     ],
+     "blade_min_y": 0.069,
+     "blade_max_y": 0.38
+    },
+    "22": {
+     "lowest": [
+      -0.709,
+      0.103,
+      0.016
+     ],
+     "blade_c": [
+      -0.597,
+      0.261,
+      0.038
+     ],
+     "blade_min_y": 0.103,
+     "blade_max_y": 0.405
+    }
+   },
+   "blade_x_range_in_water": [
+    -0.651,
+    -0.619
+   ],
+   "in_water_frames": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18
+   ]
+  },
+  "cheer": {
+   "frames": 46,
+   "stretch_max": 3.22,
+   "stretch_min": 0.065,
+   "far_max": 1.095,
+   "body_min_y": 0.196,
+   "spike__Owl": [
+    0.0601,
+    "Crew_Owl",
+    11,
+    "mixamorig:LeftShoulder",
+    0.0349,
+    0.1125
+   ],
+   "spike_LOD1": [
+    0.095,
+    "Crew_Owl_LOD1",
+    26,
+    "mixamorig:RightArm",
+    0.0717,
+    0.2026
+   ],
+   "prop_scale_minmax": {
+    "Paddle": [
+     1.0,
+     1.0
+    ],
+    "Mallet_L": [
+     0.0,
+     0
+    ],
+    "Mallet_R": [
+     0.0,
+     0
+    ]
+   }
+  },
+  "drum": {
+   "frames": 16,
+   "stretch_max": 2.678,
+   "stretch_min": 0.11,
+   "far_max": 1.077,
+   "body_min_y": 0.196,
+   "spike__Owl": [
+    0.027,
+    "Crew_Owl",
+    15,
+    "mixamorig:LeftShoulder",
+    0.0349,
+    0.0794
+   ],
+   "spike_LOD1": [
+    0.0404,
+    "Crew_Owl_LOD1",
+    7,
+    "mixamorig:RightArm",
+    0.0717,
+    0.1479
+   ],
+   "prop_scale_minmax": {
+    "Paddle": [
+     0.0,
+     0
+    ],
+    "Mallet_L": [
+     1.0,
+     1.0
+    ],
+    "Mallet_R": [
+     1.0,
+     1.0
+    ]
+   },
+   "mallet_ball": {
+    "Mallet_L": {
+     "0": [
+      0.075,
+      0.584,
+      0.45
+     ],
+     "1": [
+      0.075,
+      0.591,
+      0.449
+     ],
+     "2": [
+      0.075,
+      0.612,
+      0.445
+     ],
+     "3": [
+      0.075,
+      0.643,
+      0.44
+     ],
+     "4": [
+      0.075,
+      0.678,
+      0.433
+     ],
+     "5": [
+      0.075,
+      0.712,
+      0.427
+     ],
+     "6": [
+      0.075,
+      0.738,
+      0.423
+     ],
+     "7": [
+      0.075,
+      0.752,
+      0.42
+     ],
+     "8": [
+      0.075,
+      0.752,
+      0.42
+     ],
+     "9": [
+      0.075,
+      0.738,
+      0.423
+     ],
+     "10": [
+      0.075,
+      0.712,
+      0.427
+     ],
+     "11": [
+      0.075,
+      0.678,
+      0.433
+     ],
+     "12": [
+      0.075,
+      0.643,
+      0.44
+     ],
+     "13": [
+      0.075,
+      0.612,
+      0.445
+     ],
+     "14": [
+      0.075,
+      0.591,
+      0.449
+     ],
+     "15": [
+      0.075,
+      0.584,
+      0.45
+     ]
+    },
+    "Mallet_R": {
+     "0": [
+      -0.075,
+      0.754,
+      0.42
+     ],
+     "1": [
+      -0.075,
+      0.747,
+      0.421
+     ],
+     "2": [
+      -0.075,
+      0.726,
+      0.425
+     ],
+     "3": [
+      -0.075,
+      0.695,
+      0.43
+     ],
+     "4": [
+      -0.075,
+      0.66,
+      0.437
+     ],
+     "5": [
+      -0.075,
+      0.626,
+      0.442
+     ],
+     "6": [
+      -0.075,
+      0.6,
+      0.447
+     ],
+     "7": [
+      -0.075,
+      0.586,
+      0.45
+     ],
+     "8": [
+      -0.075,
+      0.586,
+      0.45
+     ],
+     "9": [
+      -0.075,
+      0.6,
+      0.447
+     ],
+     "10": [
+      -0.075,
+      0.626,
+      0.442
+     ],
+     "11": [
+      -0.075,
+      0.66,
+      0.437
+     ],
+     "12": [
+      -0.075,
+      0.695,
+      0.43
+     ],
+     "13": [
+      -0.075,
+      0.726,
+      0.425
+     ],
+     "14": [
+      -0.075,
+      0.747,
+      0.421
+     ],
+     "15": [
+      -0.075,
+      0.754,
+      0.42
+     ]
+    }
+   }
+  }
+ },
+ "loop_err": {
+  "paddle_L": 0.0,
+  "paddle_R": 0.0,
+  "drum": 0.0
+ }
+}
