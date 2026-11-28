@@ -312,7 +312,8 @@ if XMAS:
     gme = bpy.data.meshes.new("glow"); gbm.to_mesh(gme); gbm.free()
     gme.materials.append(gm); gme.shade_smooth()
     gme.uv_layers.new(name="UVMap")
-    glow = link(bpy.data.objects.new("glow", gme)); glow.parent = x0
+    # root level (sibling of LOD0 and LOD1) so the star and bulbs also show while LOD1 is visible
+    glow = link(bpy.data.objects.new("glow", gme))
     sel(glow); bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02); bpy.ops.object.mode_set(mode="OBJECT")
     log["xmas"] = {"bulbs": placed, "star_bottom_z": round(tz - R1, 3), "tree_top_z": round(top, 3),
