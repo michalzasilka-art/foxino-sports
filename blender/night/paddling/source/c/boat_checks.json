@@ -1,0 +1,441 @@
+{
+ "file": "Boat_Fox.glb",
+ "size_kb": 611.7,
+ "ok": true,
+ "notes": [],
+ "roots": [
+  "Boat_Fox",
+  "Boat_Fox_LOD1",
+  "Drum",
+  "Seat_Drum",
+  "Seat_L1",
+  "Seat_L2",
+  "Seat_L3",
+  "Seat_R1",
+  "Seat_R2",
+  "Seat_R3"
+ ],
+ "children": {},
+ "tris": {
+  "Boat_Fox": 3226,
+  "Boat_Fox_LOD1": 918,
+  "Drum": 176
+ },
+ "materials": [
+  "Boat_Fox"
+ ],
+ "images": [
+  [
+   "Boat_Fox_Normal",
+   "image/jpeg"
+  ],
+  [
+   "Boat_Fox_BaseColor",
+   "image/jpeg"
+  ]
+ ],
+ "Boat_Fox": {
+  "min": [
+   -0.816,
+   -0.13,
+   -5.701
+  ],
+  "max": [
+   0.806,
+   1.524,
+   5.701
+  ],
+  "length_z": 11.401,
+  "width_x": 1.622,
+  "gunwale_top_median": 0.429,
+  "gunwale_top_range": [
+   0.229,
+   0.544
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.13
+ },
+ "Boat_Fox_LOD1": {
+  "min": [
+   -0.8,
+   -0.133,
+   -5.699
+  ],
+  "max": [
+   0.797,
+   1.519,
+   5.692
+  ],
+  "length_z": 11.391,
+  "width_x": 1.597,
+  "gunwale_top_median": 0.452,
+  "gunwale_top_range": [
+   0.349,
+   0.566
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.133
+ },
+ "Drum": {
+  "tris": 176,
+  "top_y": 0.55,
+  "top_centre": [
+   0.003,
+   0.55,
+   3.551
+  ],
+  "radius": 0.2
+ },
+ "seats": {
+  "Seat_Drum": [
+   [
+    0,
+    0.36,
+    4
+   ],
+   0.0
+  ],
+  "Seat_L1": [
+   [
+    0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_L2": [
+   [
+    0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_L3": [
+   [
+    0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ],
+  "Seat_R1": [
+   [
+    -0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_R2": [
+   [
+    -0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_R3": [
+   [
+    -0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ]
+ }
+}
+{
+ "file": "Boat_Robot.glb",
+ "size_kb": 578.1,
+ "ok": true,
+ "notes": [],
+ "roots": [
+  "Boat_Robot",
+  "Boat_Robot_LOD1",
+  "Drum",
+  "Seat_Drum",
+  "Seat_L1",
+  "Seat_L2",
+  "Seat_L3",
+  "Seat_R1",
+  "Seat_R2",
+  "Seat_R3"
+ ],
+ "children": {},
+ "tris": {
+  "Boat_Robot": 3313,
+  "Boat_Robot_LOD1": 916,
+  "Drum": 176
+ },
+ "materials": [
+  "Boat_Robot"
+ ],
+ "images": [
+  [
+   "Boat_Robot_Normal",
+   "image/jpeg"
+  ],
+  [
+   "Boat_Robot_BaseColor",
+   "image/jpeg"
+  ]
+ ],
+ "Boat_Robot": {
+  "min": [
+   -0.665,
+   -0.139,
+   -5.701
+  ],
+  "max": [
+   0.692,
+   1.512,
+   5.698
+  ],
+  "length_z": 11.4,
+  "width_x": 1.357,
+  "gunwale_top_median": 0.425,
+  "gunwale_top_range": [
+   0.371,
+   0.465
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.139
+ },
+ "Boat_Robot_LOD1": {
+  "min": [
+   -0.738,
+   -0.142,
+   -5.702
+  ],
+  "max": [
+   0.771,
+   1.311,
+   5.672
+  ],
+  "length_z": 11.374,
+  "width_x": 1.509,
+  "gunwale_top_median": 0.415,
+  "gunwale_top_range": [
+   0.264,
+   0.48
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.142
+ },
+ "Drum": {
+  "tris": 176,
+  "top_y": 0.55,
+  "top_centre": [
+   0.0,
+   0.55,
+   3.55
+  ],
+  "radius": 0.2
+ },
+ "seats": {
+  "Seat_Drum": [
+   [
+    0,
+    0.36,
+    4
+   ],
+   0.0
+  ],
+  "Seat_L1": [
+   [
+    0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_L2": [
+   [
+    0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_L3": [
+   [
+    0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ],
+  "Seat_R1": [
+   [
+    -0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_R2": [
+   [
+    -0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_R3": [
+   [
+    -0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ]
+ }
+}
+{
+ "file": "Boat_Bear.glb",
+ "size_kb": 605.9,
+ "ok": true,
+ "notes": [],
+ "roots": [
+  "Boat_Bear",
+  "Boat_Bear_LOD1",
+  "Drum",
+  "Seat_Drum",
+  "Seat_L1",
+  "Seat_L2",
+  "Seat_L3",
+  "Seat_R1",
+  "Seat_R2",
+  "Seat_R3"
+ ],
+ "children": {},
+ "tris": {
+  "Boat_Bear": 3112,
+  "Boat_Bear_LOD1": 910,
+  "Drum": 176
+ },
+ "materials": [
+  "Boat_Bear"
+ ],
+ "images": [
+  [
+   "Boat_Bear_Normal",
+   "image/jpeg"
+  ],
+  [
+   "Boat_Bear_BaseColor",
+   "image/jpeg"
+  ]
+ ],
+ "Boat_Bear": {
+  "min": [
+   -0.776,
+   -0.115,
+   -5.708
+  ],
+  "max": [
+   0.791,
+   1.286,
+   5.693
+  ],
+  "length_z": 11.402,
+  "width_x": 1.566,
+  "gunwale_top_median": 0.399,
+  "gunwale_top_range": [
+   0.337,
+   0.497
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.115
+ },
+ "Boat_Bear_LOD1": {
+  "min": [
+   -0.808,
+   -0.136,
+   -5.686
+  ],
+  "max": [
+   0.796,
+   1.295,
+   5.701
+  ],
+  "length_z": 11.387,
+  "width_x": 1.604,
+  "gunwale_top_median": 0.426,
+  "gunwale_top_range": [
+   0.343,
+   0.597
+  ],
+  "crew_space_violations": 0,
+  "below_water_depth": -0.136
+ },
+ "Drum": {
+  "tris": 176,
+  "top_y": 0.55,
+  "top_centre": [
+   0.0,
+   0.55,
+   3.55
+  ],
+  "radius": 0.2
+ },
+ "seats": {
+  "Seat_Drum": [
+   [
+    0,
+    0.36,
+    4
+   ],
+   0.0
+  ],
+  "Seat_L1": [
+   [
+    0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_L2": [
+   [
+    0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_L3": [
+   [
+    0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ],
+  "Seat_R1": [
+   [
+    -0.42,
+    0.36,
+    2.3
+   ],
+   0.0
+  ],
+  "Seat_R2": [
+   [
+    -0.42,
+    0.36,
+    0.6
+   ],
+   0.0
+  ],
+  "Seat_R3": [
+   [
+    -0.42,
+    0.36,
+    -1.1
+   ],
+   0.0
+  ]
+ }
+}
