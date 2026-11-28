@@ -1,0 +1,303 @@
+{
+ "SM_Buoy": {
+  "bytes": 4200,
+  "nodes": [
+   {
+    "name": "SM_Buoy",
+    "mesh": true,
+    "children": [],
+    "trs": {}
+   }
+  ],
+  "materials": [
+   {
+    "name": "Tint",
+    "doubleSided": false,
+    "base": [
+     0.9,
+     0.9,
+     0.88,
+     1
+    ],
+    "rough": 0.3499999940395355,
+    "metal": 0
+   }
+  ],
+  "extensions": [],
+  "tris": {
+   "SM_Buoy": 72
+  },
+  "tris_total": 72,
+  "bounds_gltf": {
+   "min": [
+    -0.275,
+    -0.275,
+    -0.13
+   ],
+   "max": [
+    0.275,
+    0.275,
+    0.13
+   ]
+  },
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_Buoy: duplicate verts=40 loose verts=0",
+    "asset lowest point z=-0.275 (not resting on ground plane z=0)"
+   ],
+   "ground_z": -0.275,
+   "enclosed": [],
+   "per": {
+    "SM_Buoy": {
+     "tris": 72,
+     "uv_maps": 1,
+     "uv_zero_area_faces": 0,
+     "uv_overlap_pct": 0.0
+    }
+   }
+  }
+ },
+ "SM_Buoy_Big": {
+  "bytes": 9260,
+  "nodes": [
+   {
+    "name": "SM_Buoy_Big",
+    "mesh": true,
+    "children": [],
+    "trs": {}
+   }
+  ],
+  "materials": [
+   {
+    "name": "Buoy_Orange",
+    "doubleSided": false,
+    "base": [
+     0.96,
+     0.4,
+     0.05,
+     1
+    ],
+    "rough": 0.3499999940395355,
+    "metal": 0
+   },
+   {
+    "name": "Buoy_Cap",
+    "doubleSided": false,
+    "base": [
+     0.9,
+     0.89,
+     0.86,
+     1
+    ],
+    "rough": 0.4000000059604645,
+    "metal": 0
+   }
+  ],
+  "extensions": [],
+  "tris": {
+   "SM_Buoy_Big": 196
+  },
+  "tris_total": 196,
+  "bounds_gltf": {
+   "min": [
+    -0.5126,
+    -0.365,
+    -0.4997
+   ],
+   "max": [
+    0.5126,
+    0.79,
+    0.4997
+   ]
+  },
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_Buoy_Big: duplicate verts=78 loose verts=0",
+    "asset lowest point z=-0.365 (not resting on ground plane z=0)"
+   ],
+   "ground_z": -0.365,
+   "enclosed": [],
+   "per": {
+    "SM_Buoy_Big": {
+     "tris": 196,
+     "uv_maps": 1,
+     "uv_zero_area_faces": 0,
+     "uv_overlap_pct": 0.0
+    }
+   }
+  }
+ },
+ "SM_Tent": {
+  "bytes": 27280,
+  "nodes": [
+   {
+    "name": "SM_Tent",
+    "mesh": true,
+    "children": [],
+    "trs": {}
+   }
+  ],
+  "materials": [
+   {
+    "name": "Tint",
+    "doubleSided": true,
+    "base": [
+     0.92,
+     0.92,
+     0.9,
+     1
+    ],
+    "rough": 0.75,
+    "metal": 0
+   },
+   {
+    "name": "Frame",
+    "doubleSided": false,
+    "base": [
+     0.7,
+     0.72,
+     0.75,
+     1
+    ],
+    "rough": 0.4000000059604645,
+    "metal": 0
+   }
+  ],
+  "extensions": [],
+  "tris": {
+   "SM_Tent": 536
+  },
+  "tris_total": 536,
+  "bounds_gltf": {
+   "min": [
+    -1.52,
+    0,
+    -1.52
+   ],
+   "max": [
+    1.52,
+    3,
+    1.52
+   ]
+  },
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_Tent: duplicate verts=290 loose verts=0"
+   ],
+   "ground_z": 0.0,
+   "enclosed": [],
+   "per": {
+    "SM_Tent": {
+     "tris": 536,
+     "uv_maps": 1,
+     "uv_zero_area_faces": 0,
+     "uv_overlap_pct": 0.0
+    }
+   }
+  }
+ },
+ "SM_TeamFlag": {
+  "bytes": 12648,
+  "nodes": [
+   {
+    "name": "SignFace",
+    "mesh": true,
+    "children": [],
+    "trs": {}
+   },
+   {
+    "name": "SM_TeamFlag",
+    "mesh": true,
+    "children": [
+     0
+    ],
+    "trs": {}
+   }
+  ],
+  "materials": [
+   {
+    "name": "SignFace",
+    "doubleSided": false,
+    "base": [
+     0.94,
+     0.94,
+     0.92,
+     1
+    ],
+    "rough": 0.699999988079071,
+    "metal": 0
+   },
+   {
+    "name": "Tint",
+    "doubleSided": true,
+    "base": [
+     0.92,
+     0.92,
+     0.9,
+     1
+    ],
+    "rough": 0.75,
+    "metal": 0
+   },
+   {
+    "name": "Frame",
+    "doubleSided": false,
+    "base": [
+     0.2,
+     0.22,
+     0.26,
+     1
+    ],
+    "rough": 0.4000000059604645,
+    "metal": 0
+   }
+  ],
+  "extensions": [],
+  "tris": {
+   "SignFace": 18,
+   "SM_TeamFlag": 202
+  },
+  "tris_total": 220,
+  "bounds_gltf": {
+   "min": [
+    -1.0908,
+    0,
+    -0.3429
+   ],
+   "max": [
+    0.3429,
+    3.5028,
+    0.3429
+   ]
+  },
+  "qa": {
+   "pass": true,
+   "errors": [],
+   "warnings": [
+    "SM_TeamFlag: duplicate verts=98 loose verts=0"
+   ],
+   "ground_z": 0.0,
+   "enclosed": [],
+   "per": {
+    "SignFace": {
+     "tris": 18,
+     "uv_maps": 1,
+     "uv_zero_area_faces": 0,
+     "uv_overlap_pct": 0.0
+    },
+    "SM_TeamFlag": {
+     "tris": 202,
+     "uv_maps": 1,
+     "uv_zero_area_faces": 0,
+     "uv_overlap_pct": 0.0
+    }
+   }
+  }
+ }
+}
